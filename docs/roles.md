@@ -19,3 +19,9 @@ checks. It does not commit, push or deploy unless explicitly instructed.
 
 Remains read-only. It verifies the diff, tests, risks and regressions and returns an explicit
 review verdict.
+
+## Graphiste
+
+Provides read-only visual direction, UX/UI and layout recommendations using text files such as
+HTML, CSS, textual SVG, tokens and DOM structure. It never implements or reviews code. It may
+write only to `graphiste-out/` with explicit authorization from manager or the user.

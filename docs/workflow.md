@@ -2,7 +2,8 @@
 
 1. Run the preflight checks in `scripts/validate-ccb.sh`.
 2. The manager clarifies the objective and acceptance criteria.
-3. The manager delegates text-only architecture analysis to graph when it is useful.
+3. The manager delegates text-only technical analysis to graph when useful and UX/UI analysis
+   to graphiste when useful; those analyses may run independently or in parallel.
 4. The manager creates an implementation plan and delegates implementation to developer.
 5. The developer works in an isolated worktree, runs relevant tests and reports its diff.
 6. The reviewer checks the diff, tests and regressions without modifying code.

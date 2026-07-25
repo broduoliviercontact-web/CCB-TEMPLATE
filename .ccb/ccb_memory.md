@@ -1,5 +1,25 @@
 # Shared CCB Memory
 
-This file is intentionally generic. Add only durable, project-wide instructions here.
+## Présentation du projet
 
-The agent policy in `AGENT_POLICY.md` is mandatory for every agent.
+À compléter.
+
+## Contraintes globales
+
+À compléter. La politique `AGENT_POLICY.md` est obligatoire pour tous les agents.
+
+## Architecture résumée
+
+À compléter.
+
+## Conventions
+
+À compléter.
+
+## Décisions validées
+
+À compléter.
+
+## Informations partagées entre les agents
+
+À compléter.
