@@ -166,6 +166,11 @@ sortie. Forcez-la avec `CCB_MASCOT=radio-bot ./scripts/ccb.sh` ou `./scripts/ccb
 Désactivez le mouvement avec `CCB_NO_ANIMATION=1` ou `--no-animation`; `--ascii` garde un rendu ASCII.
 IDs : `terminal-bot`, `radio-bot`, `synth-bot`, `server-bot`, `space-bot`.
 
+### Mascot moods
+
+Les moods sont `neutral`, `working`, `happy`, `worried`, `error` et `goodbye`. Forcez le mood
+initial avec `./scripts/ccb.sh --mood happy` ou `CCB_MASCOT_MOOD=worried ./scripts/ccb.sh`.
+
 ## Arborescence
 
 ```text

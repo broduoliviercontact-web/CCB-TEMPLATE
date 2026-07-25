@@ -8,7 +8,11 @@ TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ccb-cli-test.XXXXXX")
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
 
 "$CLI" help >/dev/null
-test "$("$CLI" version)" = 1.2.1
+test "$("$CLI" version)" = 1.2.2
+"$CLI" mascots | grep -Fq terminal-bot
+"$CLI" mascot show terminal-bot | grep -Fq '[NEUTRAL]'
+"$CLI" mascot moods terminal-bot | grep -Fq goodbye
+if "$CLI" --mood invalid/value >/dev/null 2>&1; then echo "invalid mood was accepted" >&2; exit 1; fi
 "$CLI" profiles | grep -Fq 'generic'
 "$CLI" profile show generic | grep -Fq 'ID: generic'
 if "$CLI" profile show unknown >/dev/null 2>&1; then echo "unknown profile was accepted" >&2; exit 1; fi

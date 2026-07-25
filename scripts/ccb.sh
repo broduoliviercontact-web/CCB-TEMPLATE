@@ -23,6 +23,9 @@ Commands:
   profile show ID                 Show one profile
   status [TARGET]                 Show concise project status
   version                         Print the CCB template version
+  mascots                         List original session mascots
+  mascot show ID                  Render a mascot
+  mascot moods ID|--all           List supported moods
   help                            Show this help
 
 With no command, open the interactive CCB Control Room.
@@ -125,8 +128,11 @@ interactive() {
   SESSION_ASCII=0
   if [ "${CCB_ASCII:-}" = 1 ] || [ "${CCB_ASCII:-}" = true ]; then SESSION_ASCII=1; fi
   SESSION_MASCOT=$(mascot_select)
+  SESSION_MOOD=${CCB_MASCOT_MOOD:-neutral}
+  mascot_mood_is_valid "$SESSION_MOOD" || SESSION_MOOD=neutral
   banner
   printf 'Mascot: %s\n' "$(mascot_name "$SESSION_MASCOT")"
+  mascot_render_mood "$SESSION_MASCOT" "$SESSION_MOOD" "$SESSION_ASCII"
   while :; do
     cat <<'EOF'
 ╔══════════════ CCB CONTROL ROOM ══════════════╗
@@ -140,7 +146,7 @@ interactive() {
 ╚══════════════════════════════════════════════╝
 EOF
     printf 'Selection: '
-    IFS= read -r choice || { echo; return 0; }
+    IFS= read -r choice || { echo; mascot_render_mood "$SESSION_MASCOT" goodbye "$SESSION_ASCII"; echo 'CCB session closed.'; return 0; }
     case "$choice" in
       1) interactive_install ;;
       2) printf 'Target path [.]: '; IFS= read -r target || return 0; "$DOCTOR" "${target:-.}" ;;
@@ -148,7 +154,7 @@ EOF
       4) list_profiles ;;
       5) printf 'Target path [.]: '; IFS= read -r target || return 0; status "${target:-.}" ;;
       6) usage ;;
-      q|Q) return 0 ;;
+      q|Q) mascot_render_mood "$SESSION_MASCOT" goodbye "$SESSION_ASCII"; echo 'CCB session closed.'; return 0 ;;
       *) echo 'Unknown selection. Choose 1-6 or Q.' ;;
     esac
   done
@@ -159,6 +165,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --ascii) CCB_ASCII=1; shift ;;
     --no-animation) CCB_NO_ANIMATION=1; MASCOT_OPTION=1; shift ;;
+    --mood) shift; [ "$#" -gt 0 ] || { usage >&2; exit 2; }; mascot_mood_is_valid "$1" || { echo "error: invalid mood: $1" >&2; exit 2; }; CCB_MASCOT_MOOD=$1; MASCOT_OPTION=1; shift ;;
     --mascot)
       shift; [ "$#" -gt 0 ] || { usage >&2; exit 2; }
       if ! mascot_id_is_safe "$1" || ! mascot_is_valid "$1"; then echo "error: invalid mascot: $1" >&2; exit 2; fi
@@ -171,6 +178,14 @@ case "${1:-}" in
   '') interactive ;;
   help|--help|-h) usage ;;
   version) cat "$TEMPLATE_ROOT/VERSION" ;;
+  mascots) printf '%-14s %s\n' ID Name; for mascot in terminal-bot radio-bot synth-bot server-bot space-bot; do printf '%-14s %s\n' "$mascot" "$(mascot_name "$mascot")"; done ;;
+  mascot)
+    case "${2:-}" in
+      show) [ "$#" -eq 3 ] && mascot_is_valid "$3" || { echo "error: unknown mascot: ${3:-}" >&2; exit 1; }; mascot_render_mood "$3" neutral "${CCB_ASCII:-0}" ;;
+      moods) if [ "${3:-}" = --all ]; then mascot_moods; else [ "$#" -eq 3 ] && mascot_is_valid "$3" || { echo "error: unknown mascot: ${3:-}" >&2; exit 1; }; mascot_moods; fi ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    ;;
   profiles) [ "$#" -eq 1 ] || { usage >&2; exit 2; }; list_profiles ;;
   profile)
     [ "${2:-}" = show ] && [ "$#" -eq 3 ] || { usage >&2; exit 2; }

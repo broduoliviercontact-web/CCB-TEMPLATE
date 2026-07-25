@@ -28,3 +28,10 @@ per session from `terminal-bot`, `radio-bot`, `synth-bot`, `server-bot` and `spa
 mode never animates. Set `CCB_MASCOT=radio-bot` or pass `--mascot radio-bot` to force one.
 `CCB_MASCOT_SEED` makes the local selection deterministic for tests. Set `CCB_NO_ANIMATION=1` or
 pass `--no-animation` for the final frame directly. No data is sent and no dependency is used.
+
+## Mascot moods
+
+`neutral` means waiting; `working` marks an operation, `happy` a success, `worried` a success
+with warnings, `error` a failure and `goodbye` session closure. Use `./scripts/ccb.sh mascots`,
+`./scripts/ccb.sh mascot show terminal-bot`, or `./scripts/ccb.sh mascot moods --all` to browse
+the local gallery. Moods never persist and command mode never animates.

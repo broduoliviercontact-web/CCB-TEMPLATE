@@ -2,6 +2,8 @@
 
 mascot_id_is_safe() { case "$1" in ''|*[!a-z0-9-]*) return 1;; *) return 0;; esac; }
 mascot_is_valid() { case "$1" in terminal-bot|radio-bot|synth-bot|server-bot|space-bot) return 0;; *) return 1;; esac; }
+mascot_mood_is_valid() { case "$1" in neutral|working|happy|worried|error|goodbye) return 0;; *) return 1;; esac; }
+mascot_moods() { printf '%s\n' neutral working happy worried error goodbye; }
 mascot_name() { case "$1" in terminal-bot) echo 'Terminal Bot';; radio-bot) echo 'Radio Bot';; synth-bot) echo 'Synth Bot';; server-bot) echo 'Server Bot';; space-bot) echo 'Space Bot';; esac; }
 mascot_select() {
   request=${CCB_MASCOT:-}
@@ -34,4 +36,11 @@ mascot_animate() {
   id=$1; ascii=$2
   if [ "${CCB_NO_ANIMATION:-}" = 1 ] || [ ! -t 0 ] || [ ! -t 1 ]; then mascot_render_frame "$id" 1 "$ascii"; return; fi
   mascot_render_frame "$id" 1 "$ascii"; sleep 0.2 2>/dev/null || :; printf '\033[6A'; mascot_render_frame "$id" 2 "$ascii"
+}
+mascot_render_mood() {
+  id=$1; mood=$2; ascii=$3
+  mascot_is_valid "$id" && mascot_mood_is_valid "$mood" || return 1
+  mascot_render_frame "$id" 1 "$ascii"
+  case "$mood" in neutral) note='[NEUTRAL] waiting';; working) note='[WORKING] command in progress';; happy) note='[HAPPY] success';; worried) note='[WORRIED] success with warnings';; error) note='[ERROR] command failed';; goodbye) note='[GOODBYE] session closing';; esac
+  printf '%s\n' "$note"
 }
