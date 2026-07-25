@@ -1,3 +1,4 @@
+# BEGIN CCB TEMPLATE
 # CCB runtime and recoverable state
 .ccb/backups/
 .ccb/ccbd/
@@ -21,3 +22,10 @@ graphify-out/
 !graphify-out/
 graphify-out/*
 !graphify-out/.gitkeep
+
+# Graphiste artifacts are local unless explicitly exported elsewhere.
+graphiste-out/
+!graphiste-out/
+graphiste-out/*
+!graphiste-out/.gitkeep
+# END CCB TEMPLATE

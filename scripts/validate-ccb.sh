@@ -1,34 +1,92 @@
 #!/usr/bin/env sh
 set -eu
 
-fail=0
+TARGET=${1:-.}
+ERRORS=0
 
-require_path() {
-  if [ ! -e "$1" ]; then
-    echo "missing: $1" >&2
-    fail=1
-  fi
+ok() { echo "[OK] $1"; }
+warn() { echo "[WARN] $1"; }
+error() { echo "[ERROR] $1" >&2; ERRORS=1; }
+
+if [ ! -d "$TARGET" ]; then
+  error "target directory does not exist: $TARGET"
+  exit 1
+fi
+TARGET=$(CDPATH= cd "$TARGET" && pwd)
+
+if git -C "$TARGET" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  ok "Git repository: $TARGET"
+else
+  error "target is not a Git repository: $TARGET"
+fi
+
+if git -C "$TARGET" rev-parse --verify HEAD >/dev/null 2>&1; then
+  ok "initial Git commit exists"
+else
+  error "initial Git commit is required for developer worktrees"
+fi
+
+require_dir() {
+  if [ -d "$TARGET/$1" ]; then ok "directory: $1"; else error "missing directory: $1"; fi
+}
+
+require_file() {
+  if [ -f "$TARGET/$1" ]; then ok "file: $1"; else error "missing file: $1"; fi
+}
+
+require_nonempty_file() {
+  require_file "$1"
+  if [ -s "$TARGET/$1" ]; then ok "non-empty: $1"; else error "empty file: $1"; fi
 }
 
 require_ignore() {
-  if ! grep -Fqx "$1" .gitignore 2>/dev/null; then
-    echo "missing .gitignore entry: $1" >&2
-    fail=1
+  if grep -Fqx "$1" "$TARGET/.gitignore" 2>/dev/null; then
+    ok "gitignore: $1"
+  else
+    error "missing .gitignore entry: $1"
   fi
 }
 
-require_path .ccb
-require_path .ccb/AGENT_POLICY.md
-require_path .ccb/ccb_memory.md
-require_path .ccb/agents/manager/memory.md
-require_path .ccb/agents/graph/memory.md
-require_path .ccb/agents/reviewer/memory.md
-require_path graphify-out
-require_ignore "graphify-out/"
-require_ignore ".ccb/backups/"
+require_dir .ccb
+require_file .ccb/AGENT_POLICY.md
+require_nonempty_file .ccb/ccb_memory.md
+require_nonempty_file .ccb/agents/manager/memory.md
+require_nonempty_file .ccb/agents/graph/memory.md
+require_nonempty_file .ccb/agents/graphiste/memory.md
+require_nonempty_file .ccb/agents/reviewer/memory.md
+require_dir graphify-out
+require_dir graphiste-out
+require_file .gitignore
 
-if [ "$fail" -ne 0 ]; then
+for role in manager graph graphiste developer reviewer; do
+  if grep -qi "$role" "$TARGET/.ccb/AGENT_POLICY.md"; then
+    ok "policy role: $role"
+  else
+    error "policy missing role: $role"
+  fi
+done
+
+if grep -Eqi 'TEXT ONLY|text-only' "$TARGET/.ccb/AGENT_POLICY.md"; then
+  ok "policy: TEXT ONLY"
+else
+  error "policy missing TEXT ONLY"
+fi
+
+for entry in \
+  '.ccb/backups/' \
+  '.ccb/ccbd/' \
+  '.ccb/workspaces/' \
+  '.ccb/agents/*/sessions/' \
+  '.ccb/agents/*/provider-state/' \
+  'graphify-out/' \
+  'graphiste-out/'; do
+  require_ignore "$entry"
+done
+
+if [ "$ERRORS" -ne 0 ]; then
+  error "CCB template validation failed"
   exit 1
 fi
 
-echo "CCB template validation passed."
+warn "validation does not inspect provider credentials or runtime state"
+ok "CCB template validation passed"
