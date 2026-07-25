@@ -1,8 +1,40 @@
 # CCB Template
 
-Un point de départ générique pour travailler avec Claude Codex Bridge (CCB) dans un dépôt Git.
-Il définit une séparation de responsabilités durable, des mémoires persistantes et des
-contrôles simples à réutiliser dans un nouveau projet.
+[![Validate CCB Template](https://github.com/broduoliviercontact-web/CCB-TEMPLATE/actions/workflows/validate.yml/badge.svg)](https://github.com/broduoliviercontact-web/CCB-TEMPLATE/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+Une base réutilisable pour orchestrer cinq agents spécialisés autour d’un projet Git : rôles
+séparés, mémoires persistantes, règles de sécurité et validations reproductibles.
+
+![Guide étape par étape pour utiliser la template CCB](docs/assets/ccb-template-step-by-step-guide.png)
+
+## Démarrage rapide
+
+Le projet cible doit déjà être un dépôt Git avec un commit initial. Clonez la template, puis
+installez seulement ses fichiers persistants :
+
+```sh
+git clone https://github.com/broduoliviercontact-web/CCB-TEMPLATE.git
+cd CCB-TEMPLATE
+
+./scripts/install-project.sh /chemin/vers/mon-projet
+./scripts/validate-ccb.sh /chemin/vers/mon-projet
+```
+
+L’installateur préserve les mémoires existantes. Utilisez `--update` uniquement pour mettre à
+jour la politique commune avec sauvegarde préalable :
+
+```sh
+./scripts/install-project.sh /chemin/vers/mon-projet --update
+```
+
+## Règles essentielles
+
+- Le manager orchestre et ne code jamais ; le developer est le seul à modifier le produit.
+- Graph et graphiste restent en lecture seule ; reviewer ne corrige jamais directement.
+- Aucun secret, session, état provider, runtime, push forcé ou déploiement implicite.
+- TEXT ONLY : pas d’image, capture, PDF rendu ou outil Vision sans autorisation humaine.
+- Lancez `./scripts/validate-ccb.sh` avant de démarrer CCB dans un nouveau projet.
 
 ## Les cinq agents
 
