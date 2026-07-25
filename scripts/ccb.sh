@@ -7,6 +7,8 @@ INSTALL="$SCRIPT_DIR/install-project.sh"
 VALIDATE="$SCRIPT_DIR/validate-ccb.sh"
 DOCTOR="$SCRIPT_DIR/doctor.sh"
 MODEL_SETUP="$SCRIPT_DIR/model-setup.sh"
+MODEL_RESOLVE="$SCRIPT_DIR/model-resolve.sh"
+MODEL_PRESETS="$TEMPLATE_ROOT/model-presets"
 PROFILE_ROOT="$TEMPLATE_ROOT/profiles"
 
 . "$SCRIPT_DIR/profile-lib.sh"
@@ -40,6 +42,12 @@ models_command() {
   subcommand=${1:-show}; shift || :
   target=${1:-.}
   case "$subcommand" in
+    presets) for preset in "$MODEL_PRESETS"/*; do [ -d "$preset" ] && model_preset_parse "$preset/preset.conf" && printf '%s\t%s\n' "$PRESET_ID" "$PRESET_NAME"; done ;;
+    preset)
+      [ "${1:-}" = show ] && [ -n "${2:-}" ] || { echo 'error: usage: models preset show ID' >&2; return 2; }
+      model_preset_is_safe "$2" && model_preset_parse "$MODEL_PRESETS/$2/preset.conf" && [ "$PRESET_ID" = "$2" ] || { echo "error: unknown preset: $2" >&2; return 1; }
+      printf 'Name: %s\nDescription: %s\nManager: %s\nGraph: %s\nGraphiste: %s\nDeveloper: %s\nReviewer: %s\nFallback: %s\n' "$PRESET_NAME" "$PRESET_DESCRIPTION" "$MANAGER_MODEL" "$GRAPH_MODEL" "$GRAPHISTE_MODEL" "$DEVELOPER_MODEL" "$REVIEWER_MODEL" "$FALLBACK_MODEL" ;;
+    resolve) exec "$MODEL_RESOLVE" "${1:-}" "${2:-.}" ;;
     list)
       if command -v ollama >/dev/null 2>&1; then ollama list | awk 'NR > 1 { print $1 }'; else echo '[WARN] Ollama was not detected. Recommendations remain available.'; fi ;;
     recommendations) model_recommendations ;;

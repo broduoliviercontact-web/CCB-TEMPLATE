@@ -8,7 +8,8 @@ TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ccb-cli-test.XXXXXX")
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
 
 "$CLI" help >/dev/null
-test "$("$CLI" version)" = 1.4.0
+test "$("$CLI" version)" = 1.4.1
+"$CLI" models presets | grep -Fq balanced-cloud
 "$CLI" models recommendations | grep -Fq balanced-cloud
 "$CLI" mascots | grep -Fq terminal-bot
 "$CLI" mascot show terminal-bot | grep -Fq '[NEUTRAL]'
