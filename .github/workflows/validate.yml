@@ -1,0 +1,22 @@
+name: Validate CCB Template
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell syntax
+        run: |
+          sh -n scripts/install-project.sh
+          sh -n scripts/validate-ccb.sh
+          sh -n tests/test-install.sh
+      - name: Validate template
+        run: ./scripts/validate-ccb.sh
+      - name: Run installation integration tests
+        run: ./tests/test-install.sh
