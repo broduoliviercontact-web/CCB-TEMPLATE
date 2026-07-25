@@ -19,6 +19,7 @@ Commands:
   doctor [TARGET]                 Diagnose a project
   validate [TARGET]               Validate a project
   install [TARGET] [OPTIONS]      Delegate installation to install-project.sh
+  setup [TARGET] [OPTIONS]        Guided setup; use --yes for non-interactive install
   profiles                        List local profiles
   profile show ID                 Show one profile
   status [TARGET]                 Show concise project status
@@ -136,28 +137,67 @@ interactive() {
   while :; do
     cat <<'EOF'
 ╔══════════════ CCB CONTROL ROOM ══════════════╗
-║ [1] Installer CCB dans un projet              ║
-║ [2] Diagnostiquer un projet                   ║
-║ [3] Valider un projet                         ║
-║ [4] Voir les profils disponibles              ║
-║ [5] Afficher le profil actif                  ║
-║ [6] Aide                                      ║
+║ [1] Installation guidée                       ║
+║ [2] Installation rapide                       ║
+║ [3] Diagnostiquer un projet                   ║
+║ [4] Valider un projet                         ║
+║ [5] Voir les profils                          ║
+║ [6] Galerie des mascottes                     ║
+║ [7] Aide                                      ║
 ║ [Q] Quitter                                   ║
 ╚══════════════════════════════════════════════╝
 EOF
     printf 'Selection: '
     IFS= read -r choice || { echo; mascot_render_mood "$SESSION_MASCOT" goodbye "$SESSION_ASCII"; echo 'CCB session closed.'; return 0; }
     case "$choice" in
-      1) interactive_install ;;
-      2) printf 'Target path [.]: '; IFS= read -r target || return 0; "$DOCTOR" "${target:-.}" ;;
-      3) printf 'Target path [.]: '; IFS= read -r target || return 0; "$VALIDATE" "${target:-.}" ;;
-      4) list_profiles ;;
-      5) printf 'Target path [.]: '; IFS= read -r target || return 0; status "${target:-.}" ;;
-      6) usage ;;
+      1) setup_wizard ;;
+      2) interactive_install ;;
+      3) printf 'Target path [.]: '; IFS= read -r target || return 0; "$DOCTOR" "${target:-.}" ;;
+      4) printf 'Target path [.]: '; IFS= read -r target || return 0; "$VALIDATE" "${target:-.}" ;;
+      5) list_profiles ;;
+      6) "$0" mascots ;;
+      7) usage ;;
       q|Q) mascot_render_mood "$SESSION_MASCOT" goodbye "$SESSION_ASCII"; echo 'CCB session closed.'; return 0 ;;
       *) echo 'Unknown selection. Choose 1-6 or Q.' ;;
     esac
   done
+}
+
+setup_wizard() {
+  printf '%s\n' 'Step 1/8 — Guided Setup: no file will change before confirmation.'
+  printf '[C] Continue  [Q] Quit: '; IFS= read -r answer || return 0
+  case "$answer" in q|Q) return 0;; c|C) :;; *) echo 'Setup cancelled.'; return 0;; esac
+  printf '%s\n' 'Step 2/8 — Existing project only in this guided flow.'
+  printf 'Target path: '; IFS= read -r target || return 0
+  [ -d "$target" ] || { echo 'ERROR: target directory is not accessible.'; return 1; }
+  target=$(CDPATH= cd "$target" && pwd)
+  printf '%s\n' 'Step 4/8 — Pre-check'
+  command -v git >/dev/null 2>&1 || { echo 'ERROR: Git is required.'; return 1; }
+  git -C "$target" rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo 'ERROR: target is not a Git repository.'; return 1; }
+  printf '%s\n' 'Step 5/8 — Choose a profile'; list_profiles
+  printf 'Profile [generic]: '; IFS= read -r profile || return 0; profile=${profile:-generic}
+  show_profile "$profile" >/dev/null || { echo 'ERROR: unknown profile.'; return 1; }
+  printf 'Step 6/8 — Would run: %s "%s" --profile %s\n' "$INSTALL" "$target" "$profile"
+  "$INSTALL" "$target" --profile "$profile" --dry-run || return $?
+  printf 'Step 7/8 — Proceed with installation? [y/N] '; IFS= read -r answer || return 0
+  case "$answer" in y|Y|yes|YES) "$INSTALL" "$target" --profile "$profile" || return $?;; *) echo 'Installation cancelled.'; return 0;; esac
+  printf '%s\n' 'Step 8/8 — Validation'; "$VALIDATE" "$target" && "$DOCTOR" "$target"
+}
+
+setup_command() {
+  shift
+  target= profile=generic yes=0 dry=0 update=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in --profile) shift; [ "$#" -gt 0 ] || return 2; profile=$1;; --yes) yes=1;; --dry-run) dry=1;; --update) update=1;; -*) return 2;; *) [ -z "$target" ] || return 2; target=$1;; esac
+    shift
+  done
+  [ -n "$target" ] || { setup_wizard; return $?; }
+  if [ "$dry" -eq 1 ]; then "$INSTALL" "$target" --profile "$profile" --dry-run; return $?; fi
+  if [ "$yes" -ne 1 ]; then
+    if [ ! -t 0 ]; then echo 'error: setup without --yes requires an interactive terminal' >&2; return 2; fi
+    printf 'Proceed with setup? [y/N] '; IFS= read -r answer || return 0; case "$answer" in y|Y|yes|YES);; *) echo 'Installation cancelled.'; return 0;; esac
+  fi
+  if [ "$update" -eq 1 ]; then "$INSTALL" "$target" --profile "$profile" --update; else "$INSTALL" "$target" --profile "$profile"; fi
 }
 
 MASCOT_OPTION=0
@@ -194,6 +234,7 @@ case "${1:-}" in
   doctor) shift; exec "$DOCTOR" "$@" ;;
   validate) shift; exec "$VALIDATE" "$@" ;;
   install) shift; exec "$INSTALL" "$@" ;;
+  setup|wizard) setup_command "$@"; exit $? ;;
   status) shift; [ "$#" -le 1 ] || { usage >&2; exit 2; }; status "${1:-.}" ;;
   *) echo "error: unknown command: $1" >&2; usage >&2; exit 2 ;;
 esac

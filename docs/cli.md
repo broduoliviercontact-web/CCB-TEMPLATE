@@ -16,6 +16,10 @@ Non-interactive commands remain suitable for scripts and CI:
 ./scripts/ccb.sh version
 ```
 
+`./scripts/ccb.sh setup` (or `wizard`) starts the guided setup. For automation, use
+`./scripts/ccb.sh setup TARGET --profile react-web --yes`; `--dry-run` performs the same checks
+without changing files. Without `--yes`, non-interactive setup refuses to install.
+
 `--ascii` or `CCB_ASCII=1` uses an ASCII banner. `NO_COLOR=1` is respected; ordinary command
 output is already plain text. Help succeeds with status 0, unknown commands return 2, and an
 unknown profile returns 1. The CLI delegates work to the existing scripts; it does not execute

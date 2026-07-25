@@ -18,6 +18,12 @@ commandes classiques reste entièrement disponible.
 ./scripts/ccb.sh install /chemin/vers/mon-projet --profile audio-midi
 ```
 
+First installation? Launch the guided setup wizard. It checks your project, suggests a profile,
+previews the changes, installs CCB and runs validation automatically.
+
+Première installation ? Lancez l’assistant guidé : il vérifie le projet, propose un profil,
+prévisualise les changements, installe CCB puis lance la validation.
+
 ## Sommaire
 
 - [Démarrage rapide](#démarrage-rapide)

@@ -21,6 +21,7 @@ jobs:
           sh -n tests/test-install.sh
           sh -n tests/test-profiles.sh
           sh -n tests/test-cli.sh
+          sh -n tests/test-setup-wizard.sh
       - name: Validate template
         run: ./scripts/validate-ccb.sh
       - name: Run installation integration tests
@@ -28,3 +29,4 @@ jobs:
           ./tests/test-install.sh
           ./tests/test-profiles.sh
           ./tests/test-cli.sh
+          ./tests/test-setup-wizard.sh

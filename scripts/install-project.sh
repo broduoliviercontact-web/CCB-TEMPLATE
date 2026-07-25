@@ -3,7 +3,7 @@ set -eu
 
 usage() {
   cat <<EOF >&2
-usage: $0 [target-directory] [--profile ID] [--update]
+usage: $0 [target-directory] [--profile ID] [--update] [--dry-run]
        $0 --list-profiles
 EOF
   exit "${1:-2}"
@@ -15,6 +15,7 @@ TARGET=
 UPDATE=0
 PROFILE_ID=generic
 LIST_PROFILES=0
+DRY_RUN=0
 
 . "$SCRIPT_DIR/profile-lib.sh"
 
@@ -32,6 +33,7 @@ list_profiles() {
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --update) UPDATE=1 ;;
+    --dry-run) DRY_RUN=1 ;;
     --profile)
       shift
       [ "$#" -gt 0 ] || usage
@@ -92,6 +94,13 @@ fi
 if ! git -C "$TARGET" rev-parse --verify HEAD >/dev/null 2>&1; then
   echo "error: target needs an initial Git commit before CCB can create developer worktrees" >&2
   exit 1
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  printf '%s\n' 'DRY RUN — no files were modified'
+  printf 'Would install CCB profile: %s\n' "$PROFILE_ID"
+  printf '%s\n' 'Would create or preserve .ccb/, profile files, memories and managed .gitignore entries.'
+  exit 0
 fi
 
 copy_missing() {
