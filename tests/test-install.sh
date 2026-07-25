@@ -8,6 +8,14 @@ VALIDATE="$TEMPLATE_ROOT/scripts/validate-ccb.sh"
 TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ccb-template-test.XXXXXX")
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
 
+for skill in \
+  skills/shared/ccb-handoff/SKILL.md \
+  skills/shared/project-memory/SKILL.md \
+  skills/shared/safe-git-boundaries/SKILL.md \
+  skills/shared/text-only-policy/SKILL.md; do
+  test -s "$TEMPLATE_ROOT/$skill" || { echo "missing shared skill: $skill" >&2; exit 1; }
+done
+
 repo="$TEMP_ROOT/project"
 empty_repo="$TEMP_ROOT/without-head"
 mkdir -p "$repo" "$empty_repo"

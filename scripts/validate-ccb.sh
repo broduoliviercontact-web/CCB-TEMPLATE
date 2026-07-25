@@ -2,6 +2,8 @@
 set -eu
 
 TARGET=${1:-.}
+SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
+TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 ERRORS=0
 
 ok() { echo "[OK] $1"; }
@@ -39,6 +41,14 @@ require_nonempty_file() {
   if [ -s "$TARGET/$1" ]; then ok "non-empty: $1"; else error "empty file: $1"; fi
 }
 
+require_template_nonempty_file() {
+  if [ -s "$TEMPLATE_ROOT/$1" ]; then
+    ok "shared skill: $1"
+  else
+    error "missing or empty shared skill: $1"
+  fi
+}
+
 require_ignore() {
   if grep -Fqx "$1" "$TARGET/.gitignore" 2>/dev/null; then
     ok "gitignore: $1"
@@ -57,6 +67,14 @@ require_nonempty_file .ccb/agents/reviewer/memory.md
 require_dir graphify-out
 require_dir graphiste-out
 require_file .gitignore
+
+for skill in \
+  skills/shared/ccb-handoff/SKILL.md \
+  skills/shared/project-memory/SKILL.md \
+  skills/shared/safe-git-boundaries/SKILL.md \
+  skills/shared/text-only-policy/SKILL.md; do
+  require_template_nonempty_file "$skill"
+done
 
 for role in manager graph graphiste developer reviewer; do
   if grep -qi "$role" "$TARGET/.ccb/AGENT_POLICY.md"; then
