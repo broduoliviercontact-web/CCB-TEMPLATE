@@ -17,6 +17,7 @@ jobs:
           sh -n scripts/validate-ccb.sh
           sh -n scripts/doctor.sh
           sh -n scripts/ccb.sh
+          sh -n scripts/mascot-lib.sh
           sh -n tests/test-install.sh
           sh -n tests/test-profiles.sh
           sh -n tests/test-cli.sh

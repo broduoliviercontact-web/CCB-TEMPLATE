@@ -9,6 +9,7 @@ DOCTOR="$SCRIPT_DIR/doctor.sh"
 PROFILE_ROOT="$TEMPLATE_ROOT/profiles"
 
 . "$SCRIPT_DIR/profile-lib.sh"
+. "$SCRIPT_DIR/mascot-lib.sh"
 
 usage() {
   cat <<'EOF'
@@ -66,15 +67,13 @@ status() {
 }
 
 banner() {
+  mascot_animate "$SESSION_MASCOT" "$SESSION_ASCII"
   if [ "${CCB_ASCII:-}" = 1 ] || [ "${CCB_ASCII:-}" = true ]; then
     cat <<'EOF'
 +--------------------------------------------------+
 |                    C C B                         |
 |           CLAUDE CODEX BRIDGE                    |
-|        +-------+                                 |
-|        | o o   |  CCB robot                      |
-|        |  _    |                                 |
-|        +-------+                                 |
+|             CCB CONTROL ROOM                     |
 +--------------------------------------------------+
 EOF
   else
@@ -82,10 +81,7 @@ EOF
 ╔══════════════════════════════════════════════════╗
 ║                  C C B                           ║
 ║         C L A U D E  C O D E X  B R I D G E      ║
-║        ┌───────┐                                 ║
-║        │  ■ ■  │  terminal robot                 ║
-║        │   ▰   │                                 ║
-║        └─┬───┬─┘                                 ║
+║             CCB CONTROL ROOM                     ║
 ╚══════════════════════════════════════════════════╝
 EOF
   fi
@@ -126,7 +122,11 @@ interactive_install() {
 }
 
 interactive() {
+  SESSION_ASCII=0
+  if [ "${CCB_ASCII:-}" = 1 ] || [ "${CCB_ASCII:-}" = true ]; then SESSION_ASCII=1; fi
+  SESSION_MASCOT=$(mascot_select)
   banner
+  printf 'Mascot: %s\n' "$(mascot_name "$SESSION_MASCOT")"
   while :; do
     cat <<'EOF'
 ╔══════════════ CCB CONTROL ROOM ══════════════╗
@@ -154,7 +154,19 @@ EOF
   done
 }
 
-if [ "${1:-}" = --ascii ]; then CCB_ASCII=1; shift; fi
+MASCOT_OPTION=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --ascii) CCB_ASCII=1; shift ;;
+    --no-animation) CCB_NO_ANIMATION=1; MASCOT_OPTION=1; shift ;;
+    --mascot)
+      shift; [ "$#" -gt 0 ] || { usage >&2; exit 2; }
+      if ! mascot_id_is_safe "$1" || ! mascot_is_valid "$1"; then echo "error: invalid mascot: $1" >&2; exit 2; fi
+      CCB_MASCOT=$1; MASCOT_OPTION=1; shift ;;
+    *) break ;;
+  esac
+done
+if [ "$MASCOT_OPTION" -eq 1 ] && [ "$#" -gt 0 ]; then echo 'error: mascot options require interactive mode' >&2; exit 2; fi
 case "${1:-}" in
   '') interactive ;;
   help|--help|-h) usage ;;

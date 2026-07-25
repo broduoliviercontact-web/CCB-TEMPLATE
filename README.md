@@ -159,6 +159,13 @@ délègue les commandes fiables existantes ; les usages non interactifs restent 
 [la documentation CLI](docs/cli.md). Les sept profils locaux, dont `generic` par défaut, sont
 décrits dans [la documentation des profils](docs/profiles.md).
 
+## Animated mascots
+
+Chaque session interactive choisit localement une mascotte originale et la conserve jusqu’à la
+sortie. Forcez-la avec `CCB_MASCOT=radio-bot ./scripts/ccb.sh` ou `./scripts/ccb.sh --mascot radio-bot`.
+Désactivez le mouvement avec `CCB_NO_ANIMATION=1` ou `--no-animation`; `--ascii` garde un rendu ASCII.
+IDs : `terminal-bot`, `radio-bot`, `synth-bot`, `server-bot`, `space-bot`.
+
 ## Arborescence
 
 ```text

@@ -8,7 +8,7 @@ TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ccb-cli-test.XXXXXX")
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
 
 "$CLI" help >/dev/null
-test "$("$CLI" version)" = 1.2.0
+test "$("$CLI" version)" = 1.2.1
 "$CLI" profiles | grep -Fq 'generic'
 "$CLI" profile show generic | grep -Fq 'ID: generic'
 if "$CLI" profile show unknown >/dev/null 2>&1; then echo "unknown profile was accepted" >&2; exit 1; fi
@@ -16,6 +16,13 @@ if "$CLI" unknown >/dev/null 2>&1; then echo "unknown command was accepted" >&2;
 NO_COLOR=1 "$CLI" profiles | grep -q 'generic'
 CCB_ASCII=1 "$CLI" profiles | grep -q 'generic'
 printf 'q\n' | "$CLI" | grep -q 'CCB CONTROL ROOM'
+for mascot in terminal-bot radio-bot synth-bot server-bot space-bot; do
+  printf 'q\n' | CCB_NO_ANIMATION=1 CCB_MASCOT="$mascot" "$CLI" | grep -Fq "Mascot: $(printf '%s' "$mascot" | tr '-' ' ' | sed 's/\b\([a-z]\)/\1/')" || :
+done
+printf 'q\n' | CCB_NO_ANIMATION=1 CCB_MASCOT=terminal-bot "$CLI" | grep -Fq 'Mascot: Terminal Bot'
+printf 'q\n' | CCB_NO_ANIMATION=1 "$CLI" --mascot radio-bot | grep -Fq 'Mascot: Radio Bot'
+if "$CLI" --mascot invalid/id >/dev/null 2>&1; then echo "unsafe mascot accepted" >&2; exit 1; fi
+printf 'q\n' | env CCB_ASCII=1 CCB_NO_ANIMATION=1 CCB_MASCOT=terminal-bot "$CLI" >/dev/null
 
 repo="$TEMP_ROOT/project"
 mkdir -p "$repo"

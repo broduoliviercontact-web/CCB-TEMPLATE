@@ -20,3 +20,11 @@ Non-interactive commands remain suitable for scripts and CI:
 output is already plain text. Help succeeds with status 0, unknown commands return 2, and an
 unknown profile returns 1. The CLI delegates work to the existing scripts; it does not execute
 profile content or construct commands for a shell.
+
+## Animated mascots
+
+Only a no-argument interactive session shows a short local animation. A mascot is selected once
+per session from `terminal-bot`, `radio-bot`, `synth-bot`, `server-bot` and `space-bot`; command
+mode never animates. Set `CCB_MASCOT=radio-bot` or pass `--mascot radio-bot` to force one.
+`CCB_MASCOT_SEED` makes the local selection deterministic for tests. Set `CCB_NO_ANIMATION=1` or
+pass `--no-animation` for the final frame directly. No data is sent and no dependency is used.

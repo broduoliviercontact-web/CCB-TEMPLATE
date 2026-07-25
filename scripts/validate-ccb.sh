@@ -89,6 +89,12 @@ done
 require_template_executable scripts/doctor.sh
 require_template_executable scripts/ccb.sh
 
+if [ -s "$TEMPLATE_ROOT/scripts/mascot-lib.sh" ] && [ -r "$TEMPLATE_ROOT/scripts/mascot-lib.sh" ]; then
+  ok "template library: scripts/mascot-lib.sh"
+else
+  error "missing or unreadable template library: scripts/mascot-lib.sh"
+fi
+
 for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh; do
   if [ -s "$TEMPLATE_ROOT/$template_file" ]; then
     ok "template file: $template_file"
