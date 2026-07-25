@@ -89,6 +89,10 @@ done
 require_template_executable scripts/doctor.sh
 require_template_executable scripts/ccb.sh
 
+for model_script in scripts/model-lib.sh scripts/model-setup.sh; do
+  if [ -s "$TEMPLATE_ROOT/$model_script" ] && [ -r "$TEMPLATE_ROOT/$model_script" ]; then ok "template model script: $model_script"; else error "missing model script: $model_script"; fi
+done
+
 if [ -s "$TEMPLATE_ROOT/scripts/mascot-lib.sh" ] && [ -r "$TEMPLATE_ROOT/scripts/mascot-lib.sh" ]; then
   ok "template library: scripts/mascot-lib.sh"
 else

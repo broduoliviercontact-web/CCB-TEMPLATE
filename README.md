@@ -24,6 +24,9 @@ previews the changes, installs CCB and runs validation automatically.
 Première installation ? Lancez l’assistant guidé : il vérifie le projet, propose un profil,
 prévisualise les changements, installe CCB puis lance la validation.
 
+CCB 1.4 can keep non-secret Ollama model assignments in `.ccb/models.conf`. Inspect local models
+with `./scripts/ccb.sh models list` and recommendations with `./scripts/ccb.sh models recommendations`.
+
 ## Sommaire
 
 - [Démarrage rapide](#démarrage-rapide)

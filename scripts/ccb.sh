@@ -6,10 +6,12 @@ TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 INSTALL="$SCRIPT_DIR/install-project.sh"
 VALIDATE="$SCRIPT_DIR/validate-ccb.sh"
 DOCTOR="$SCRIPT_DIR/doctor.sh"
+MODEL_SETUP="$SCRIPT_DIR/model-setup.sh"
 PROFILE_ROOT="$TEMPLATE_ROOT/profiles"
 
 . "$SCRIPT_DIR/profile-lib.sh"
 . "$SCRIPT_DIR/mascot-lib.sh"
+. "$SCRIPT_DIR/model-lib.sh"
 
 usage() {
   cat <<'EOF'
@@ -27,10 +29,33 @@ Commands:
   mascots                         List original session mascots
   mascot show ID                  Render a mascot
   mascot moods ID|--all           List supported moods
+  models [show|list|validate|recommendations|setup|reset]
   help                            Show this help
 
 With no command, open the interactive CCB Control Room.
 EOF
+}
+
+models_command() {
+  subcommand=${1:-show}; shift || :
+  target=${1:-.}
+  case "$subcommand" in
+    list)
+      if command -v ollama >/dev/null 2>&1; then ollama list | awk 'NR > 1 { print $1 }'; else echo '[WARN] Ollama was not detected. Recommendations remain available.'; fi ;;
+    recommendations) model_recommendations ;;
+    show|validate)
+      file="$target/.ccb/models.conf"
+      if models_conf_validate "$file"; then
+        [ "$subcommand" = validate ] && echo '[OK] models.conf is valid' || sed '/API_KEY\|TOKEN\|SECRET/d' "$file"
+      else echo "error: invalid or missing models.conf: $file" >&2; return 1; fi ;;
+    setup)
+      [ -t 0 ] || { echo 'error: models setup requires an interactive terminal in this version' >&2; return 2; }
+      printf 'Ollama mode [local-proxy]: '; IFS= read -r mode || return 0; mode=${mode:-local-proxy}
+      printf 'Write recommended non-secret model configuration? [y/N] '; IFS= read -r answer || return 0
+      case "$answer" in y|Y|yes|YES) "$MODEL_SETUP" "$target" "$mode";; *) echo 'Model setup cancelled.';; esac ;;
+    reset) echo 'error: reset requires interactive model setup; existing configuration was preserved.' >&2; return 2 ;;
+    *) echo "error: unknown models command: $subcommand" >&2; return 2 ;;
+  esac
 }
 
 list_profiles() {
@@ -226,6 +251,7 @@ case "${1:-}" in
       *) usage >&2; exit 2 ;;
     esac
     ;;
+  models) shift; models_command "$@"; exit $? ;;
   profiles) [ "$#" -eq 1 ] || { usage >&2; exit 2; }; list_profiles ;;
   profile)
     [ "${2:-}" = show ] && [ "$#" -eq 3 ] || { usage >&2; exit 2; }
