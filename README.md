@@ -8,10 +8,35 @@ séparés, mémoires persistantes, règles de sécurité et validations reproduc
 
 ![Guide étape par étape pour utiliser la template CCB](docs/assets/ccb-template-step-by-step-guide.png)
 
+## Sommaire
+
+- [Démarrage rapide](#démarrage-rapide)
+- [Les cinq agents](#les-cinq-agents)
+- [Utilisation recommandée](#utilisation-recommandée)
+- [Skills partagés](#skills-partagés)
+- [Politique TEXT ONLY](#politique-text-only)
+- [Validation](#validation)
+- [Arborescence](#arborescence)
+- [Documentation](#documentation)
+
 ## Démarrage rapide
 
-Le projet cible doit déjà être un dépôt Git avec un commit initial. Clonez la template, puis
-installez seulement ses fichiers persistants :
+### Cas A — utiliser le dépôt comme template GitHub
+
+1. Ouvrez ce dépôt sur GitHub.
+2. Si GitHub affiche **Use this template** (après activation manuelle de *Template repository*),
+   créez votre nouveau dépôt depuis ce modèle.
+3. Clonez le nouveau projet.
+4. Créez au moins un commit initial si nécessaire, puis exécutez le validateur :
+
+   ```sh
+   ./scripts/validate-ccb.sh
+   ```
+
+### Cas B — installer CCB dans un dépôt existant
+
+Le projet cible doit être un dépôt Git avec au moins un commit ; un arbre de travail propre est
+fortement recommandé.
 
 ```sh
 git clone https://github.com/broduoliviercontact-web/CCB-TEMPLATE.git
@@ -21,103 +46,135 @@ cd CCB-TEMPLATE
 ./scripts/validate-ccb.sh /chemin/vers/mon-projet
 ```
 
-L’installateur préserve les mémoires existantes. Utilisez `--update` uniquement pour mettre à
-jour la politique commune avec sauvegarde préalable :
+Pour mettre à jour la politique commune tout en préservant les mémoires locales :
 
 ```sh
 ./scripts/install-project.sh /chemin/vers/mon-projet --update
 ```
 
-## Règles essentielles
-
-- Le manager orchestre et ne code jamais ; le developer est le seul à modifier le produit.
-- Graph et graphiste restent en lecture seule ; reviewer ne corrige jamais directement.
-- Aucun secret, session, état provider, runtime, push forcé ou déploiement implicite.
-- TEXT ONLY : pas d’image, capture, PDF rendu ou outil Vision sans autorisation humaine.
-- Lancez `./scripts/validate-ccb.sh` avant de démarrer CCB dans un nouveau projet.
+`--update` sauvegarde la politique précédente dans `.ccb/backups/`, met à jour la politique
+commune et ne doit pas écraser les fichiers `memory.md`. Les scripts ne démarrent ni CCB ni les
+agents automatiquement.
 
 ## Les cinq agents
 
-| Agent | Responsabilité | Écriture produit |
+| Agent | Responsabilité | Modification du code |
 | --- | --- | --- |
-| manager | Reçoit la demande, planifie, délègue et consolide. | Jamais |
-| graph | Analyse textuellement l'architecture et les dépendances. | Jamais |
-| graphiste | Analyse UX/UI et donne une direction visuelle depuis des fichiers textuels. | Jamais |
-| developer | Implémente dans un worktree isolé. | Seul agent autorisé |
-| reviewer | Relit le diff, les tests et les risques. | Jamais |
+| Manager | Planifie, délègue et consolide les résultats. | Non |
+| Graph | Analyse l’architecture technique et les dépendances. | Non |
+| Graphiste | Analyse l’UX/UI, l’accessibilité et la direction visuelle depuis des sources textuelles. | Non |
+| Developer | Implémente les changements dans un worktree isolé. | Oui |
+| Reviewer | Vérifie les changements et produit un verdict. | Non |
 
-Le flux normal est `manager → graph et/ou graphiste → developer → reviewer → manager`.
-Le manager délègue toute implémentation lorsqu'un developer est disponible ; le reviewer
-ne corrige jamais directement le code. Graph traite l'architecture technique, les dépendances
-et la structure du code ; graphiste traite UX/UI, mise en page, tokens et cohérence visuelle.
+Graph concerne l’architecture technique. Graphiste concerne le design, l’UX/UI et
+l’accessibilité. Le Developer reste le seul agent autorisé à modifier le code applicatif.
 
-## Politique TEXT ONLY
+```text
+Manager
+├── Graph, si une analyse technique est nécessaire
+├── Graphiste, si une analyse UX/UI est nécessaire
+└── Developer
+    └── Reviewer
+        └── Manager
+```
 
-Les agents utilisent des modèles textuels. Ils ne doivent jamais ouvrir, envoyer ou
-interpréter une image, une capture d'écran, un fichier PDF rendu comme image ou un outil
-Vision. Préférer le DOM, HTML, CSS, JavaScript, logs, stack traces, sorties textuelles de
-Puppeteer/Playwright, diff Git et tests automatisés. Voir
-[`.ccb/AGENT_POLICY.md`](.ccb/AGENT_POLICY.md).
+Graph et Graphiste peuvent intervenir séparément ou en parallèle.
+
+## Utilisation recommandée
+
+1. L’utilisateur donne l’objectif au Manager.
+2. Le Manager clarifie le périmètre et les critères d’acceptation.
+3. Graph et/ou Graphiste analysent sans modifier le code.
+4. Le Developer travaille dans un worktree isolé, exécute les tests et produit un handoff.
+5. Le Reviewer contrôle sans corriger directement.
+6. Le Manager décide de la suite.
+
+Aucun push ou déploiement n’est effectué sans autorisation explicite.
 
 ## Skills partagés
 
-Le catalogue minimal sous [`skills/shared/`](skills/shared/) contient des références de travail
-réutilisables : transmission, mémoire projet, limites Git et politique TEXT ONLY. Ces skills
-ne remplacent pas `.ccb/AGENT_POLICY.md`, ne donnent aucune permission supplémentaire et les
-agents ne lisent que ceux utiles à leur mission. Cette première version reste volontairement
-simple ; aucun skill externe n’est ajouté sans audit humain.
+| Skill | Utilité |
+| --- | --- |
+| `ccb-handoff` | Standardise les transmissions entre agents. |
+| `project-memory` | Maintient des mémoires courtes et durables. |
+| `safe-git-boundaries` | Définit les limites Git et les droits des rôles. |
+| `text-only-policy` | Garantit une collaboration sans Vision. |
+
+[Consulter le catalogue des skills](skills/README.md). Les skills sont des références de
+travail : ils ne donnent pas automatiquement de permissions et
+[`.ccb/AGENT_POLICY.md`](.ccb/AGENT_POLICY.md) reste prioritaire.
+
+## Politique TEXT ONLY
+
+**Interdit :** analyse de captures d’écran, PNG/JPG/WEBP, Vision, PDF interprétés visuellement
+et transmission d’images entre agents.
+
+**Autorisé :** HTML, CSS, SVG textuel, DOM, ARIA, tokens de design, logs, tests, diffs Git et
+sorties textuelles Playwright ou Puppeteer.
+
+[Lire la politique complète](skills/shared/text-only-policy/SKILL.md). Une analyse visuelle
+indispensable exige une autorisation humaine explicite.
+
+## Validation
+
+```sh
+sh -n scripts/install-project.sh
+sh -n scripts/validate-ccb.sh
+sh -n tests/test-install.sh
+
+./scripts/validate-ccb.sh
+./tests/test-install.sh
+```
+
+- `[OK]` : validation réussie ;
+- `[WARN]` : point à examiner ;
+- `[ERROR]` : correction obligatoire.
+
+La GitHub Action **Validate CCB Template** exécute également ces vérifications lors des pushes
+et pull requests vers `main`.
+
+## Arborescence
+
+```text
+.ccb/
+├── AGENT_POLICY.md
+├── ccb_memory.md
+└── agents/
+    ├── manager/
+    ├── graph/
+    ├── graphiste/
+    └── reviewer/
+
+skills/
+└── shared/
+
+graphify-out/
+graphiste-out/
+scripts/
+tests/
+docs/
+```
+
+- `graphify-out/` : sorties autorisées de l’agent Graph ;
+- `graphiste-out/` : sorties autorisées de l’agent Graphiste ;
+- `.ccb/` : politique et mémoires persistantes ;
+- `skills/shared/` : contrats de travail communs.
 
 ## Utilisation avec Claude Code et Codex
 
-CCB peut piloter Claude Code comme interface de fournisseur. Codex peut utiliser ce dépôt
-comme contrat de workflow : il lit les politiques et mémoires, laisse le manager orchestrer,
-et réserve les modifications produit au developer. Aucune clé, session, état provider ou
-runtime CCB ne doit être versionné.
+CCB peut piloter Claude Code comme interface de fournisseur. Codex peut utiliser ce dépôt comme
+contrat de workflow : il lit les politiques et mémoires, laisse le manager orchestrer et réserve
+les modifications produit au developer. Aucune clé, session, état provider ou runtime CCB ne
+doit être versionné.
 
-## Installer dans un nouveau projet
+## Documentation
 
-1. Clonez le template :
-
-   ```sh
-   git clone https://github.com/broduoliviercontact-web/CCB-TEMPLATE.git
-   cd CCB-TEMPLATE
-   ```
-
-2. Le projet cible doit être un dépôt Git ayant déjà un commit initial. Installez les fichiers
-   persistants sans écraser les mémoires locales :
-
-   ```sh
-   ./scripts/install-project.sh /chemin/vers/mon-projet
-   ./scripts/validate-ccb.sh /chemin/vers/mon-projet
-   ```
-
-3. Pour mettre à jour la politique commune, tout en préservant tous les `memory.md`, utilisez :
-
-   ```sh
-   ./scripts/install-project.sh /chemin/vers/mon-projet --update
-   ```
-
-   L'ancienne politique est sauvegardée sous `.ccb/backups/`.
-
-4. Ajoutez une configuration CCB adaptée au projet si nécessaire, sans commettre les
-   sessions, worktrees, sauvegardes ou états provider.
-5. Démarrez ensuite CCB selon la procédure locale de votre environnement. Les scripts ne
-   démarrent jamais CCB automatiquement.
-
-Les scripts ne démarrent aucun agent et ne modifient pas les sources applicatives.
-
-## Contenu
-
-- `.ccb/` : politiques et mémoires persistantes ;
-- `docs/` : architecture, workflow, rôles et démarrage ;
-- `scripts/` : installation non destructive et validation ;
-- `tests/` : test d'intégration de l'installation ;
-- `graphify-out/.gitkeep` et `graphiste-out/.gitkeep` : emplacements réservés aux sorties
-  explicitement demandées ; leurs productions locales sont ignorées ;
-- `examples/` : emplacement pour de futurs exemples génériques.
-
-La CI GitHub exécute la validation shell et le test d'installation sur les push vers `main` et
-les pull requests ciblant `main`.
+- [Démarrer avec la template](docs/getting-started.md)
+- [Architecture](docs/architecture.md)
+- [Rôles](docs/roles.md)
+- [Workflow](docs/workflow.md)
+- [Politique des agents](.ccb/AGENT_POLICY.md)
+- [Catalogue des skills](skills/README.md)
 
 ## Activer le dépôt comme GitHub Template
 
