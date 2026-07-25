@@ -25,3 +25,9 @@ review verdict.
 Provides read-only visual direction, UX/UI and layout recommendations using text files such as
 HTML, CSS, textual SVG, tokens and DOM structure. It never implements or reviews code. It may
 write only to `graphiste-out/` with explicit authorization from manager or the user.
+
+## Skills partagés
+
+Les références de travail réutilisables sont dans `skills/shared/`. Elles complètent les rôles,
+mais `.ccb/AGENT_POLICY.md` reste prioritaire et n’accorde aucune permission supplémentaire.
+Chaque rôle lit uniquement les skills utiles à sa mission.

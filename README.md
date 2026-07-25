@@ -27,6 +27,14 @@ Vision. Préférer le DOM, HTML, CSS, JavaScript, logs, stack traces, sorties te
 Puppeteer/Playwright, diff Git et tests automatisés. Voir
 [`.ccb/AGENT_POLICY.md`](.ccb/AGENT_POLICY.md).
 
+## Skills partagés
+
+Le catalogue minimal sous [`skills/shared/`](skills/shared/) contient des références de travail
+réutilisables : transmission, mémoire projet, limites Git et politique TEXT ONLY. Ces skills
+ne remplacent pas `.ccb/AGENT_POLICY.md`, ne donnent aucune permission supplémentaire et les
+agents ne lisent que ceux utiles à leur mission. Cette première version reste volontairement
+simple ; aucun skill externe n’est ajouté sans audit humain.
+
 ## Utilisation avec Claude Code et Codex
 
 CCB peut piloter Claude Code comme interface de fournisseur. Codex peut utiliser ce dépôt

@@ -12,3 +12,9 @@
 
 Stop the workflow when Git has no `HEAD`, CCB policy files are missing, a required agent is
 unavailable, validation fails without explanation, or a request is materially ambiguous.
+
+## Skills partagés
+
+Le dossier `skills/shared/` contient des contrats textuels légers pour les handoffs, la mémoire,
+les limites Git et TEXT ONLY. Ils servent de référence et ne remplacent jamais
+`.ccb/AGENT_POLICY.md`; consulter seulement les skills nécessaires à la mission.
