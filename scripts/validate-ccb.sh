@@ -4,6 +4,8 @@ set -eu
 TARGET=${1:-.}
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
+. "$SCRIPT_DIR/profile-lib.sh"
+PROFILE_ROOT="$TEMPLATE_ROOT/profiles"
 ERRORS=0
 
 ok() { echo "[OK] $1"; }
@@ -85,6 +87,39 @@ for skill in \
 done
 
 require_template_executable scripts/doctor.sh
+require_template_executable scripts/ccb.sh
+
+for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh; do
+  if [ -s "$TEMPLATE_ROOT/$template_file" ]; then
+    ok "template file: $template_file"
+  else
+    error "missing or empty template file: $template_file"
+  fi
+done
+
+validate_profiles() {
+  if [ ! -d "$PROFILE_ROOT" ]; then error "missing profiles directory"; return; fi
+  if [ ! -d "$PROFILE_ROOT/generic" ]; then error "missing generic profile"; fi
+  seen_ids=' '
+  for profile_dir in "$PROFILE_ROOT"/*; do
+    [ -d "$profile_dir" ] || continue
+    if [ -L "$profile_dir" ]; then error "profile directory must not be a symlink: $(basename "$profile_dir")"; continue; fi
+    if ! profile_parse "$profile_dir/profile.conf"; then error "invalid profile $(basename "$profile_dir"): $PROFILE_PARSE_ERROR"; continue; fi
+    if [ "$PROFILE_ID" != "$(basename "$profile_dir")" ]; then error "profile id does not match directory: $PROFILE_ID"; fi
+    case "$seen_ids" in *" $PROFILE_ID "*) error "duplicate profile id: $PROFILE_ID";; *) seen_ids="$seen_ids$PROFILE_ID ";; esac
+    if [ ! -s "$profile_dir/PROFILE.md" ] || [ ! -s "$profile_dir/$PROFILE_MEMORY_SEED" ]; then error "incomplete profile: $PROFILE_ID"; fi
+    case "$PROFILE_SKILLS" in ,*|*,|*,,*) error "invalid PROFILE_SKILLS: $PROFILE_ID";; esac
+    old_ifs=$IFS; IFS=,
+    for profile_skill in $PROFILE_SKILLS; do
+      [ -n "$profile_skill" ] || continue
+      if ! profile_id_is_safe "$profile_skill" || [ ! -s "$profile_dir/skills/$profile_skill/SKILL.md" ]; then error "missing or unsafe profile skill: $PROFILE_ID/$profile_skill"; fi
+    done
+    IFS=$old_ifs
+    ok "profile: $PROFILE_ID"
+  done
+}
+
+validate_profiles
 
 for role in manager graph graphiste developer reviewer; do
   if grep -qi "$role" "$TARGET/.ccb/AGENT_POLICY.md"; then
@@ -110,6 +145,23 @@ for entry in \
   'graphiste-out/'; do
   require_ignore "$entry"
 done
+
+if [ -f "$TARGET/.ccb/active-profile" ]; then
+  active_profile=$(cat "$TARGET/.ccb/active-profile")
+  if ! profile_id_is_safe "$active_profile" || ! profile_parse "$PROFILE_ROOT/$active_profile/profile.conf"; then
+    error "invalid active profile: $active_profile"
+  else
+    require_file ".ccb/profiles/$active_profile/PROFILE.md"
+    old_ifs=$IFS; IFS=,
+    for profile_skill in $PROFILE_SKILLS; do
+      [ -n "$profile_skill" ] && require_file ".ccb/profiles/$active_profile/skills/$profile_skill/SKILL.md"
+    done
+    IFS=$old_ifs
+    ok "active profile: $active_profile"
+  fi
+else
+  warn "no active profile (compatible legacy CCB project); run install-project.sh --profile generic to add one"
+fi
 
 if [ "$ERRORS" -ne 0 ]; then
   error "CCB template validation failed"

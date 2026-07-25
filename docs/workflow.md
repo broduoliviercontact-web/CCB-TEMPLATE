@@ -1,6 +1,8 @@
 # Workflow
 
 1. Run the preflight checks in `scripts/validate-ccb.sh`.
+   `./scripts/ccb.sh` may be used as an optional interactive entry point; it does not replace
+   scriptable commands or the validation gate.
 2. The manager clarifies the objective and acceptance criteria.
 3. The manager delegates text-only technical analysis to graph when useful and UX/UI analysis
    to graphiste when useful; those analyses may run independently or in parallel.

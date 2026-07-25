@@ -16,8 +16,14 @@ jobs:
           sh -n scripts/install-project.sh
           sh -n scripts/validate-ccb.sh
           sh -n scripts/doctor.sh
+          sh -n scripts/ccb.sh
           sh -n tests/test-install.sh
+          sh -n tests/test-profiles.sh
+          sh -n tests/test-cli.sh
       - name: Validate template
         run: ./scripts/validate-ccb.sh
       - name: Run installation integration tests
-        run: ./tests/test-install.sh
+        run: |
+          ./tests/test-install.sh
+          ./tests/test-profiles.sh
+          ./tests/test-cli.sh

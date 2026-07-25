@@ -8,6 +8,16 @@ séparés, mémoires persistantes, règles de sécurité et validations reproduc
 
 ![Guide étape par étape pour utiliser la template CCB](docs/assets/ccb-template-step-by-step-guide.png)
 
+La V1.2 ajoute une CCB Control Room interactive et des profils de projet. Le fonctionnement en
+commandes classiques reste entièrement disponible.
+
+```sh
+./scripts/ccb.sh
+./scripts/ccb.sh doctor
+./scripts/ccb.sh profiles
+./scripts/ccb.sh install /chemin/vers/mon-projet --profile audio-midi
+```
+
 ## Sommaire
 
 - [Démarrage rapide](#démarrage-rapide)
@@ -16,6 +26,7 @@ séparés, mémoires persistantes, règles de sécurité et validations reproduc
 - [Skills partagés](#skills-partagés)
 - [Politique TEXT ONLY](#politique-text-only)
 - [Validation](#validation)
+- [Control Room et profils](#control-room-et-profils)
 - [Arborescence](#arborescence)
 - [Documentation](#documentation)
 
@@ -140,6 +151,13 @@ et pull requests vers `main`.
 `scripts/doctor.sh` est un diagnostic sans écriture : il vérifie l'environnement local, Git et
 la structure CCB, puis propose les corrections éventuelles. Ajouter `--verbose` affiche aussi
 le rapport détaillé du validateur : `./scripts/doctor.sh /chemin/vers/mon-projet --verbose`.
+
+## Control Room et profils
+
+`./scripts/ccb.sh` ouvre une interface terminal rétro, optionnelle et sans dépendance. Elle
+délègue les commandes fiables existantes ; les usages non interactifs restent disponibles dans
+[la documentation CLI](docs/cli.md). Les sept profils locaux, dont `generic` par défaut, sont
+décrits dans [la documentation des profils](docs/profiles.md).
 
 ## Arborescence
 

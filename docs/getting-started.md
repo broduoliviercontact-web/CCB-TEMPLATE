@@ -8,6 +8,7 @@ git clone https://github.com/broduoliviercontact-web/CCB-TEMPLATE.git
 cd CCB-TEMPLATE
 
 ./scripts/install-project.sh /chemin/vers/mon-projet
+./scripts/install-project.sh /chemin/vers/mon-projet --profile generic
 ./scripts/doctor.sh /chemin/vers/mon-projet
 ./scripts/validate-ccb.sh /chemin/vers/mon-projet
 ```
@@ -27,3 +28,6 @@ placeholders belong in this template.
 Before starting an isolated developer worktree, create an initial Git commit so `HEAD` exists.
 `doctor.sh` is read-only: it reports missing prerequisites and suggested commands without
 installing tools or changing the target project. Use `--verbose` to include the validator report.
+
+For an optional interactive entry point, run `./scripts/ccb.sh`. It opens the CCB Control Room;
+all commands remain available non-interactively for CI and automation.
