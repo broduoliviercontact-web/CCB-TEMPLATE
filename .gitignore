@@ -1,0 +1,23 @@
+# CCB runtime and recoverable state
+.ccb/backups/
+.ccb/ccbd/
+.ccb/workspaces/
+.ccb/.claude-*-session
+.ccb/*.log
+.ccb/*.pid
+.ccb/agents/*/cancel_flags/
+.ccb/agents/*/jobs.jsonl
+.ccb/agents/*/logs/
+.ccb/agents/*/sessions/
+.ccb/agents/*/provider-state/
+.ccb/agents/*/restore.json
+.ccb/agents/*/history/
+.ccb/agents/*/histories/
+.ccb/agents/*/history.json
+.ccb/agents/*/history.jsonl
+
+# Graph artifacts are local unless explicitly exported elsewhere.
+graphify-out/
+!graphify-out/
+graphify-out/*
+!graphify-out/.gitkeep
