@@ -27,9 +27,10 @@ séparés, mémoires persistantes, règles de sécurité et validations reproduc
 2. Si GitHub affiche **Use this template** (après activation manuelle de *Template repository*),
    créez votre nouveau dépôt depuis ce modèle.
 3. Clonez le nouveau projet.
-4. Créez au moins un commit initial si nécessaire, puis exécutez le validateur :
+4. Créez au moins un commit initial si nécessaire, puis exécutez le diagnostic et le validateur :
 
    ```sh
+   ./scripts/doctor.sh
    ./scripts/validate-ccb.sh
    ```
 
@@ -43,6 +44,7 @@ git clone https://github.com/broduoliviercontact-web/CCB-TEMPLATE.git
 cd CCB-TEMPLATE
 
 ./scripts/install-project.sh /chemin/vers/mon-projet
+./scripts/doctor.sh /chemin/vers/mon-projet
 ./scripts/validate-ccb.sh /chemin/vers/mon-projet
 ```
 
@@ -120,8 +122,10 @@ indispensable exige une autorisation humaine explicite.
 ```sh
 sh -n scripts/install-project.sh
 sh -n scripts/validate-ccb.sh
+sh -n scripts/doctor.sh
 sh -n tests/test-install.sh
 
+./scripts/doctor.sh
 ./scripts/validate-ccb.sh
 ./tests/test-install.sh
 ```
@@ -132,6 +136,10 @@ sh -n tests/test-install.sh
 
 La GitHub Action **Validate CCB Template** exécute également ces vérifications lors des pushes
 et pull requests vers `main`.
+
+`scripts/doctor.sh` est un diagnostic sans écriture : il vérifie l'environnement local, Git et
+la structure CCB, puis propose les corrections éventuelles. Ajouter `--verbose` affiche aussi
+le rapport détaillé du validateur : `./scripts/doctor.sh /chemin/vers/mon-projet --verbose`.
 
 ## Arborescence
 

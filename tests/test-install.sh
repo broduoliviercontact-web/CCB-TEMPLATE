@@ -5,6 +5,7 @@ SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 INSTALL="$TEMPLATE_ROOT/scripts/install-project.sh"
 VALIDATE="$TEMPLATE_ROOT/scripts/validate-ccb.sh"
+DOCTOR="$TEMPLATE_ROOT/scripts/doctor.sh"
 TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ccb-template-test.XXXXXX")
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
 
@@ -27,6 +28,7 @@ git -C "$repo" add README.md
 git -C "$repo" commit -qm "test: initial fixture"
 
 "$INSTALL" "$repo"
+"$DOCTOR" "$repo" >/dev/null
 
 for path in \
   .ccb \
@@ -58,6 +60,25 @@ grep -Fqx '# local manager convention' "$repo/.ccb/agents/manager/memory.md"
 git init -q "$empty_repo"
 if "$INSTALL" "$empty_repo" >/dev/null 2>&1; then
   echo "installer unexpectedly accepted repository without HEAD" >&2
+  exit 1
+fi
+
+if "$DOCTOR" "$empty_repo" >/dev/null 2>&1; then
+  echo "doctor unexpectedly accepted repository without HEAD" >&2
+  exit 1
+fi
+
+"$DOCTOR" --help >/dev/null
+
+if "$DOCTOR" --unknown >/dev/null 2>&1; then
+  echo "doctor unexpectedly accepted an unknown option" >&2
+  exit 1
+else
+  test "$?" -eq 2 || { echo "doctor returned the wrong status for an unknown option" >&2; exit 1; }
+fi
+
+if "$DOCTOR" "$TEMP_ROOT/does-not-exist" >/dev/null 2>&1; then
+  echo "doctor unexpectedly accepted a missing directory" >&2
   exit 1
 fi
 

@@ -49,6 +49,14 @@ require_template_nonempty_file() {
   fi
 }
 
+require_template_executable() {
+  if [ -x "$TEMPLATE_ROOT/$1" ]; then
+    ok "template script: $1"
+  else
+    error "missing or non-executable template script: $1"
+  fi
+}
+
 require_ignore() {
   if grep -Fqx "$1" "$TARGET/.gitignore" 2>/dev/null; then
     ok "gitignore: $1"
@@ -75,6 +83,8 @@ for skill in \
   skills/shared/text-only-policy/SKILL.md; do
   require_template_nonempty_file "$skill"
 done
+
+require_template_executable scripts/doctor.sh
 
 for role in manager graph graphiste developer reviewer; do
   if grep -qi "$role" "$TARGET/.ccb/AGENT_POLICY.md"; then

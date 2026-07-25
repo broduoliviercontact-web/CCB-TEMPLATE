@@ -15,6 +15,7 @@ jobs:
         run: |
           sh -n scripts/install-project.sh
           sh -n scripts/validate-ccb.sh
+          sh -n scripts/doctor.sh
           sh -n tests/test-install.sh
       - name: Validate template
         run: ./scripts/validate-ccb.sh
