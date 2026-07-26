@@ -4,6 +4,7 @@ set -u
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 INSTALL="$SCRIPT_DIR/install-project.sh"
+PROJECT_INIT="$SCRIPT_DIR/project-init.sh"
 VALIDATE="$SCRIPT_DIR/validate-ccb.sh"
 DOCTOR="$SCRIPT_DIR/doctor.sh"
 MODEL_SETUP="$SCRIPT_DIR/model-setup.sh"
@@ -24,6 +25,7 @@ Commands:
   doctor [TARGET]                 Diagnose a project
   validate [TARGET]               Validate a project
   install [TARGET] [OPTIONS]      Delegate installation to install-project.sh
+  init TARGET [OPTIONS]           Create the minimal safe CCB project structure
   setup [TARGET] [OPTIONS]        Guided setup; use --yes for non-interactive install
   profiles                        List local profiles
   profile show ID                 Show one profile
@@ -291,6 +293,7 @@ case "${1:-}" in
   doctor) shift; exec "$DOCTOR" "$@" ;;
   validate) shift; exec "$VALIDATE" "$@" ;;
   install) shift; exec "$INSTALL" "$@" ;;
+  init) shift; exec "$PROJECT_INIT" "$@" ;;
   setup|wizard) setup_command "$@"; exit $? ;;
   status) shift; [ "$#" -le 1 ] || { usage >&2; exit 2; }; status "${1:-.}" ;;
   *) echo "error: unknown command: $1" >&2; usage >&2; exit 2 ;;
