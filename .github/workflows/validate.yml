@@ -19,6 +19,7 @@ jobs:
           sh -n tests/test-doctor.sh
           sh -n scripts/ccb.sh
           sh -n scripts/project-init.sh
+          sh -n scripts/project-skills.sh
           sh -n scripts/mascot-lib.sh
           sh -n scripts/model-lib.sh
           sh -n scripts/model-setup.sh
@@ -34,6 +35,8 @@ jobs:
           sh -n tests/test-project-profiles.sh
           sh -n tests/test-project-models.sh
           sh -n tests/test-project-config.sh
+          sh -n tests/test-project-skills.sh
+          sh -n tests/test-skills-command.sh
           sh -n tests/test-setup-wizard.sh
       - name: Validate template
         run: ./scripts/validate-ccb.sh
@@ -45,7 +48,9 @@ jobs:
           ./tests/test-project-init.sh
           ./tests/test-project-profiles.sh
           ./tests/test-project-models.sh
+          ./tests/test-project-skills.sh
           ./tests/test-project-config.sh
+          ./tests/test-skills-command.sh
           ./tests/test-doctor.sh
           ./tests/test-models.sh
           ./tests/test-provider-routing.sh

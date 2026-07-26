@@ -7,6 +7,7 @@ TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 . "$SCRIPT_DIR/model-lib.sh"
 . "$SCRIPT_DIR/project-profile-lib.sh"
 . "$SCRIPT_DIR/project-config-lib.sh"
+. "$SCRIPT_DIR/project-skills-lib.sh"
 
 strict=0
 no_ollama=0
@@ -47,6 +48,7 @@ done
 
 printf 'CCB Doctor\n'
 if [ -n "$target" ]; then
+  template_version=
   if [ ! -d "$target" ] || [ -L "$target" ]; then echo 'error: TARGET must be a real directory' >&2; exit 2; fi
   target=$(CDPATH= cd "$target" && pwd) || exit 2
   printf 'Target: %s\n' "$target"
@@ -58,7 +60,7 @@ for tool in sh sed grep awk mktemp mv chmod mkdir rm basename dirname; do
   if command -v "$tool" >/dev/null 2>&1; then emit OK "shell.$tool" available; else emit FAIL "shell.$tool" missing; fi
 done
 
-if [ -f "$TEMPLATE_ROOT/VERSION" ] && [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.6.0 ]; then emit OK template.version 1.6.0; else emit FAIL template.version 'expected 1.6.0'; fi
+if [ -f "$TEMPLATE_ROOT/VERSION" ] && [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.6.1 ]; then emit OK template.version 1.6.1; else emit FAIL template.version 'expected 1.6.1'; fi
 for script in scripts/ccb.sh scripts/project-init.sh scripts/project-config.sh scripts/validate-ccb.sh; do
   if [ -x "$TEMPLATE_ROOT/$script" ]; then emit OK "template.$script" executable; else emit FAIL "template.$script" missing-or-not-executable; fi
   if [ -f "$TEMPLATE_ROOT/$script" ] && sh -n "$TEMPLATE_ROOT/$script" >/dev/null 2>&1; then emit OK "syntax.$script" valid; else emit FAIL "syntax.$script" invalid; fi
@@ -66,7 +68,7 @@ done
 for profile in generic web node python audio; do
   if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$profile.conf" && [ "$PROJECT_PROFILE_ID" = "$profile" ]; then emit OK "template.profile.$profile" valid; else emit FAIL "template.profile.$profile" invalid; fi
 done
-for file in docs/project-bootstrap.md docs/doctor.md docs/v1.6.0.md tests/test-doctor.sh .github/workflows/validate.yml; do
+for file in docs/project-bootstrap.md docs/project-skills.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md tests/test-doctor.sh .github/workflows/validate.yml; do
   [ -s "$TEMPLATE_ROOT/$file" ] && emit OK "template.$file" present || emit FAIL "template.$file" missing
 done
 if command -v git >/dev/null 2>&1; then
@@ -105,6 +107,7 @@ if [ -n "$target" ]; then
     if [ -L "$target/.ccb/context" ] || [ ! -d "$target/.ccb/context" ]; then emit FAIL project.context_dir missing-or-unsafe; else emit OK project.context_dir directory; fi
     check_managed_file "$target/.ccb/project.conf" project.project_conf
     check_managed_file "$target/.ccb/models.conf" project.models_conf
+    check_managed_file "$target/.ccb/skills.conf" project.skills_conf
     check_managed_file "$target/.ccb/context/project.md" project.context
     check_managed_file "$target/AGENTS.md" project.agents
     if project_conf_parse "$target/.ccb/project.conf"; then
@@ -121,6 +124,13 @@ if [ -n "$target" ]; then
     emit OK project.provider "$PROJECT_MODEL_PROVIDER"
     for role in default planner coder reviewer; do model_value=$(awk -F= -v key="CCB_MODEL_$(printf '%s' "$role" | tr '[:lower:]' '[:upper:]')" '$1==key {print $2}' "$target/.ccb/models.conf"); [ -n "$model_value" ] && emit OK "project.model.$role" "$model_value" || emit FAIL "project.model.$role" missing; done
     else emit FAIL project.models_conf invalid; fi
+    if project_skills_parse "$target/.ccb/skills.conf"; then
+      emit OK project.ponytail_mode "$PROJECT_SKILL_PONYTAIL_MODE"
+      grep -Fq '.ccb/skills.conf' "$target/AGENTS.md" 2>/dev/null && grep -Fq '## Ponytail' "$target/AGENTS.md" 2>/dev/null && grep -Fq "Mode: $PROJECT_SKILL_PONYTAIL_MODE" "$target/AGENTS.md" 2>/dev/null && emit OK project.ponytail_guidance present || emit FAIL project.ponytail_guidance missing
+      grep -Fq '## Skills' "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.skills_context present || emit WARN project.skills_context missing
+    else
+      [ "$template_version" = 1.6.0 ] && emit WARN project.skills_conf legacy-not-configured || emit FAIL project.skills_conf invalid
+    fi
     grep -Fq '.ccb/context/project.md' "$target/AGENTS.md" 2>/dev/null && grep -Fq '.ccb/models.conf' "$target/AGENTS.md" 2>/dev/null && emit OK project.agents_guidance present || emit WARN project.agents_guidance incomplete
   fi
   if command -v git >/dev/null 2>&1; then

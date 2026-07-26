@@ -21,7 +21,7 @@ run() { output=$("$@" 2>&1); status=$?; }
 
 run "$CLI" init --help
 assert_status 0 "$status" 'init help'
-for option in TARGET --project-name --profile --model --planner-model --coder-model --reviewer-model --yes --dry-run; do assert_contains "$output" "$option" 'init help documents options'; done
+for option in TARGET --project-name --profile --model --planner-model --coder-model --reviewer-model --ponytail-mode --yes --dry-run; do assert_contains "$output" "$option" 'init help documents options'; done
 run "$CLI" init; assert_status 2 "$status" 'missing target'
 run "$CLI" init "$WORK/unknown" --unknown; assert_status 2 "$status" 'unknown option'
 run "$CLI" init "$WORK/force" --force; assert_status 2 "$status" 'force is refused'
@@ -30,9 +30,9 @@ run "$CLI" init "$WORK/profile" --profile other; assert_status 2 "$status" 'unsu
 existing="$WORK/existing project"; mkdir "$existing" || fail 'cannot create fixture'
 run "$CLI" init "$existing"
 assert_status 0 "$status" 'initial creation in existing directory'
-for file in .ccb/project.conf .ccb/models.conf .ccb/context/project.md AGENTS.md; do assert_file "$existing/$file"; done
+for file in .ccb/project.conf .ccb/models.conf .ccb/skills.conf .ccb/context/project.md AGENTS.md; do assert_file "$existing/$file"; done
 assert_contains "$(cat "$existing/.ccb/project.conf")" 'CCB_PROJECT_NAME=existing project' 'basename project name'
-assert_contains "$(cat "$existing/.ccb/project.conf")" 'CCB_TEMPLATE_VERSION=1.6.0' 'template version'
+assert_contains "$(cat "$existing/.ccb/project.conf")" 'CCB_TEMPLATE_VERSION=1.6.1' 'template version'
 assert_contains "$(cat "$existing/.ccb/context/project.md")" 'Project: existing project' 'context name'
 assert_contains "$(cat "$existing/AGENTS.md")" 'Read .ccb/context/project.md' 'agent guidance'
 assert_no_temps "$existing"
@@ -40,7 +40,7 @@ assert_no_temps "$existing"
 before_conf=$(cat "$existing/.ccb/project.conf")
 run "$CLI" init "$existing"
 assert_status 0 "$status" 'idempotent invocation'
-for file in .ccb/project.conf .ccb/models.conf .ccb/context/project.md AGENTS.md; do assert_contains "$output" "SKIP $file" 'idempotent plan'; done
+for file in .ccb/project.conf .ccb/models.conf .ccb/skills.conf .ccb/context/project.md AGENTS.md; do assert_contains "$output" "SKIP $file" 'idempotent plan'; done
 [ "$(cat "$existing/.ccb/project.conf")" = "$before_conf" ] || fail 'SKIP rewrote project.conf'
 assert_no_temps "$existing"
 
@@ -51,6 +51,7 @@ assert_status 0 "$status" 'partial initialization'
 assert_contains "$output" 'SKIP .ccb/project.conf' 'partial SKIP'
 assert_contains "$output" 'CREATE .ccb/context/project.md' 'partial context CREATE'
 assert_contains "$output" 'CREATE .ccb/models.conf' 'partial models CREATE'
+assert_contains "$output" 'CREATE .ccb/skills.conf' 'partial skills CREATE'
 assert_contains "$output" 'CREATE AGENTS.md' 'partial AGENTS CREATE'
 
 conflict="$WORK/conflict"; mkdir "$conflict" || fail 'cannot create conflict fixture'
@@ -66,6 +67,7 @@ dry="$WORK/dry run"; run "$CLI" init "$dry" --yes --dry-run
 assert_status 0 "$status" 'dry run absent target'
 assert_contains "$output" 'CREATE .ccb/project.conf' 'dry-run CREATE'
 assert_contains "$output" 'CREATE .ccb/models.conf' 'dry-run models CREATE'
+assert_contains "$output" 'CREATE .ccb/skills.conf' 'dry-run skills CREATE'
 assert_not_exists "$dry"
 
 run "$CLI" init "$existing" --dry-run

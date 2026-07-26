@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.6.1
+
+### Added
+
+- Declarative project skills, Ponytail modes, and read-only `ccb skills` guidance.
+
+### Changed
+
+- Bootstrap manages `skills.conf` alongside project, model, context, and agent guidance.
+
+### Security
+
+- Ponytail plugins and hooks are never installed or activated automatically.
+
+### Testing
+
+- CI covers skills configuration and instructions.
+
 ## 1.6.0
 
 ### Added

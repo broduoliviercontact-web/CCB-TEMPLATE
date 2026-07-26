@@ -48,6 +48,7 @@ Profiles and declarative Ollama model routing are available during bootstrap:
 ./scripts/ccb.sh init ./outil-node --profile node --model qwen3:8b --coder-model qwen2.5-coder:7b --yes
 ./scripts/ccb.sh init "./studio midi" --profile audio --dry-run
 ./scripts/ccb.sh config ./mon-site
+./scripts/ccb.sh skills ./mon-site --agent codex
 ```
 
 Supported bootstrap profiles are `generic`, `web`, `node`, `python`, and `audio`. No model is

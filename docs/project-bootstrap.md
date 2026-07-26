@@ -8,7 +8,7 @@ Use `./scripts/ccb.sh init TARGET` to create the smallest local CCB project cont
 ./scripts/ccb.sh init ./my-project --dry-run
 ```
 
-The managed files are exactly `.ccb/project.conf`, `.ccb/models.conf`, `.ccb/context/project.md`, and `AGENTS.md`. Their expected contents are newline-terminated. Unknown project files are left unchanged. `models.conf` is declarative, contains only non-secret Ollama routing values, and is never evaluated as shell code.
+The managed files are exactly `.ccb/project.conf`, `.ccb/models.conf`, `.ccb/skills.conf`, `.ccb/context/project.md`, and `AGENTS.md`. Ponytail defaults to enabled `full` mode and can be set with `--ponytail-mode off|lite|full|ultra`; no plugin is installed automatically.
 
 Before writing, the command prints a complete plan for all managed files: `CREATE` for an absent path, `SKIP` for an identical regular file, and `CONFLICT` for different content, a symbolic link, a non-regular file, or an incompatible parent. A conflict exits with status 1 and prevents every write. A second identical invocation therefore reports four `SKIP` entries. A V1.6.0-B project has different managed-file contents, so it deliberately conflicts rather than being silently migrated.
 
