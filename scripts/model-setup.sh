@@ -1,26 +1,44 @@
 #!/bin/sh
 set -u
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
+TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 . "$SCRIPT_DIR/model-lib.sh"
-target=${1:-.}
-mode=${2:-local-proxy}
-[ -d "$target" ] || { echo "error: target directory does not exist" >&2; exit 1; }
-target=$(CDPATH= cd "$target" && pwd)
-model_mode_is_valid "$mode" || { echo "error: invalid Ollama mode" >&2; exit 2; }
-[ -d "$target/.ccb" ] || { echo "error: CCB is not installed" >&2; exit 1; }
-if [ "$mode" = cloud-api ] && [ -z "${OLLAMA_API_KEY:-}" ]; then echo "[WARN] OLLAMA_API_KEY is not set; it was not requested or stored." >&2; fi
-mkdir -p "$target/.ccb"
-cat >"$target/.ccb/models.conf" <<EOF
+
+target= mode=local-proxy preset= manual=0 single= fallback= yes=0 dry=0
+manager= graph= graphiste= developer= reviewer=
+while [ "$#" -gt 0 ]; do
+  case "$1" in --preset) shift; preset=${1:-};; --single-model) shift; single=${1:-};; --manager) shift; manager=${1:-};; --graph) shift; graph=${1:-};; --graphiste) shift; graphiste=${1:-};; --developer) shift; developer=${1:-};; --reviewer) shift; reviewer=${1:-};; --fallback) shift; fallback=${1:-};; --mode) shift; mode=${1:-};; --yes) yes=1;; --dry-run) dry=1;; --manual) manual=1;; -*) echo "error: unknown option: $1" >&2; exit 2;; *) [ -z "$target" ] || { echo 'error: one target expected' >&2; exit 2; }; target=$1;; esac
+  shift
+done
+target=${target:-.}; [ -d "$target/.ccb" ] && [ ! -L "$target/.ccb" ] || { echo 'error: CCB is not installed or is unsafe' >&2; exit 1; }
+target=$(CDPATH= cd "$target" && pwd); model_mode_is_valid "$mode" || { echo 'error: invalid Ollama mode' >&2; exit 2; }
+if [ -n "$preset" ]; then
+  model_preset_is_safe "$preset" && model_preset_parse "$TEMPLATE_ROOT/model-presets/$preset/preset.conf" && [ "$PRESET_ID" = "$preset" ] || { echo 'error: invalid preset' >&2; exit 2; }
+  manager=$MANAGER_MODEL; graph=$GRAPH_MODEL; graphiste=$GRAPHISTE_MODEL; developer=$DEVELOPER_MODEL; reviewer=$REVIEWER_MODEL; fallback=$FALLBACK_MODEL
+fi
+if [ -n "$single" ]; then model_name_is_safe "$single" || { echo 'error: invalid model' >&2; exit 2; }; manager=$single; graph=$single; graphiste=$single; developer=$single; reviewer=$single; [ -n "$fallback" ] || fallback=$single; preset=single-model; fi
+if [ "$manual" -eq 1 ] && [ "$yes" -ne 1 ]; then echo 'error: manual setup requires explicit values and --yes in non-interactive mode' >&2; exit 2; fi
+for value in "$manager" "$graph" "$graphiste" "$developer" "$reviewer" "$fallback"; do model_name_is_safe "$value" || { echo 'error: incomplete or invalid model configuration' >&2; exit 2; }; done
+host=http://localhost:11434; [ "$mode" = cloud-api ] && host=https://ollama.com/api
+printf 'Provider: ollama\nMode: %s\nPreset: %s\nManager: %s\nGraph: %s\nGraphiste: %s\nDeveloper: %s\nReviewer: %s\nFallback: %s\n' "$mode" "${preset:-manual}" "$manager" "$graph" "$graphiste" "$developer" "$reviewer" "$fallback"
+if [ "$dry" -eq 1 ]; then echo 'DRY RUN — no files were modified'; exit 0; fi
+[ "$yes" -eq 1 ] || { [ -t 0 ] || { echo 'error: --yes is required without a TTY' >&2; exit 2; }; printf 'Write this configuration? [y/N] '; IFS= read -r answer || exit 0; case "$answer" in y|Y|yes|YES);; *) echo 'Model setup cancelled.'; exit 0;; esac; }
+conf_file="$target/.ccb/models.conf"; [ ! -L "$conf_file" ] || { echo 'error: models.conf symlink refused' >&2; exit 1; }
+tmp=$(mktemp "$target/.ccb/.models.conf.XXXXXX") || exit 1; trap 'rm -f "$tmp"' EXIT HUP INT TERM
+cat >"$tmp" <<EOF
 # CCB agent model configuration (non-secret).
 # Never store API keys or authentication tokens in this file.
 CCB_MODEL_PROVIDER=ollama
 CCB_OLLAMA_MODE=$mode
-CCB_OLLAMA_HOST=$( [ "$mode" = cloud-api ] && printf https://ollama.com/api || printf http://localhost:11434 )
-CCB_MODEL_MANAGER=glm-5.2:cloud
-CCB_MODEL_GRAPH=qwen3.5:cloud
-CCB_MODEL_GRAPHISTE=gemma4:cloud
-CCB_MODEL_DEVELOPER=kimi-k2.7-code:cloud
-CCB_MODEL_REVIEWER=deepseek-v4-pro:cloud
-CCB_MODEL_FALLBACK=gpt-oss:120b-cloud
+CCB_OLLAMA_HOST=$host
+CCB_MODEL_PRESET=${preset:-manual}
+CCB_MODEL_MANAGER=$manager
+CCB_MODEL_GRAPH=$graph
+CCB_MODEL_GRAPHISTE=$graphiste
+CCB_MODEL_DEVELOPER=$developer
+CCB_MODEL_REVIEWER=$reviewer
+CCB_MODEL_FALLBACK=$fallback
 EOF
-echo "updated: $target/.ccb/models.conf"
+models_conf_validate "$tmp" || { echo 'error: generated configuration is invalid' >&2; exit 1; }; chmod 644 "$tmp"
+if [ -f "$conf_file" ]; then cp "$conf_file" "$target/.ccb/models.conf.backup-$(date +%Y%m%d-%H%M%S)"; fi
+mv "$tmp" "$conf_file"; trap - EXIT HUP INT TERM; echo "updated: $conf_file"

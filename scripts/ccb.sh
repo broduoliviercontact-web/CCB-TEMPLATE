@@ -56,11 +56,7 @@ models_command() {
       if models_conf_validate "$file"; then
         [ "$subcommand" = validate ] && echo '[OK] models.conf is valid' || sed '/API_KEY\|TOKEN\|SECRET/d' "$file"
       else echo "error: invalid or missing models.conf: $file" >&2; return 1; fi ;;
-    setup)
-      [ -t 0 ] || { echo 'error: models setup requires an interactive terminal in this version' >&2; return 2; }
-      printf 'Ollama mode [local-proxy]: '; IFS= read -r mode || return 0; mode=${mode:-local-proxy}
-      printf 'Write recommended non-secret model configuration? [y/N] '; IFS= read -r answer || return 0
-      case "$answer" in y|Y|yes|YES) "$MODEL_SETUP" "$target" "$mode";; *) echo 'Model setup cancelled.';; esac ;;
+    setup) exec "$MODEL_SETUP" "$@" ;;
     reset) echo 'error: reset requires interactive model setup; existing configuration was preserved.' >&2; return 2 ;;
     *) echo "error: unknown models command: $subcommand" >&2; return 2 ;;
   esac
