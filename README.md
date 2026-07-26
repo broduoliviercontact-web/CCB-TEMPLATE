@@ -53,6 +53,17 @@ Profiles and declarative Ollama model routing are available during bootstrap:
 Supported bootstrap profiles are `generic`, `web`, `node`, `python`, and `audio`. No model is
 downloaded or contacted during initialization.
 
+### Diagnostics
+
+```sh
+./scripts/ccb.sh doctor
+./scripts/ccb.sh doctor ./mon-projet --no-ollama
+./scripts/ccb.sh doctor ./mon-projet --strict
+```
+
+Recommended flow: clone or install CCB, run `ccb init`, inspect with `ccb config`, then run
+`ccb doctor`. See [doctor](docs/doctor.md) and the [V1.6.0 overview](docs/v1.6.0.md).
+
 ## Sommaire
 
 - [Démarrage rapide](#démarrage-rapide)

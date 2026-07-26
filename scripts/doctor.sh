@@ -1,217 +1,145 @@
 #!/bin/sh
-# Diagnostic read-only for projects using the CCB template.
+# Read-only diagnostics for the CCB template and V1.6.0 bootstrap projects.
 set -u
-
-usage() {
-  cat <<'EOF'
-usage: ./scripts/doctor.sh [project-directory] [--verbose]
-
-Diagnose whether a Git project is ready to use the CCB template.
-
-Examples:
-  ./scripts/doctor.sh
-  ./scripts/doctor.sh .
-  ./scripts/doctor.sh /path/to/project --verbose
-EOF
-}
-
-TARGET=
-VERBOSE=0
-
-for argument in "$@"; do
-  case "$argument" in
-    --help|-h)
-      usage
-      exit 0
-      ;;
-    --verbose|-v)
-      VERBOSE=1
-      ;;
-    -*)
-      echo "error: unknown option: $argument" >&2
-      usage >&2
-      exit 2
-      ;;
-    *)
-      if [ -n "$TARGET" ]; then
-        echo "error: only one project directory may be specified" >&2
-        usage >&2
-        exit 2
-      fi
-      TARGET=$argument
-      ;;
-  esac
-done
-
-if [ -z "$TARGET" ]; then
-  TARGET=.
-fi
 
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
-VALIDATE="$TEMPLATE_ROOT/scripts/validate-ccb.sh"
-. "$SCRIPT_DIR/profile-lib.sh"
-PROFILE_ROOT="$TEMPLATE_ROOT/profiles"
-ERRORS=0
-WARNINGS=0
+. "$SCRIPT_DIR/model-lib.sh"
+. "$SCRIPT_DIR/project-profile-lib.sh"
+. "$SCRIPT_DIR/project-config-lib.sh"
 
-ok() { printf '%s\n' "[OK] $1"; }
-warn() { printf '%s\n' "[WARN] $1"; WARNINGS=$((WARNINGS + 1)); }
-error() { printf '%s\n' "[ERROR] $1" >&2; ERRORS=$((ERRORS + 1)); }
+strict=0
+no_ollama=0
+format=text
+target=
+ok_count=0 warn_count=0 fail_count=0 skip_count=0
 
-check_command() {
-  command_name=$1
-  label=$2
-  recommendation=$3
+usage() {
+  cat >&2 <<'EOF'
+usage: ccb.sh doctor [TARGET] [OPTIONS]
 
-  if command -v "$command_name" >/dev/null 2>&1; then
-    ok "$label available"
-    return 0
-  fi
+Read-only diagnostics for this template, and optionally a bootstrapped project.
 
-  warn "$label not found; $recommendation"
-  return 1
+Options:
+  --strict          Treat WARN results as an exit status 1
+  --no-ollama       Skip local Ollama checks
+  --format text     Use stable plain-text output (the only supported format)
+  -h, --help        Show this help
+EOF
+  exit "${1:-2}"
 }
 
-printf '%s\n' 'CCB doctor v1.2'
+emit() {
+  status=$1 id=$2 message=$3
+  printf '[%s] %s — %s\n' "$status" "$id" "$message"
+  case "$status" in OK) ok_count=$((ok_count + 1));; WARN) warn_count=$((warn_count + 1));; FAIL) fail_count=$((fail_count + 1));; SKIP) skip_count=$((skip_count + 1));; esac
+}
 
-GIT_AVAILABLE=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --help|-h) usage 0;; --strict) strict=1;; --no-ollama) no_ollama=1;;
+    --format) shift; [ "$#" -gt 0 ] || usage 2; format=$1; [ "$format" = text ] || { echo "error: unsupported format: $format" >&2; exit 2; };;
+    -*) echo "error: unknown option: $1" >&2; usage 2;;
+    *) [ -z "$target" ] || { echo 'error: only one TARGET is accepted' >&2; usage 2; }; target=$1;;
+  esac
+  shift
+done
+
+printf 'CCB Doctor\n'
+if [ -n "$target" ]; then
+  if [ ! -d "$target" ] || [ -L "$target" ]; then echo 'error: TARGET must be a real directory' >&2; exit 2; fi
+  target=$(CDPATH= cd "$target" && pwd) || exit 2
+  printf 'Target: %s\n' "$target"
+else
+  printf 'Target: template-only\n'
+fi
+
+for tool in sh sed grep awk mktemp mv chmod mkdir rm basename dirname; do
+  if command -v "$tool" >/dev/null 2>&1; then emit OK "shell.$tool" available; else emit FAIL "shell.$tool" missing; fi
+done
+
+if [ -f "$TEMPLATE_ROOT/VERSION" ] && [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.6.0 ]; then emit OK template.version 1.6.0; else emit FAIL template.version 'expected 1.6.0'; fi
+for script in scripts/ccb.sh scripts/project-init.sh scripts/project-config.sh scripts/validate-ccb.sh; do
+  if [ -x "$TEMPLATE_ROOT/$script" ]; then emit OK "template.$script" executable; else emit FAIL "template.$script" missing-or-not-executable; fi
+  if [ -f "$TEMPLATE_ROOT/$script" ] && sh -n "$TEMPLATE_ROOT/$script" >/dev/null 2>&1; then emit OK "syntax.$script" valid; else emit FAIL "syntax.$script" invalid; fi
+done
+for profile in generic web node python audio; do
+  if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$profile.conf" && [ "$PROJECT_PROFILE_ID" = "$profile" ]; then emit OK "template.profile.$profile" valid; else emit FAIL "template.profile.$profile" invalid; fi
+done
+for file in docs/project-bootstrap.md docs/doctor.md docs/v1.6.0.md tests/test-doctor.sh .github/workflows/validate.yml; do
+  [ -s "$TEMPLATE_ROOT/$file" ] && emit OK "template.$file" present || emit FAIL "template.$file" missing
+done
 if command -v git >/dev/null 2>&1; then
-  ok 'Git available'
-  GIT_AVAILABLE=1
+  emit OK git.command available
+  if [ -z "$target" ] && git -C "$TEMPLATE_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if [ -n "$(git -C "$TEMPLATE_ROOT" status --porcelain 2>/dev/null)" ]; then emit WARN git.template working-tree-dirty; else emit OK git.template working-tree-clean; fi
+  else emit SKIP git.template not-a-repository; fi
+else emit WARN git.command unavailable; fi
+
+file_mode() {
+  stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1" 2>/dev/null || return 1
+}
+check_managed_file() {
+  path=$1 id=$2
+  if [ -L "$path" ]; then emit FAIL "$id" symbolic-link
+  elif [ ! -f "$path" ]; then emit FAIL "$id" missing-or-not-regular
+  elif [ ! -r "$path" ]; then emit WARN "$id" unreadable
+  else
+    emit OK "$id" present
+    mode=$(file_mode "$path") || mode=
+    if [ -z "$mode" ]; then emit SKIP "$id.permissions" stat-unavailable
+    elif [ "$mode" = 644 ]; then emit OK "$id.permissions" 644
+    else emit WARN "$id.permissions" "$mode"; fi
+  fi
+}
+
+if [ -n "$target" ]; then
+  if [ -L "$target/.ccb" ] || [ ! -d "$target/.ccb" ]; then emit FAIL project.ccb missing-or-unsafe; else emit OK project.ccb directory; fi
+  if [ -L "$target/.ccb/context" ] || [ ! -d "$target/.ccb/context" ]; then emit FAIL project.context_dir missing-or-unsafe; else emit OK project.context_dir directory; fi
+  check_managed_file "$target/.ccb/project.conf" project.project_conf
+  check_managed_file "$target/.ccb/models.conf" project.models_conf
+  check_managed_file "$target/.ccb/context/project.md" project.context
+  check_managed_file "$target/AGENTS.md" project.agents
+  if project_conf_parse "$target/.ccb/project.conf"; then
+    profile=$PROJECT_PROFILE
+    project_version=$(awk -F= '$1=="CCB_PROJECT_VERSION" {print $2}' "$target/.ccb/project.conf")
+    template_version=$(awk -F= '$1=="CCB_TEMPLATE_VERSION" {print $2}' "$target/.ccb/project.conf")
+    if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$profile.conf" && [ "$PROJECT_PROFILE_ID" = "$profile" ]; then emit OK project.profile "$profile"; else emit FAIL project.profile unsupported; fi
+    [ "$project_version" = 1 ] && emit OK project.version 1 || emit FAIL project.version unsupported
+    [ "$template_version" = "$(cat "$TEMPLATE_ROOT/VERSION")" ] && emit OK project.template_version "$template_version" || emit FAIL project.template_version incompatible
+    grep -Fq "Project: $PROJECT_NAME" "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.context_name present || emit WARN project.context_name missing
+    grep -Fq "Profile: $profile" "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.context_profile present || emit WARN project.context_profile missing
+  else emit FAIL project.project_conf invalid; fi
+  if project_models_parse "$target/.ccb/models.conf"; then
+    emit OK project.provider "$PROJECT_MODEL_PROVIDER"
+    for role in default planner coder reviewer; do model_value=$(awk -F= -v key="CCB_MODEL_$(printf '%s' "$role" | tr '[:lower:]' '[:upper:]')" '$1==key {print $2}' "$target/.ccb/models.conf"); [ -n "$model_value" ] && emit OK "project.model.$role" "$model_value" || emit FAIL "project.model.$role" missing; done
+  else emit FAIL project.models_conf invalid; fi
+  grep -Fq '.ccb/context/project.md' "$target/AGENTS.md" 2>/dev/null && grep -Fq '.ccb/models.conf' "$target/AGENTS.md" 2>/dev/null && emit OK project.agents_guidance present || emit WARN project.agents_guidance incomplete
+  if command -v git >/dev/null 2>&1; then
+    if git -C "$target" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      [ -z "$(git -C "$target" status --porcelain 2>/dev/null)" ] && emit OK git.project working-tree-clean || emit WARN git.project working-tree-dirty
+    else emit SKIP git.project not-a-repository; fi
+  fi
+fi
+
+if [ "$no_ollama" -eq 1 ]; then
+  emit SKIP ollama disabled
+elif ! command -v ollama >/dev/null 2>&1; then
+  emit WARN ollama.command not-found
+elif ! ollama --version >/dev/null 2>&1; then
+  emit WARN ollama.command version-failed
 else
-  error 'Git not found; install Git, then run this command again.'
-fi
-
-check_command tmux tmux 'install tmux before starting a CCB session.' || :
-
-GH_AVAILABLE=0
-if check_command gh 'GitHub CLI' 'install GitHub CLI if your workflow needs GitHub authentication.'; then
-  GH_AVAILABLE=1
-fi
-
-check_command ccb CCB 'install or make the CCB command available before starting CCB.' || :
-
-if [ "$GH_AVAILABLE" -eq 1 ]; then
-  if gh auth status >/dev/null 2>&1; then
-    ok 'GitHub CLI authentication is available'
-  else
-    warn 'GitHub CLI is not authenticated; run: gh auth login'
-  fi
-fi
-
-if [ ! -d "$TARGET" ]; then
-  error "target directory does not exist: $TARGET"
-  TARGET_VALID=0
-else
-  TARGET=$(CDPATH= cd "$TARGET" && pwd)
-  TARGET_VALID=1
-  ok "target directory: $TARGET"
-fi
-
-PROJECT_IS_GIT=0
-if [ "$TARGET_VALID" -eq 1 ] && [ "$GIT_AVAILABLE" -eq 1 ]; then
-  if git -C "$TARGET" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    PROJECT_IS_GIT=1
-    ok 'target is a Git repository'
-  else
-    error 'target is not a Git repository; initialize Git before installing CCB.'
-  fi
-fi
-
-if [ "$PROJECT_IS_GIT" -eq 1 ]; then
-  if git -C "$TARGET" rev-parse --verify HEAD >/dev/null 2>&1; then
-    ok 'initial Git commit exists'
-  else
-    error 'initial Git commit is missing; create one before CCB creates developer worktrees.'
-  fi
-
-  if git -C "$TARGET" remote get-url origin >/dev/null 2>&1; then
-    ok 'Git remote "origin" is configured'
-  else
-    warn 'Git remote "origin" is not configured; add one before publishing work.'
-  fi
-
-  if [ -n "$(git -C "$TARGET" status --porcelain 2>/dev/null)" ]; then
-    warn 'working tree has local changes; commit or stash them before starting collaborative work.'
-  else
-    ok 'working tree is clean'
-  fi
-
-  if git -C "$TARGET" config --get user.name >/dev/null 2>&1 \
-    || git config --global --get user.name >/dev/null 2>&1; then
-    ok 'Git author name is configured'
-  else
-    warn 'Git author name is not configured; run: git config --global user.name "Your Name"'
-  fi
-
-  if git -C "$TARGET" config --get user.email >/dev/null 2>&1 \
-    || git config --global --get user.email >/dev/null 2>&1; then
-    ok 'Git author email is configured'
-  else
-    warn 'Git author email is not configured; run: git config --global user.email "you@example.com"'
-  fi
-fi
-
-if [ "$TARGET_VALID" -eq 1 ]; then
-  if [ -f "$VALIDATE" ]; then
-    VALIDATE_OUTPUT=$(mktemp "${TMPDIR:-/tmp}/ccb-doctor.XXXXXX") || VALIDATE_OUTPUT=
-    if [ -n "$VALIDATE_OUTPUT" ]; then
-      if sh "$VALIDATE" "$TARGET" >"$VALIDATE_OUTPUT" 2>&1; then
-        ok 'CCB template files and ignore rules are valid'
-      else
-        error 'CCB template files or ignore rules are incomplete; run the installer or inspect the validator output.'
-      fi
-
-      if [ "$VERBOSE" -eq 1 ]; then
-        printf '%s\n' '--- validate-ccb.sh output ---'
-        sed 's/^/  /' "$VALIDATE_OUTPUT"
-      fi
-      rm -f "$VALIDATE_OUTPUT"
+  emit OK ollama.command available
+  if [ -n "$target" ] && project_models_parse "$target/.ccb/models.conf"; then
+    local_models=$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')
+    if [ -z "$local_models" ]; then emit WARN ollama.models unavailable-or-empty
     else
-      warn 'could not create a temporary file; CCB template validation was skipped.'
+      for configured in "$PROJECT_MODEL_DEFAULT" "$PROJECT_MODEL_PLANNER" "$PROJECT_MODEL_CODER" "$PROJECT_MODEL_REVIEWER"; do printf '%s\n' "$local_models" | grep -Fqx "$configured" && emit OK "ollama.model.$configured" installed || emit WARN "ollama.model.$configured" not-installed; done
     fi
-  else
-    error 'validate-ccb.sh is missing from this CCB template checkout.'
-  fi
+  else emit SKIP ollama.models no-project; fi
 fi
 
-if [ "$TARGET_VALID" -eq 1 ]; then
-  printf '%s\n' 'Project profile:'
-  if [ ! -f "$TARGET/.ccb/active-profile" ]; then
-    warn 'no active profile; run install-project.sh --profile generic to add one.'
-  else
-    active_profile=$(cat "$TARGET/.ccb/active-profile")
-    if ! profile_id_is_safe "$active_profile" || ! profile_parse "$PROFILE_ROOT/$active_profile/profile.conf"; then
-      error "invalid active profile: $active_profile"
-    elif [ ! -f "$TARGET/.ccb/profiles/$active_profile/PROFILE.md" ]; then
-      error "profile installation is incomplete: $active_profile"
-    else
-      profile_valid=1
-      old_ifs=$IFS; IFS=,
-      for profile_skill in $PROFILE_SKILLS; do
-        [ -n "$profile_skill" ] && [ ! -f "$TARGET/.ccb/profiles/$active_profile/skills/$profile_skill/SKILL.md" ] && profile_valid=0
-      done
-      IFS=$old_ifs
-      if [ "$profile_valid" -eq 1 ]; then
-        ok "Active profile: $active_profile (version $PROFILE_VERSION)"
-        printf '%s\n' "[INFO] Profile skills: $(profile_skill_count "$PROFILE_SKILLS")"
-        ok 'Profile installation is valid'
-      else
-        error "profile installation is incomplete: $active_profile"
-      fi
-    fi
-  fi
-fi
-
-printf '%s\n' "Summary: $ERRORS error(s), $WARNINGS warning(s)."
-if [ "$ERRORS" -ne 0 ]; then
-  printf '%s\n' 'Result: project is not ready for CCB. Apply the recommendations above, then rerun doctor.' >&2
-  exit 1
-fi
-
-if [ "$WARNINGS" -ne 0 ]; then
-  printf '%s\n' 'Result: project is usable, with recommendations to review before starting CCB.'
-else
-  printf '%s\n' 'Result: project is ready for CCB.'
-fi
+printf 'Summary: OK=%s WARN=%s FAIL=%s SKIP=%s\n' "$ok_count" "$warn_count" "$fail_count" "$skip_count"
+[ "$fail_count" -eq 0 ] || exit 1
+[ "$strict" -eq 0 ] || [ "$warn_count" -eq 0 ] || exit 1
+exit 0

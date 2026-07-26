@@ -92,8 +92,9 @@ require_template_executable scripts/doctor.sh
 require_template_executable scripts/ccb.sh
 require_template_executable scripts/project-init.sh
 require_template_executable scripts/project-config.sh
+require_template_executable scripts/doctor.sh
 
-for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh; do
+for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-doctor.sh; do
   require_template_executable "$project_test"
 done
 
@@ -107,7 +108,7 @@ else
   error "missing or unreadable template library: scripts/mascot-lib.sh"
 fi
 
-for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md; do
+for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md docs/doctor.md docs/v1.6.0.md CHANGELOG.md; do
   if [ -s "$TEMPLATE_ROOT/$template_file" ]; then
     ok "template file: $template_file"
   else
@@ -120,6 +121,18 @@ for project_profile in generic web node python audio; do
     ok "project bootstrap profile: $project_profile"
   else
     error "invalid project bootstrap profile: $project_profile"
+  fi
+done
+
+for audited_script in scripts/doctor.sh scripts/project-init.sh scripts/project-config.sh scripts/project-config-lib.sh scripts/project-profile-lib.sh; do
+  if awk '
+    /^[[:space:]]*#/ { next }
+    /(^|[[:space:];])eval([[:space:];]|$)|(^|[[:space:];])source[[:space:]]|(^|[[:space:];])(bash|sh)[[:space:]]+-c|curl[[:space:]]|wget[[:space:]]|sudo[[:space:]]|chmod[[:space:]]+777|mktemp[[:space:]]+-u|rm[[:space:]]+-rf/ { bad=1 }
+    END { exit bad ? 1 : 0 }
+  ' "$TEMPLATE_ROOT/$audited_script"; then
+    ok "safe production script: $audited_script"
+  else
+    error "unsafe production construction: $audited_script"
   fi
 done
 

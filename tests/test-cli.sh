@@ -20,6 +20,7 @@ assert_contains() {
 help_output=$("$CLI" help)
 assert_contains "$help_output" 'init TARGET [OPTIONS]' 'help documents project bootstrap'
 assert_contains "$help_output" 'config TARGET' 'help documents bootstrap config'
+assert_contains "$help_output" 'doctor [TARGET]' 'help documents doctor'
 version_output=$("$CLI" version)
 [ "$version_output" = 1.6.0 ] || {
   echo "assertion failed: version is $version_output (expected: 1.6.0)" >&2
@@ -58,7 +59,7 @@ git -C "$repo" add README.md
 git -C "$repo" commit -qm fixture
 "$CLI" install "$repo" --profile react-web >/dev/null
 "$CLI" validate "$repo" >/dev/null
-"$CLI" doctor "$repo" >/dev/null
+"$CLI" doctor --no-ollama >/dev/null
 "$CLI" status "$repo" | grep -Fq 'Active profile: react-web'
 
 echo "[OK] CLI integration tests passed"
