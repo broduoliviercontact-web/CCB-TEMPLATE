@@ -6,10 +6,21 @@ TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 
 target= mode=local-proxy preset= manual=0 single= fallback= yes=0 dry=0
 manager= graph= graphiste= developer= reviewer=
+interactive=0
+[ "$#" -eq 0 ] && interactive=1
 while [ "$#" -gt 0 ]; do
   case "$1" in --preset) shift; preset=${1:-};; --single-model) shift; single=${1:-};; --manager) shift; manager=${1:-};; --graph) shift; graph=${1:-};; --graphiste) shift; graphiste=${1:-};; --developer) shift; developer=${1:-};; --reviewer) shift; reviewer=${1:-};; --fallback) shift; fallback=${1:-};; --mode) shift; mode=${1:-};; --yes) yes=1;; --dry-run) dry=1;; --manual) manual=1;; -*) echo "error: unknown option: $1" >&2; exit 2;; *) [ -z "$target" ] || { echo 'error: one target expected' >&2; exit 2; }; target=$1;; esac
   shift
 done
+if [ "$interactive" -eq 1 ]; then
+  [ -t 0 ] || { echo 'error: models setup needs a target or an interactive terminal' >&2; exit 2; }
+  printf 'Step 1/6 — Project target [.]: '; IFS= read -r target || exit 0; target=${target:-.}
+  printf '%s\n' 'Step 2/6 — Ollama detection'
+  if command -v ollama >/dev/null 2>&1; then ollama --version 2>/dev/null || :; ollama list 2>/dev/null || :; else echo '[WARN] Ollama was not detected; recommended models remain usable.'; fi
+  printf '%s\n' 'Step 3/6 — Strategy: [1] Balanced [2] Coding [3] Reasoning [4] Creative [5] Local [6] One model [Q] Quit'
+  printf 'Selection: '; IFS= read -r choice || exit 0
+  case "$choice" in 1) preset=balanced-cloud;; 2) preset=coding-cloud;; 3) preset=reasoning-cloud;; 4) preset=creative-cloud;; 5) preset=local-light;; 6) printf 'Model name: '; IFS= read -r single || exit 0;; q|Q) echo 'Model setup cancelled.'; exit 0;; *) echo 'error: invalid strategy' >&2; exit 2;; esac
+fi
 target=${target:-.}; [ -d "$target/.ccb" ] && [ ! -L "$target/.ccb" ] || { echo 'error: CCB is not installed or is unsafe' >&2; exit 1; }
 target=$(CDPATH= cd "$target" && pwd); model_mode_is_valid "$mode" || { echo 'error: invalid Ollama mode' >&2; exit 2; }
 if [ -n "$preset" ]; then

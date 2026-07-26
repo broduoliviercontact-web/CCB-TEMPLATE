@@ -20,6 +20,8 @@ jobs:
           sh -n scripts/mascot-lib.sh
           sh -n scripts/model-lib.sh
           sh -n scripts/model-setup.sh
+          sh -n scripts/model-resolve.sh
+          sh -n tests/test-models.sh
           sh -n tests/test-install.sh
           sh -n tests/test-profiles.sh
           sh -n tests/test-cli.sh
@@ -31,4 +33,5 @@ jobs:
           ./tests/test-install.sh
           ./tests/test-profiles.sh
           ./tests/test-cli.sh
+          ./tests/test-models.sh
           ./tests/test-setup-wizard.sh
