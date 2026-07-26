@@ -35,6 +35,8 @@ Commands:
   models [show|list|validate|recommendations|setup|reset]
   agent run|model|command|check ROLE [TARGET] [OPTIONS]
   agents [TARGET]
+  providers
+  provider check|models ollama
   help                            Show this help
 
 With no command, open the interactive CCB Control Room.
@@ -44,6 +46,16 @@ EOF
 agent_command() {
   action=${1:-}; role=${2:-}; shift 2 2>/dev/null || :
   case "$action" in run) exec "$AGENT_LAUNCHER" "$role" "$@";; model) exec "$MODEL_RESOLVE" "$role" "${1:-.}";; command) "$AGENT_LAUNCHER" "$role" "${1:-.}" --dry-run;; check) "$AGENT_LAUNCHER" "$role" "${1:-.}" --dry-run >/dev/null;; *) echo 'error: usage: agent run|model|command|check ROLE' >&2; return 2;; esac
+}
+
+provider_command() {
+  action=${1:-}; provider=${2:-}
+  [ "$provider" = ollama ] || { echo "Unsupported runtime provider: $provider" >&2; return 2; }
+  case "$action" in
+    check) "$SCRIPT_DIR/provider-router.sh" available ollama . || return $?; "$SCRIPT_DIR/provider-router.sh" list-models ollama . >/dev/null || return $?; echo 'Ollama runtime: READY' ;;
+    models) models=$("$SCRIPT_DIR/provider-router.sh" list-models ollama .) || return $?; if [ -n "$models" ]; then printf '%s\n' "$models"; else echo 'No local Ollama models found.'; fi ;;
+    *) echo 'usage: ccb.sh provider check|models ollama' >&2; return 2;;
+  esac
 }
 
 models_command() {
@@ -268,6 +280,9 @@ case "${1:-}" in
   agents)
     target=${2:-.}; printf '%-12s %-30s %s\n' Agent Model Ready
     for role in manager graph graphiste developer reviewer; do model=$($MODEL_RESOLVE "$role" "$target" 2>/dev/null || printf missing); printf '%-12s %-30s %s\n' "$role" "$model" "$( [ "$model" = missing ] && printf no || printf yes )"; done ;;
+  providers)
+    if "$SCRIPT_DIR/provider-router.sh" available ollama . >/dev/null 2>&1; then echo 'Provider   Status   Details'; echo 'Ollama     READY    CLI available'; else echo 'Provider   Status   Details'; echo 'Ollama     MISSING  Install Ollama and ensure it is in PATH'; fi ;;
+  provider) shift; provider_command "$@"; exit $? ;;
   profiles) [ "$#" -eq 1 ] || { usage >&2; exit 2; }; list_profiles ;;
   profile)
     [ "${2:-}" = show ] && [ "$#" -eq 3 ] || { usage >&2; exit 2; }
