@@ -21,6 +21,7 @@ help_output=$("$CLI" help)
 assert_contains "$help_output" 'init TARGET [OPTIONS]' 'help documents project bootstrap'
 assert_contains "$help_output" 'config TARGET' 'help documents bootstrap config'
 assert_contains "$help_output" 'skills TARGET' 'help documents skills'
+assert_contains "$help_output" 'upgrade TARGET [OPTIONS]' 'help documents project upgrade'
 assert_contains "$help_output" 'doctor [TARGET]' 'help documents doctor'
 version_output=$("$CLI" version)
 [ "$version_output" = 1.6.1 ] || {
@@ -31,6 +32,7 @@ init_help=$("$CLI" init --help 2>&1)
 assert_contains "$init_help" 'init TARGET' 'project bootstrap help is available'
 assert_contains "$init_help" '--ponytail-mode' 'init documents Ponytail mode'
 "$CLI" skills --help >/dev/null 2>&1
+"$CLI" upgrade --help >/dev/null 2>&1
 "$CLI" models presets | grep -Fq balanced-cloud || { echo 'assertion failed: models presets lists balanced-cloud' >&2; exit 1; }
 "$CLI" models recommendations | grep -Fq balanced-cloud || { echo 'assertion failed: model recommendations list balanced-cloud' >&2; exit 1; }
 "$CLI" mascots | grep -Fq terminal-bot || { echo 'assertion failed: mascots list terminal-bot' >&2; exit 1; }

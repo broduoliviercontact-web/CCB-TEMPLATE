@@ -1,7 +1,7 @@
 # CCB Doctor
 
 `./scripts/ccb.sh doctor [TARGET]` is a read-only diagnostic. Without a target
-it checks the template; with a target it also checks the four bootstrap-managed
+it checks the template; with a target it also checks the five bootstrap-managed
 files, profile, model routing, permissions, and lightweight Git state.
 
 ```sh
@@ -20,6 +20,10 @@ it never evaluates them. It may call only `ollama --version` and `ollama list`.
 It never downloads, runs, starts, modifies, or removes models, and it never
 repairs project files or permissions. The text format is the supported stable
 format in V1.6.0.
+
+A valid bootstrap project at template version `1.6.0` receives a `WARN` that
+skills are not configured and an explicit `ccb upgrade TARGET --yes` recommendation.
+Doctor remains read-only: it does not start an upgrade.
 
 Individual file writes from bootstrap are atomic, but a multi-file bootstrap
 cannot be a perfect shell transaction if a late rename fails.

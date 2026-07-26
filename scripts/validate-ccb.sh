@@ -94,9 +94,10 @@ require_template_executable scripts/ccb.sh
 require_template_executable scripts/project-init.sh
 require_template_executable scripts/project-config.sh
 require_template_executable scripts/project-skills.sh
+require_template_executable scripts/project-upgrade.sh
 require_template_executable scripts/doctor.sh
 
-for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-doctor.sh; do
+for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
   require_template_executable "$project_test"
 done
 
@@ -110,7 +111,7 @@ else
   error "missing or unreadable template library: scripts/mascot-lib.sh"
 fi
 
-for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md CHANGELOG.md; do
+for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md CHANGELOG.md; do
   if [ -s "$TEMPLATE_ROOT/$template_file" ]; then
     ok "template file: $template_file"
   else
@@ -128,7 +129,7 @@ for project_profile in generic web node python audio; do
   fi
 done
 
-for audited_script in scripts/doctor.sh scripts/project-init.sh scripts/project-config.sh scripts/project-config-lib.sh scripts/project-profile-lib.sh; do
+for audited_script in scripts/doctor.sh scripts/project-init.sh scripts/project-upgrade.sh scripts/project-config.sh scripts/project-config-lib.sh scripts/project-profile-lib.sh; do
   if awk '
     /^[[:space:]]*#/ { next }
     /(^|[[:space:];])eval([[:space:];]|$)|(^|[[:space:];])source[[:space:]]|(^|[[:space:];])(bash|sh)[[:space:]]+-c|curl[[:space:]]|wget[[:space:]]|sudo[[:space:]]|chmod[[:space:]]+777|mktemp[[:space:]]+-u|rm[[:space:]]+-rf/ { bad=1 }

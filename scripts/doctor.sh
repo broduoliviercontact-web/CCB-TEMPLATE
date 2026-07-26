@@ -61,14 +61,14 @@ for tool in sh sed grep awk mktemp mv chmod mkdir rm basename dirname; do
 done
 
 if [ -f "$TEMPLATE_ROOT/VERSION" ] && [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.6.1 ]; then emit OK template.version 1.6.1; else emit FAIL template.version 'expected 1.6.1'; fi
-for script in scripts/ccb.sh scripts/project-init.sh scripts/project-config.sh scripts/validate-ccb.sh; do
+for script in scripts/ccb.sh scripts/project-init.sh scripts/project-config.sh scripts/project-upgrade.sh scripts/validate-ccb.sh; do
   if [ -x "$TEMPLATE_ROOT/$script" ]; then emit OK "template.$script" executable; else emit FAIL "template.$script" missing-or-not-executable; fi
   if [ -f "$TEMPLATE_ROOT/$script" ] && sh -n "$TEMPLATE_ROOT/$script" >/dev/null 2>&1; then emit OK "syntax.$script" valid; else emit FAIL "syntax.$script" invalid; fi
 done
 for profile in generic web node python audio; do
   if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$profile.conf" && [ "$PROJECT_PROFILE_ID" = "$profile" ]; then emit OK "template.profile.$profile" valid; else emit FAIL "template.profile.$profile" invalid; fi
 done
-for file in docs/project-bootstrap.md docs/project-skills.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md tests/test-doctor.sh .github/workflows/validate.yml; do
+for file in docs/project-bootstrap.md docs/project-skills.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md tests/test-doctor.sh tests/test-project-upgrade.sh .github/workflows/validate.yml; do
   [ -s "$TEMPLATE_ROOT/$file" ] && emit OK "template.$file" present || emit FAIL "template.$file" missing
 done
 if command -v git >/dev/null 2>&1; then
@@ -85,7 +85,8 @@ file_mode() {
 }
 check_managed_file() {
   path=$1 id=$2
-  if [ -L "$path" ]; then emit FAIL "$id" symbolic-link
+  if [ "$id" = project.skills_conf ] && [ ! -e "$path" ] && [ ! -L "$path" ] && grep -Fqx 'CCB_TEMPLATE_VERSION=1.6.0' "$target/.ccb/project.conf" 2>/dev/null; then emit WARN "$id" legacy-not-configured
+  elif [ -L "$path" ]; then emit FAIL "$id" symbolic-link
   elif [ ! -f "$path" ]; then emit FAIL "$id" missing-or-not-regular
   elif [ ! -r "$path" ]; then emit WARN "$id" unreadable
   else
@@ -116,7 +117,7 @@ if [ -n "$target" ]; then
     template_version=$(awk -F= '$1=="CCB_TEMPLATE_VERSION" {print $2}' "$target/.ccb/project.conf")
     if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$profile.conf" && [ "$PROJECT_PROFILE_ID" = "$profile" ]; then emit OK project.profile "$profile"; else emit FAIL project.profile unsupported; fi
     [ "$project_version" = 1 ] && emit OK project.version 1 || emit FAIL project.version unsupported
-    [ "$template_version" = "$(cat "$TEMPLATE_ROOT/VERSION")" ] && emit OK project.template_version "$template_version" || emit FAIL project.template_version incompatible
+    if [ "$template_version" = "$(cat "$TEMPLATE_ROOT/VERSION")" ]; then emit OK project.template_version "$template_version"; elif [ "$template_version" = 1.6.0 ]; then emit WARN project.template_version upgrade-available; else emit FAIL project.template_version incompatible; fi
     grep -Fq "Project: $PROJECT_NAME" "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.context_name present || emit WARN project.context_name missing
     grep -Fq "Profile: $profile" "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.context_profile present || emit WARN project.context_profile missing
     else emit FAIL project.project_conf invalid; fi
@@ -129,7 +130,7 @@ if [ -n "$target" ]; then
       grep -Fq '.ccb/skills.conf' "$target/AGENTS.md" 2>/dev/null && grep -Fq '## Ponytail' "$target/AGENTS.md" 2>/dev/null && grep -Fq "Mode: $PROJECT_SKILL_PONYTAIL_MODE" "$target/AGENTS.md" 2>/dev/null && emit OK project.ponytail_guidance present || emit FAIL project.ponytail_guidance missing
       grep -Fq '## Skills' "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.skills_context present || emit WARN project.skills_context missing
     else
-      [ "$template_version" = 1.6.0 ] && emit WARN project.skills_conf legacy-not-configured || emit FAIL project.skills_conf invalid
+      if [ "$template_version" = 1.6.0 ]; then emit WARN project.upgrade 'run: ccb.sh upgrade TARGET --yes'; else emit FAIL project.skills_conf invalid; fi
     fi
     grep -Fq '.ccb/context/project.md' "$target/AGENTS.md" 2>/dev/null && grep -Fq '.ccb/models.conf' "$target/AGENTS.md" 2>/dev/null && emit OK project.agents_guidance present || emit WARN project.agents_guidance incomplete
   fi

@@ -19,6 +19,11 @@ before=$(cksum "$project/.ccb/models.conf")
 run "$CLI" doctor "$project" --no-ollama; [ "$status" -eq 0 ] || fail "valid project doctor failed: $output"; contains "$output" 'project.profile — audio' || fail 'profile result'; contains "$output" 'ollama — disabled' || fail 'ollama skip'; after=$(cksum "$project/.ccb/models.conf"); [ "$before" = "$after" ] || fail 'doctor modified project'
 run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail 'strict valid project failed'
 
+legacy="$WORK/legacy project"; "$CLI" init "$legacy" --yes >/dev/null
+sed 's/CCB_TEMPLATE_VERSION=1.6.1/CCB_TEMPLATE_VERSION=1.6.0/' "$legacy/.ccb/project.conf" >"$legacy/.ccb/project.next" && mv "$legacy/.ccb/project.next" "$legacy/.ccb/project.conf"
+rm -f "$legacy/.ccb/skills.conf"
+run "$CLI" doctor "$legacy" --no-ollama; [ "$status" -eq 0 ] || fail 'legacy doctor should warn, not fail'; contains "$output" 'project.upgrade — run: ccb.sh upgrade TARGET --yes' || fail 'legacy upgrade recommendation missing'
+
 chmod 666 "$project/.ccb/models.conf"
 run "$CLI" doctor "$project" --no-ollama; [ "$status" -eq 0 ] || fail 'warning should not fail normal doctor'; contains "$output" 'project.models_conf.permissions — 666' || fail 'permission warning missing'
 run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict warning should fail'

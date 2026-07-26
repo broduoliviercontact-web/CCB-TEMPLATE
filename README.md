@@ -37,7 +37,7 @@ Create the minimal local CCB contract without installing runtimes or touching Gi
 ./scripts/ccb.sh init ./mon-projet --dry-run
 ```
 
-The first invocation creates four managed files. An identical second invocation reports `SKIP`
+The first invocation creates five managed files. An identical second invocation reports `SKIP`
 for each one instead of failing. See [the bootstrap guide](docs/project-bootstrap.md) for the
 conflict and safety rules.
 
@@ -54,6 +54,17 @@ Profiles and declarative Ollama model routing are available during bootstrap:
 Supported bootstrap profiles are `generic`, `web`, `node`, `python`, and `audio`. No model is
 downloaded or contacted during initialization.
 
+### Safe upgrade from 1.6.0
+
+Bootstrap projects created with CCB 1.6.0 can be migrated explicitly; inspect the complete plan first:
+
+```sh
+./scripts/ccb.sh upgrade ./mon-projet --dry-run
+./scripts/ccb.sh upgrade ./mon-projet --yes
+```
+
+The upgrade never runs automatically and stops on customized managed files. See [the upgrade guide](docs/project-upgrade.md).
+
 ### Diagnostics
 
 ```sh
@@ -63,7 +74,8 @@ downloaded or contacted during initialization.
 ```
 
 Recommended flow: clone or install CCB, run `ccb init`, inspect with `ccb config`, then run
-`ccb doctor`. See [doctor](docs/doctor.md) and the [V1.6.0 overview](docs/v1.6.0.md).
+`ccb doctor`. A 1.6.0 project receives a read-only upgrade recommendation; Doctor never migrates it.
+See [doctor](docs/doctor.md) and the [V1.6.0 overview](docs/v1.6.0.md).
 
 ## Sommaire
 

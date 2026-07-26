@@ -5,18 +5,22 @@
 ### Added
 
 - Declarative project skills, Ponytail modes, and read-only `ccb skills` guidance.
+- Explicit `ccb upgrade TARGET` migration from bootstrap project format 1.6.0 to 1.6.1.
 
 ### Changed
 
 - Bootstrap manages `skills.conf` alongside project, model, context, and agent guidance.
+- Doctor recognizes a 1.6.0 project as upgradeable and recommends, but never performs, the upgrade.
 
 ### Security
 
 - Ponytail plugins and hooks are never installed or activated automatically.
+- Upgrade refuses customized managed files and uses atomic replacements with rollback attempts.
 
 ### Testing
 
 - CI covers skills configuration and instructions.
+- CI covers upgrade planning, dry-run, conflicts, and idempotence.
 
 ## 1.6.0
 
