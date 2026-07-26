@@ -88,6 +88,7 @@ done
 
 require_template_executable scripts/doctor.sh
 require_template_executable scripts/ccb.sh
+require_template_executable scripts/project-init.sh
 
 for model_script in scripts/model-lib.sh scripts/model-setup.sh; do
   if [ -s "$TEMPLATE_ROOT/$model_script" ] && [ -r "$TEMPLATE_ROOT/$model_script" ]; then ok "template model script: $model_script"; else error "missing model script: $model_script"; fi
@@ -99,7 +100,7 @@ else
   error "missing or unreadable template library: scripts/mascot-lib.sh"
 fi
 
-for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md; do
+for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md; do
   if [ -s "$TEMPLATE_ROOT/$template_file" ]; then
     ok "template file: $template_file"
   else

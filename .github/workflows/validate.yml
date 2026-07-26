@@ -29,6 +29,7 @@ jobs:
           sh -n tests/test-install.sh
           sh -n tests/test-profiles.sh
           sh -n tests/test-cli.sh
+          sh -n tests/test-project-init.sh
           sh -n tests/test-setup-wizard.sh
       - name: Validate template
         run: ./scripts/validate-ccb.sh
@@ -37,6 +38,7 @@ jobs:
           ./tests/test-install.sh
           ./tests/test-profiles.sh
           ./tests/test-cli.sh
+          ./tests/test-project-init.sh
           ./tests/test-models.sh
           ./tests/test-provider-routing.sh
           ./tests/test-setup-wizard.sh

@@ -27,6 +27,20 @@ prévisualise les changements, installe CCB puis lance la validation.
 CCB 1.4 can keep non-secret Ollama model assignments in `.ccb/models.conf`. Inspect local models
 with `./scripts/ccb.sh models list` and recommendations with `./scripts/ccb.sh models recommendations`.
 
+### Minimal project bootstrap
+
+Create the minimal local CCB contract without installing runtimes or touching Git:
+
+```sh
+./scripts/ccb.sh init ./mon-projet --yes
+./scripts/ccb.sh init ./mon-projet
+./scripts/ccb.sh init ./mon-projet --dry-run
+```
+
+The first invocation creates three managed files. An identical second invocation reports `SKIP`
+for each one instead of failing. See [the bootstrap guide](docs/project-bootstrap.md) for the
+conflict and safety rules.
+
 ## Sommaire
 
 - [Démarrage rapide](#démarrage-rapide)
