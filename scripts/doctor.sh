@@ -77,7 +77,9 @@ if command -v git >/dev/null 2>&1; then
 else emit WARN git.command unavailable; fi
 
 file_mode() {
-  stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1" 2>/dev/null || return 1
+  mode=$(stat -f '%Lp' "$1" 2>/dev/null) || mode=
+  case "$mode" in [0-7][0-7][0-7]) printf '%s\n' "$mode"; return 0;; esac
+  stat -c '%a' "$1" 2>/dev/null || return 1
 }
 check_managed_file() {
   path=$1 id=$2
