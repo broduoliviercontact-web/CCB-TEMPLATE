@@ -17,6 +17,7 @@ jobs:
           sh -n scripts/validate-ccb.sh
           sh -n scripts/doctor.sh
           sh -n scripts/ccb.sh
+          sh -n scripts/project-init.sh
           sh -n scripts/mascot-lib.sh
           sh -n scripts/model-lib.sh
           sh -n scripts/model-setup.sh
