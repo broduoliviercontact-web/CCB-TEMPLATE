@@ -5,6 +5,8 @@ TARGET=${1:-.}
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 . "$SCRIPT_DIR/profile-lib.sh"
+. "$SCRIPT_DIR/model-lib.sh"
+. "$SCRIPT_DIR/project-profile-lib.sh"
 PROFILE_ROOT="$TEMPLATE_ROOT/profiles"
 ERRORS=0
 
@@ -89,6 +91,11 @@ done
 require_template_executable scripts/doctor.sh
 require_template_executable scripts/ccb.sh
 require_template_executable scripts/project-init.sh
+require_template_executable scripts/project-config.sh
+
+for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh; do
+  require_template_executable "$project_test"
+done
 
 for model_script in scripts/model-lib.sh scripts/model-setup.sh; do
   if [ -s "$TEMPLATE_ROOT/$model_script" ] && [ -r "$TEMPLATE_ROOT/$model_script" ]; then ok "template model script: $model_script"; else error "missing model script: $model_script"; fi
@@ -100,11 +107,19 @@ else
   error "missing or unreadable template library: scripts/mascot-lib.sh"
 fi
 
-for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md; do
+for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md; do
   if [ -s "$TEMPLATE_ROOT/$template_file" ]; then
     ok "template file: $template_file"
   else
     error "missing or empty template file: $template_file"
+  fi
+done
+
+for project_profile in generic web node python audio; do
+  if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$project_profile.conf" && [ "$PROJECT_PROFILE_ID" = "$project_profile" ]; then
+    ok "project bootstrap profile: $project_profile"
+  else
+    error "invalid project bootstrap profile: $project_profile"
   fi
 done
 

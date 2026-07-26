@@ -37,9 +37,21 @@ Create the minimal local CCB contract without installing runtimes or touching Gi
 ./scripts/ccb.sh init ./mon-projet --dry-run
 ```
 
-The first invocation creates three managed files. An identical second invocation reports `SKIP`
+The first invocation creates four managed files. An identical second invocation reports `SKIP`
 for each one instead of failing. See [the bootstrap guide](docs/project-bootstrap.md) for the
 conflict and safety rules.
+
+Profiles and declarative Ollama model routing are available during bootstrap:
+
+```sh
+./scripts/ccb.sh init ./mon-site --profile web --yes
+./scripts/ccb.sh init ./outil-node --profile node --model qwen3:8b --coder-model qwen2.5-coder:7b --yes
+./scripts/ccb.sh init "./studio midi" --profile audio --dry-run
+./scripts/ccb.sh config ./mon-site
+```
+
+Supported bootstrap profiles are `generic`, `web`, `node`, `python`, and `audio`. No model is
+downloaded or contacted during initialization.
 
 ## Sommaire
 

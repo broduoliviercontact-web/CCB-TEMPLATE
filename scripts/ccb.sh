@@ -5,6 +5,7 @@ SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 INSTALL="$SCRIPT_DIR/install-project.sh"
 PROJECT_INIT="$SCRIPT_DIR/project-init.sh"
+PROJECT_CONFIG="$SCRIPT_DIR/project-config.sh"
 VALIDATE="$SCRIPT_DIR/validate-ccb.sh"
 DOCTOR="$SCRIPT_DIR/doctor.sh"
 MODEL_SETUP="$SCRIPT_DIR/model-setup.sh"
@@ -26,6 +27,7 @@ Commands:
   validate [TARGET]               Validate a project
   install [TARGET] [OPTIONS]      Delegate installation to install-project.sh
   init TARGET [OPTIONS]           Create the minimal safe CCB project structure
+  config TARGET                   Read bootstrap project and model configuration
   setup [TARGET] [OPTIONS]        Guided setup; use --yes for non-interactive install
   profiles                        List local profiles
   profile show ID                 Show one profile
@@ -294,6 +296,7 @@ case "${1:-}" in
   validate) shift; exec "$VALIDATE" "$@" ;;
   install) shift; exec "$INSTALL" "$@" ;;
   init) shift; exec "$PROJECT_INIT" "$@" ;;
+  config) shift; exec "$PROJECT_CONFIG" "$@" ;;
   setup|wizard) setup_command "$@"; exit $? ;;
   status) shift; [ "$#" -le 1 ] || { usage >&2; exit 2; }; status "${1:-.}" ;;
   *) echo "error: unknown command: $1" >&2; usage >&2; exit 2 ;;

@@ -19,6 +19,7 @@ assert_contains() {
 
 help_output=$("$CLI" help)
 assert_contains "$help_output" 'init TARGET [OPTIONS]' 'help documents project bootstrap'
+assert_contains "$help_output" 'config TARGET' 'help documents bootstrap config'
 version_output=$("$CLI" version)
 [ "$version_output" = 1.6.0 ] || {
   echo "assertion failed: version is $version_output (expected: 1.6.0)" >&2

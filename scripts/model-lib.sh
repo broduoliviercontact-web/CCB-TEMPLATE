@@ -26,10 +26,15 @@ model_preset_parse() {
 models_conf_validate() {
   file=$1
   [ -f "$file" ] || return 1
-  provider= mode= host= manager= graph= graphiste= developer= reviewer=
+  provider= mode= host= manager= graph= graphiste= developer= reviewer= default= planner= coder= project_reviewer=
   while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in ''|'#'*) continue;; CCB_MODEL_PROVIDER=*) provider=${line#*=};; CCB_OLLAMA_MODE=*) mode=${line#*=};; CCB_OLLAMA_HOST=*) host=${line#*=};; CCB_MODEL_PRESET=*) preset=${line#*=}; model_preset_is_safe "$preset" || return 1;; CCB_MODEL_MANAGER=*) manager=${line#*=};; CCB_MODEL_GRAPH=*) graph=${line#*=};; CCB_MODEL_GRAPHISTE=*) graphiste=${line#*=};; CCB_MODEL_DEVELOPER=*) developer=${line#*=};; CCB_MODEL_REVIEWER=*) reviewer=${line#*=};; CCB_MODEL_FALLBACK=*) :;; *) return 1;; esac
+    case "$line" in ''|'#'*) continue;; CCB_MODEL_PROVIDER=*) provider=${line#*=};; CCB_MODEL_DEFAULT=*) default=${line#*=};; CCB_MODEL_PLANNER=*) planner=${line#*=};; CCB_MODEL_CODER=*) coder=${line#*=};; CCB_OLLAMA_MODE=*) mode=${line#*=};; CCB_OLLAMA_HOST=*) host=${line#*=};; CCB_MODEL_PRESET=*) preset=${line#*=}; model_preset_is_safe "$preset" || return 1;; CCB_MODEL_MANAGER=*) manager=${line#*=};; CCB_MODEL_GRAPH=*) graph=${line#*=};; CCB_MODEL_GRAPHISTE=*) graphiste=${line#*=};; CCB_MODEL_DEVELOPER=*) developer=${line#*=};; CCB_MODEL_REVIEWER=*) reviewer=${line#*=}; project_reviewer=$reviewer;; CCB_MODEL_FALLBACK=*) :;; *) return 1;; esac
   done <"$file"
-  [ "$provider" = ollama ] && model_mode_is_valid "$mode" && [ -n "$host" ] || return 1
+  [ "$provider" = ollama ] || return 1
+  if [ -n "$default" ] || [ -n "$planner" ] || [ -n "$coder" ]; then
+    for model in "$default" "$planner" "$coder" "$project_reviewer"; do model_name_is_safe "$model" || return 1; done
+    return 0
+  fi
+  model_mode_is_valid "$mode" && [ -n "$host" ] || return 1
   for model in "$manager" "$graph" "$graphiste" "$developer" "$reviewer"; do model_name_is_safe "$model" || return 1; done
 }
