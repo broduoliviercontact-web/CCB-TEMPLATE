@@ -94,13 +94,18 @@ check_managed_file() {
 }
 
 if [ -n "$target" ]; then
-  if [ -L "$target/.ccb" ] || [ ! -d "$target/.ccb" ]; then emit FAIL project.ccb missing-or-unsafe; else emit OK project.ccb directory; fi
-  if [ -L "$target/.ccb/context" ] || [ ! -d "$target/.ccb/context" ]; then emit FAIL project.context_dir missing-or-unsafe; else emit OK project.context_dir directory; fi
-  check_managed_file "$target/.ccb/project.conf" project.project_conf
-  check_managed_file "$target/.ccb/models.conf" project.models_conf
-  check_managed_file "$target/.ccb/context/project.md" project.context
-  check_managed_file "$target/AGENTS.md" project.agents
-  if project_conf_parse "$target/.ccb/project.conf"; then
+  legacy_project=0
+  if [ ! -e "$target/.ccb/project.conf" ] && [ -f "$target/.ccb/AGENT_POLICY.md" ]; then legacy_project=1; fi
+  if [ "$legacy_project" -eq 1 ]; then
+    emit SKIP project.bootstrap legacy-installation
+  elif [ -L "$target/.ccb" ] || [ ! -d "$target/.ccb" ]; then emit FAIL project.ccb missing-or-unsafe; else emit OK project.ccb directory; fi
+  if [ "$legacy_project" -eq 0 ]; then
+    if [ -L "$target/.ccb/context" ] || [ ! -d "$target/.ccb/context" ]; then emit FAIL project.context_dir missing-or-unsafe; else emit OK project.context_dir directory; fi
+    check_managed_file "$target/.ccb/project.conf" project.project_conf
+    check_managed_file "$target/.ccb/models.conf" project.models_conf
+    check_managed_file "$target/.ccb/context/project.md" project.context
+    check_managed_file "$target/AGENTS.md" project.agents
+    if project_conf_parse "$target/.ccb/project.conf"; then
     profile=$PROJECT_PROFILE
     project_version=$(awk -F= '$1=="CCB_PROJECT_VERSION" {print $2}' "$target/.ccb/project.conf")
     template_version=$(awk -F= '$1=="CCB_TEMPLATE_VERSION" {print $2}' "$target/.ccb/project.conf")
@@ -109,12 +114,13 @@ if [ -n "$target" ]; then
     [ "$template_version" = "$(cat "$TEMPLATE_ROOT/VERSION")" ] && emit OK project.template_version "$template_version" || emit FAIL project.template_version incompatible
     grep -Fq "Project: $PROJECT_NAME" "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.context_name present || emit WARN project.context_name missing
     grep -Fq "Profile: $profile" "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.context_profile present || emit WARN project.context_profile missing
-  else emit FAIL project.project_conf invalid; fi
-  if project_models_parse "$target/.ccb/models.conf"; then
+    else emit FAIL project.project_conf invalid; fi
+    if project_models_parse "$target/.ccb/models.conf"; then
     emit OK project.provider "$PROJECT_MODEL_PROVIDER"
     for role in default planner coder reviewer; do model_value=$(awk -F= -v key="CCB_MODEL_$(printf '%s' "$role" | tr '[:lower:]' '[:upper:]')" '$1==key {print $2}' "$target/.ccb/models.conf"); [ -n "$model_value" ] && emit OK "project.model.$role" "$model_value" || emit FAIL "project.model.$role" missing; done
-  else emit FAIL project.models_conf invalid; fi
-  grep -Fq '.ccb/context/project.md' "$target/AGENTS.md" 2>/dev/null && grep -Fq '.ccb/models.conf' "$target/AGENTS.md" 2>/dev/null && emit OK project.agents_guidance present || emit WARN project.agents_guidance incomplete
+    else emit FAIL project.models_conf invalid; fi
+    grep -Fq '.ccb/context/project.md' "$target/AGENTS.md" 2>/dev/null && grep -Fq '.ccb/models.conf' "$target/AGENTS.md" 2>/dev/null && emit OK project.agents_guidance present || emit WARN project.agents_guidance incomplete
+  fi
   if command -v git >/dev/null 2>&1; then
     if git -C "$target" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
       [ -z "$(git -C "$target" status --porcelain 2>/dev/null)" ] && emit OK git.project working-tree-clean || emit WARN git.project working-tree-dirty
@@ -130,7 +136,7 @@ elif ! ollama --version >/dev/null 2>&1; then
   emit WARN ollama.command version-failed
 else
   emit OK ollama.command available
-  if [ -n "$target" ] && project_models_parse "$target/.ccb/models.conf"; then
+  if [ -n "$target" ] && [ "${legacy_project:-0}" -eq 0 ] && project_models_parse "$target/.ccb/models.conf"; then
     local_models=$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')
     if [ -z "$local_models" ]; then emit WARN ollama.models unavailable-or-empty
     else
