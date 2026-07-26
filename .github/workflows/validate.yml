@@ -22,6 +22,9 @@ jobs:
           sh -n scripts/model-setup.sh
           sh -n scripts/model-resolve.sh
           sh -n tests/test-models.sh
+          sh -n scripts/provider-router.sh
+          sh -n scripts/runtime/provider-ollama.sh
+          sh -n tests/test-provider-routing.sh
           sh -n tests/test-install.sh
           sh -n tests/test-profiles.sh
           sh -n tests/test-cli.sh
@@ -34,4 +37,5 @@ jobs:
           ./tests/test-profiles.sh
           ./tests/test-cli.sh
           ./tests/test-models.sh
+          ./tests/test-provider-routing.sh
           ./tests/test-setup-wizard.sh
