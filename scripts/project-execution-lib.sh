@@ -83,12 +83,142 @@ project_execution_parse_conf() {
     project_execution_value_is_safe "$EXECUTION_ERROR" 160 || return 1
   [ "$EXECUTION_PROVIDER" = ollama ] && runtime_model_is_safe "$EXECUTION_MODEL" || return 1
   case "$EXECUTION_ATTEMPT" in ''|*[!0-9]*|0) return 1;; esac
-  case "$EXECUTION_STARTED" in ????-??-??T??:??:??[+-]????) :;; *) return 1;; esac
-  if [ "$EXECUTION_STATUS" = running ]; then [ -z "$EXECUTION_COMPLETED" ] && [ -z "$EXECUTION_ERROR" ]
+  if [ "$EXECUTION_STATUS" = failed ] && [ "$EXECUTION_ERROR" = retry-prepared ]; then
+    [ -z "$EXECUTION_STARTED" ] && [ -z "$EXECUTION_COMPLETED" ]
   else
-    case "$EXECUTION_COMPLETED" in ????-??-??T??:??:??[+-]????) :;; *) return 1;; esac
-    if [ "$EXECUTION_STATUS" = succeeded ]; then [ -z "$EXECUTION_ERROR" ]; else [ -n "$EXECUTION_ERROR" ]; fi
+    case "$EXECUTION_STARTED" in ????-??-??T??:??:??[+-]????) :;; *) return 1;; esac
+    if [ "$EXECUTION_STATUS" = running ]; then [ -z "$EXECUTION_COMPLETED" ] && [ -z "$EXECUTION_ERROR" ]
+    else
+      case "$EXECUTION_COMPLETED" in ????-??-??T??:??:??[+-]????) :;; *) return 1;; esac
+      if [ "$EXECUTION_STATUS" = succeeded ]; then [ -z "$EXECUTION_ERROR" ]; else [ -n "$EXECUTION_ERROR" ]; fi
+    fi
   fi
+}
+
+project_execution_attempt_parse_conf() {
+  file=$1
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  [ "$(wc -c <"$file" | tr -d ' ')" -le 2048 ] || return 1
+  ATTEMPT_NUMBER= ATTEMPT_STATUS= ATTEMPT_PROVIDER= ATTEMPT_MODEL=
+  ATTEMPT_STARTED= ATTEMPT_COMPLETED= ATTEMPT_ERROR=; seen=' '
+  while IFS= read -r line || [ -n "$line" ]; do
+    key=${line%%=*}; value=${line#*=}; [ "$line" != "$key" ] || return 1
+    case "$seen" in *" $key "*) return 1;; *) seen="$seen$key ";; esac
+    case "$key" in
+      CCB_ATTEMPT_VERSION) [ "$value" = 1 ] || return 1;;
+      CCB_ATTEMPT_NUMBER) ATTEMPT_NUMBER=$value;;
+      CCB_ATTEMPT_STATUS) ATTEMPT_STATUS=$value;;
+      CCB_ATTEMPT_PROVIDER) ATTEMPT_PROVIDER=$value;;
+      CCB_ATTEMPT_MODEL) ATTEMPT_MODEL=$value;;
+      CCB_ATTEMPT_STARTED_AT) ATTEMPT_STARTED=$value;;
+      CCB_ATTEMPT_COMPLETED_AT) ATTEMPT_COMPLETED=$value;;
+      CCB_ATTEMPT_ERROR) ATTEMPT_ERROR=$value;;
+      *) return 1;;
+    esac
+  done <"$file"
+  for key in CCB_ATTEMPT_VERSION CCB_ATTEMPT_NUMBER CCB_ATTEMPT_STATUS CCB_ATTEMPT_PROVIDER CCB_ATTEMPT_MODEL CCB_ATTEMPT_STARTED_AT CCB_ATTEMPT_COMPLETED_AT CCB_ATTEMPT_ERROR; do
+    case "$seen" in *" $key "*) :;; *) return 1;; esac
+  done
+  case "$ATTEMPT_NUMBER" in 1|2|3) :;; *) return 1;; esac
+  [ "$ATTEMPT_STATUS" = failed ] && [ "$ATTEMPT_PROVIDER" = ollama ] && runtime_model_is_safe "$ATTEMPT_MODEL" || return 1
+  case "$ATTEMPT_STARTED" in ????-??-??T??:??:??[+-]????) :;; *) return 1;; esac
+  case "$ATTEMPT_COMPLETED" in ????-??-??T??:??:??[+-]????) :;; *) return 1;; esac
+  project_execution_value_is_safe "$ATTEMPT_ERROR" 160 && [ -n "$ATTEMPT_ERROR" ] || return 1
+  case "$ATTEMPT_ERROR" in timeout|invalid-response|oversized-response|unsafe-endpoint|request-failed|empty-result) :;; *) return 1;; esac
+}
+
+project_execution_attempts_summary() {
+  step=$1; attempts="$step/attempts"
+  EXECUTION_ARCHIVED_ATTEMPTS=0; EXECUTION_LAST_ARCHIVED_STATUS=none
+  [ ! -e "$attempts" ] && [ ! -L "$attempts" ] && return 0
+  [ -d "$attempts" ] && [ ! -L "$attempts" ] || return 1
+  entry_count=$(find "$attempts" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')
+  expected=1
+  for archive in "$attempts"/*.conf; do
+    [ -e "$archive" ] || [ -L "$archive" ] || continue
+    [ "$(basename "$archive")" = "$(printf '%03d.conf' "$expected")" ] || return 1
+    project_execution_attempt_parse_conf "$archive" || return 1
+    [ "$ATTEMPT_NUMBER" -eq "$expected" ] || return 1
+    EXECUTION_ARCHIVED_ATTEMPTS=$expected; EXECUTION_LAST_ARCHIVED_STATUS=$ATTEMPT_STATUS
+    expected=$((expected + 1))
+  done
+  [ "$EXECUTION_ARCHIVED_ATTEMPTS" -le 3 ] && [ "$entry_count" -eq "$EXECUTION_ARCHIVED_ATTEMPTS" ]
+}
+
+project_execution_retry_fail_point_is_valid() {
+  if [ "${CCB_TEST_MODE:-0}" != 1 ]; then [ -z "${CCB_TEST_RETRY_FAIL_POINT:-}" ]; return; fi
+  case "${CCB_TEST_RETRY_FAIL_POINT:-}" in ''|before-archive|after-archive|before-execution-conf|after-execution-conf) return 0;; *) return 1;; esac
+}
+
+project_execution_retry_fail_point() {
+  [ "${CCB_TEST_MODE:-0}" = 1 ] && [ "${CCB_TEST_RETRY_FAIL_POINT:-}" = "$1" ] || return 0
+  echo "error: injected workflow retry failure: $1" >&2
+  return 1
+}
+
+project_execution_publish_metadata() {
+  prepared=$1; target=$2; parent=$(dirname "$target")
+  [ -f "$prepared" ] && [ ! -L "$prepared" ] && [ -d "$parent" ] && [ ! -L "$parent" ] && [ ! -L "$target" ] || return 1
+  publish=$(mktemp "$parent/.retry-publish.XXXXXX") || return 1
+  if cp "$prepared" "$publish" && chmod 644 "$publish" && mv "$publish" "$target"; then return 0; fi
+  rm -f "$publish"; return 1
+}
+
+project_execution_retry_cleanup_transaction() {
+  [ -n "${retry_transaction:-}" ] && [ -d "$retry_transaction" ] && [ ! -L "$retry_transaction" ] || return 0
+  for retry_file in archive.conf execution.conf.new execution.conf.old; do
+    path="$retry_transaction/$retry_file"
+    [ ! -e "$path" ] || { [ -f "$path" ] && [ ! -L "$path" ] && rm -f "$path"; }
+  done
+  rmdir "$retry_transaction"
+}
+
+project_execution_retry_rollback() {
+  rollback_status=0
+  if [ "${retry_execution_published:-0}" = 1 ]; then project_execution_publish_metadata "$retry_transaction/execution.conf.old" "$retry_execution_file" || rollback_status=1; fi
+  if [ "${retry_archive_published:-0}" = 1 ]; then
+    if [ -f "$retry_archive_file" ] && [ ! -L "$retry_archive_file" ]; then rm -f "$retry_archive_file" || rollback_status=1; else rollback_status=1; fi
+  fi
+  if [ "${retry_attempts_created:-0}" = 1 ]; then rmdir "$retry_attempts_dir" 2>/dev/null || rollback_status=1; fi
+  project_execution_retry_cleanup_transaction || rollback_status=1
+  [ "$rollback_status" -eq 0 ]
+}
+
+project_execution_prepare_retry() {
+  step=$1
+  retry_execution_file="$step/execution.conf"; retry_attempts_dir="$step/attempts"
+  retry_archive_file="$retry_attempts_dir/$(printf '%03d.conf' "$EXECUTION_ATTEMPT")"
+  retry_attempts_created=0; retry_archive_published=0; retry_execution_published=0
+  project_execution_retry_fail_point_is_valid || { echo 'error: invalid workflow retry test hook' >&2; return 1; }
+  [ -z "$(find "$step" -maxdepth 1 -name '.ccb-retry-transaction.*' -print -quit)" ] || { echo 'error: residual workflow retry transaction' >&2; return 1; }
+  if [ -e "$retry_attempts_dir" ] || [ -L "$retry_attempts_dir" ]; then
+    [ -d "$retry_attempts_dir" ] && [ ! -L "$retry_attempts_dir" ] || { echo 'error: unsafe workflow retry archive directory' >&2; return 1; }
+  fi
+  project_execution_attempts_summary "$step" || { echo 'error: invalid workflow retry archive' >&2; return 1; }
+  [ "$EXECUTION_ARCHIVED_ATTEMPTS" -eq $((EXECUTION_ATTEMPT - 1)) ] || { echo 'error: inconsistent workflow retry archive' >&2; return 1; }
+  [ ! -e "$retry_archive_file" ] && [ ! -L "$retry_archive_file" ] || { echo 'error: workflow retry archive already exists' >&2; return 1; }
+  retry_transaction=$(mktemp -d "$step/.ccb-retry-transaction.XXXXXX") || return 1
+  cp "$retry_execution_file" "$retry_transaction/execution.conf.old" && chmod 600 "$retry_transaction/execution.conf.old" || { project_execution_retry_cleanup_transaction; return 1; }
+  printf 'CCB_ATTEMPT_VERSION=1\nCCB_ATTEMPT_NUMBER=%s\nCCB_ATTEMPT_STATUS=failed\nCCB_ATTEMPT_PROVIDER=%s\nCCB_ATTEMPT_MODEL=%s\nCCB_ATTEMPT_STARTED_AT=%s\nCCB_ATTEMPT_COMPLETED_AT=%s\nCCB_ATTEMPT_ERROR=%s\n' "$EXECUTION_ATTEMPT" "$EXECUTION_PROVIDER" "$EXECUTION_MODEL" "$EXECUTION_STARTED" "$EXECUTION_COMPLETED" "$EXECUTION_ERROR" >"$retry_transaction/archive.conf" && chmod 600 "$retry_transaction/archive.conf" || { project_execution_retry_cleanup_transaction; return 1; }
+  project_execution_attempt_parse_conf "$retry_transaction/archive.conf" || { project_execution_retry_cleanup_transaction; return 1; }
+  next_attempt=$((EXECUTION_ATTEMPT + 1))
+  project_execution_write_conf "$retry_transaction/execution.conf.new" failed ollama "$EXECUTION_MODEL" "$next_attempt" '' '' retry-prepared || { project_execution_retry_cleanup_transaction; return 1; }
+  project_execution_retry_fail_point before-archive || { project_execution_retry_rollback; return 1; }
+  if [ ! -d "$retry_attempts_dir" ]; then
+    mkdir "$retry_attempts_dir" || { project_execution_retry_rollback; return 1; }
+    retry_attempts_created=1
+    chmod 700 "$retry_attempts_dir" || { project_execution_retry_rollback; return 1; }
+  fi
+  project_execution_publish_metadata "$retry_transaction/archive.conf" "$retry_archive_file" || { project_execution_retry_rollback; return 1; }
+  retry_archive_published=1
+  project_execution_retry_fail_point after-archive || { project_execution_retry_rollback; return 1; }
+  project_execution_retry_fail_point before-execution-conf || { project_execution_retry_rollback; return 1; }
+  project_execution_publish_metadata "$retry_transaction/execution.conf.new" "$retry_execution_file" || { project_execution_retry_rollback; return 1; }
+  retry_execution_published=1
+  project_execution_retry_fail_point after-execution-conf || { project_execution_retry_rollback; return 1; }
+  project_execution_parse_conf "$retry_execution_file" && [ "$EXECUTION_ATTEMPT" -eq "$next_attempt" ] && [ "$EXECUTION_ERROR" = retry-prepared ] || { project_execution_retry_rollback; return 1; }
+  project_execution_attempt_parse_conf "$retry_archive_file" || { project_execution_retry_rollback; return 1; }
+  project_execution_retry_cleanup_transaction || return 1
 }
 
 project_execution_publish_result() {
@@ -131,7 +261,12 @@ project_execution_run_current() {
   attempt=1; execution_conf="$step_dir/execution.conf"
   if [ -e "$execution_conf" ] || [ -L "$execution_conf" ]; then
     project_execution_parse_conf "$execution_conf" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: invalid execution metadata' >&2; return 1; }
-    attempt=$((EXECUTION_ATTEMPT + 1))
+    case "$EXECUTION_STATUS:$EXECUTION_ERROR" in
+      failed:retry-prepared) attempt=$EXECUTION_ATTEMPT;;
+      failed:*) rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: workflow step execution previously failed; run retry-step first' >&2; return 1;;
+      running:*) rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: workflow step execution is already running' >&2; return 1;;
+      succeeded:*) rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: successful execution has no explicit result' >&2; return 1;;
+    esac
   fi
   project_execution_build_prompt "$prompt_file" "$context_file" "$input_file" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; return 1; }
   project_execution_write_conf "$execution_conf" running ollama "$STEP_MODEL" "$attempt" "$started" '' '' || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; return 1; }

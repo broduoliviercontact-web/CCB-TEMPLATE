@@ -158,12 +158,139 @@ project_run_validate_run_prepared() (
   if [ "$completion" = required ]; then [ -n "$RUN_COMPLETED" ]; else [ -z "$RUN_COMPLETED" ]; fi
 )
 
+project_run_cancel_fail_point_is_valid() {
+  if [ "${CCB_TEST_MODE:-0}" != 1 ]; then
+    [ -z "${CCB_TEST_CANCEL_FAIL_POINT:-}" ]
+    return
+  fi
+  case "${CCB_TEST_CANCEL_FAIL_POINT:-}" in
+    ''|before-publish|after-current-step|after-orchestration|before-run|after-run) return 0;;
+    *) return 1;;
+  esac
+}
+
+project_run_cancel_fail_point() {
+  [ "${CCB_TEST_MODE:-0}" = 1 ] && [ "${CCB_TEST_CANCEL_FAIL_POINT:-}" = "$1" ] || return 0
+  echo "error: injected workflow cancellation failure: $1" >&2
+  return 1
+}
+
+project_run_validate_cancel_source() {
+  run_dir=$1
+  case "$RUN_STATUS" in pending|in-progress|blocked) :;; *) return 1;; esac
+  i=1
+  while [ "$i" -le "$RUN_COUNT" ]; do
+    source_step=$(find "$run_dir" -maxdepth 1 -type d -name "$(printf '%02d' "$i")-*" -print)
+    run_step_parse "$source_step/step.conf" || return 1
+    source_execution="$source_step/execution.conf"; source_has_execution=0
+    if [ -e "$source_execution" ] || [ -L "$source_execution" ]; then
+      project_execution_parse_conf "$source_execution" || return 1
+      source_has_execution=1
+    fi
+    project_execution_attempts_summary "$source_step" || return 1
+    [ "$EXECUTION_ARCHIVED_ATTEMPTS" -eq 0 ] || [ "$source_has_execution" -eq 1 ] || return 1
+    if [ "$i" -lt "$RUN_CURRENT" ]; then
+      case "$STEP_STATUS" in completed|skipped) :;; *) return 1;; esac
+    elif [ "$i" -gt "$RUN_CURRENT" ]; then
+      [ "$STEP_STATUS" = pending ] || return 1
+    else
+      case "$RUN_STATUS:$STEP_STATUS" in
+        pending:pending|pending:ready|in-progress:ready|in-progress:in-progress|blocked:blocked) :;;
+        *) return 1;;
+      esac
+    fi
+    i=$((i + 1))
+  done
+}
+
+project_run_validate_cancelled_run_prepared() (
+  file=$1; expected_current=$2; expected_timestamp=$3
+  run_parse_conf "$file" && [ "$RUN_STATUS" = cancelled ] &&
+    [ "$RUN_CURRENT" = "$expected_current" ] && [ "$RUN_UPDATED" = "$expected_timestamp" ] &&
+    [ "$RUN_COMPLETED" = "$expected_timestamp" ]
+)
+
+project_run_validate_cancelled_step_prepared() (
+  file=$1; expected_number=$2; expected_role=$3; expected_status=$4
+  run_step_parse "$file" && [ "$STEP_NUMBER" = "$expected_number" ] &&
+    [ "$STEP_ROLE" = "$expected_role" ] && [ "$STEP_STATUS" = "$expected_status" ]
+)
+
+project_run_timestamp_is_valid() {
+  case "$1" in ????-??-??T??:??:??[+-]????) return 0;; *) return 1;; esac
+}
+
+project_run_execution_history_summary() {
+  history_run_dir=$1
+  PROJECT_RUN_HAS_EXECUTION_HISTORY=0; PROJECT_RUN_ARCHIVED_ATTEMPTS=0
+  PROJECT_RUN_HAS_ARCHIVED_RETRIES=0; PROJECT_RUN_AT_RETRY_LIMIT=0
+  PROJECT_RUN_EXECUTION_SUCCEEDED=0; PROJECT_RUN_EXECUTION_FAILED=0
+  PROJECT_RUN_ORCHESTRATION_STATUS=none
+  project_run_timestamp_is_valid "$RUN_CREATED" && project_run_timestamp_is_valid "$RUN_UPDATED" || return 1
+  [ "$RUN_UPDATED" \< "$RUN_CREATED" ] && return 1
+  case "$RUN_STATUS" in
+    completed|cancelled) project_run_timestamp_is_valid "$RUN_COMPLETED" || return 1;;
+    *) [ -z "$RUN_COMPLETED" ] || return 1;;
+  esac
+  history_index=1
+  while [ "$history_index" -le "$RUN_COUNT" ]; do
+    history_step_dir=$(find "$history_run_dir" -maxdepth 1 -type d -name "$(printf '%02d' "$history_index")-*" -print)
+    run_step_parse "$history_step_dir/step.conf" || return 1
+    history_step_provider=$STEP_PROVIDER; history_step_model=$STEP_MODEL
+    history_execution_file="$history_step_dir/execution.conf"; history_has_execution=0
+    if [ -e "$history_execution_file" ] || [ -L "$history_execution_file" ]; then
+      project_execution_parse_conf "$history_execution_file" || return 1
+      [ "$EXECUTION_PROVIDER" = "$history_step_provider" ] && [ "$EXECUTION_MODEL" = "$history_step_model" ] || return 1
+      [ "$EXECUTION_ATTEMPT" -le 3 ] || return 1
+      history_has_execution=1; history_execution_attempt=$EXECUTION_ATTEMPT
+      PROJECT_RUN_HAS_EXECUTION_HISTORY=1
+      [ "$EXECUTION_STATUS" != succeeded ] || PROJECT_RUN_EXECUTION_SUCCEEDED=1
+      [ "$EXECUTION_STATUS" != failed ] || PROJECT_RUN_EXECUTION_FAILED=1
+      if [ "$EXECUTION_STATUS" = failed ] && [ "$EXECUTION_ERROR" != retry-prepared ] && [ "$EXECUTION_ATTEMPT" -eq 3 ]; then PROJECT_RUN_AT_RETRY_LIMIT=1; fi
+    fi
+    project_execution_attempts_summary "$history_step_dir" || return 1
+    if [ "$history_has_execution" -eq 1 ]; then
+      [ "$history_execution_attempt" -eq $((EXECUTION_ARCHIVED_ATTEMPTS + 1)) ] || return 1
+      if [ "$EXECUTION_ERROR" = retry-prepared ]; then [ "$EXECUTION_ARCHIVED_ATTEMPTS" -gt 0 ] || return 1; fi
+    else
+      [ "$EXECUTION_ARCHIVED_ATTEMPTS" -eq 0 ] || return 1
+    fi
+    [ "$EXECUTION_ARCHIVED_ATTEMPTS" -eq 0 ] || PROJECT_RUN_HAS_ARCHIVED_RETRIES=1
+    PROJECT_RUN_ARCHIVED_ATTEMPTS=$((PROJECT_RUN_ARCHIVED_ATTEMPTS + EXECUTION_ARCHIVED_ATTEMPTS))
+    history_archive_index=1; history_previous_completion=
+    while [ "$history_archive_index" -le "$EXECUTION_ARCHIVED_ATTEMPTS" ]; do
+      history_archive="$history_step_dir/attempts/$(printf '%03d.conf' "$history_archive_index")"
+      project_execution_attempt_parse_conf "$history_archive" || return 1
+      [ "$ATTEMPT_PROVIDER" = "$history_step_provider" ] && [ "$ATTEMPT_MODEL" = "$history_step_model" ] || return 1
+      [ "$ATTEMPT_COMPLETED" \< "$ATTEMPT_STARTED" ] && return 1
+      if [ -n "$history_previous_completion" ] && [ "$ATTEMPT_STARTED" \< "$history_previous_completion" ]; then return 1; fi
+      history_previous_completion=$ATTEMPT_COMPLETED
+      history_archive_index=$((history_archive_index + 1))
+    done
+    if [ "$history_has_execution" -eq 1 ] && [ -n "$EXECUTION_STARTED" ] && [ -n "$history_previous_completion" ] && [ "$EXECUTION_STARTED" \< "$history_previous_completion" ]; then return 1; fi
+    history_index=$((history_index + 1))
+  done
+  history_orchestration="$history_run_dir/orchestration.conf"
+  if [ -e "$history_orchestration" ] || [ -L "$history_orchestration" ]; then
+    project_orchestration_parse_conf "$history_orchestration" || return 1
+    [ "$ORCHESTRATION_STEP_COUNT" -eq "$RUN_COUNT" ] || return 1
+    PROJECT_RUN_ORCHESTRATION_STATUS=$ORCHESTRATION_STATUS
+  fi
+  history_current_dir=$(find "$history_run_dir" -maxdepth 1 -type d -name "$(printf '%02d' "$RUN_CURRENT")-*" -print)
+  run_step_parse "$history_current_dir/step.conf" || return 1
+  case "$RUN_STATUS:$STEP_STATUS" in
+    pending:pending|pending:ready|in-progress:ready|in-progress:in-progress|blocked:blocked|completed:completed|completed:skipped|cancelled:skipped|cancelled:blocked) :;;
+    *) return 1;;
+  esac
+}
+
 project_run_summary() {
   runs_dir=$1
   RUNS_DIRECTORY=absent; RUNS_TOTAL=0; RUNS_VALID=0; RUNS_INVALID=0
   RUNS_PENDING=0; RUNS_IN_PROGRESS=0; RUNS_BLOCKED=0; RUNS_COMPLETED=0; RUNS_CANCELLED=0
   RUNS_EXECUTION_SUCCEEDED=0; RUNS_EXECUTION_FAILED=0
   RUNS_AUTOMATION_SUCCEEDED=0; RUNS_AUTOMATION_FAILED=0; RUNS_AUTOMATION_INTERRUPTED=0; RUNS_AUTOMATION_RUNNING=0
+  RUNS_WITH_ARCHIVED_RETRIES=0; RUNS_ARCHIVED_FAILED_ATTEMPTS=0; RUNS_AT_RETRY_LIMIT=0; RUNS_WITH_EXECUTION_HISTORY=0
   RUNS_LATEST=none; RUNS_LATEST_STATUS=none; latest_key=
   [ ! -e "$runs_dir" ] && [ ! -L "$runs_dir" ] && return 0
   RUNS_DIRECTORY=present
@@ -172,7 +299,7 @@ project_run_summary() {
     [ -e "$candidate" ] || [ -L "$candidate" ] || continue
     case "$(basename "$candidate")" in .ccb-transaction.*) continue;; esac
     RUNS_TOTAL=$((RUNS_TOTAL + 1))
-    if run_validate_directory "$candidate"; then
+    if run_validate_directory "$candidate" && project_run_execution_history_summary "$candidate"; then
       RUNS_VALID=$((RUNS_VALID + 1))
       case "$RUN_STATUS" in
         pending) RUNS_PENDING=$((RUNS_PENDING + 1));;
@@ -182,27 +309,18 @@ project_run_summary() {
         cancelled) RUNS_CANCELLED=$((RUNS_CANCELLED + 1));;
       esac
       candidate_id=$(basename "$candidate")
-      candidate_succeeded=0; candidate_failed=0
-      for execution_candidate in "$candidate"/*/execution.conf; do
-        [ -e "$execution_candidate" ] || [ -L "$execution_candidate" ] || continue
-        if project_execution_parse_conf "$execution_candidate"; then
-          [ "$EXECUTION_STATUS" = succeeded ] && candidate_succeeded=1
-          [ "$EXECUTION_STATUS" = failed ] && candidate_failed=1
-        fi
-      done
-      RUNS_EXECUTION_SUCCEEDED=$((RUNS_EXECUTION_SUCCEEDED + candidate_succeeded))
-      RUNS_EXECUTION_FAILED=$((RUNS_EXECUTION_FAILED + candidate_failed))
-      orchestration_candidate="$candidate/orchestration.conf"
-      if [ -e "$orchestration_candidate" ] || [ -L "$orchestration_candidate" ]; then
-        if project_orchestration_parse_conf "$orchestration_candidate"; then
-          case "$ORCHESTRATION_STATUS" in
-            succeeded) RUNS_AUTOMATION_SUCCEEDED=$((RUNS_AUTOMATION_SUCCEEDED + 1));;
-            failed) RUNS_AUTOMATION_FAILED=$((RUNS_AUTOMATION_FAILED + 1));;
-            interrupted) RUNS_AUTOMATION_INTERRUPTED=$((RUNS_AUTOMATION_INTERRUPTED + 1));;
-            running) RUNS_AUTOMATION_RUNNING=$((RUNS_AUTOMATION_RUNNING + 1));;
-          esac
-        fi
-      fi
+      RUNS_EXECUTION_SUCCEEDED=$((RUNS_EXECUTION_SUCCEEDED + PROJECT_RUN_EXECUTION_SUCCEEDED))
+      RUNS_EXECUTION_FAILED=$((RUNS_EXECUTION_FAILED + PROJECT_RUN_EXECUTION_FAILED))
+      RUNS_WITH_ARCHIVED_RETRIES=$((RUNS_WITH_ARCHIVED_RETRIES + PROJECT_RUN_HAS_ARCHIVED_RETRIES))
+      RUNS_ARCHIVED_FAILED_ATTEMPTS=$((RUNS_ARCHIVED_FAILED_ATTEMPTS + PROJECT_RUN_ARCHIVED_ATTEMPTS))
+      RUNS_AT_RETRY_LIMIT=$((RUNS_AT_RETRY_LIMIT + PROJECT_RUN_AT_RETRY_LIMIT))
+      RUNS_WITH_EXECUTION_HISTORY=$((RUNS_WITH_EXECUTION_HISTORY + PROJECT_RUN_HAS_EXECUTION_HISTORY))
+      case "$PROJECT_RUN_ORCHESTRATION_STATUS" in
+        succeeded) RUNS_AUTOMATION_SUCCEEDED=$((RUNS_AUTOMATION_SUCCEEDED + 1));;
+        failed) RUNS_AUTOMATION_FAILED=$((RUNS_AUTOMATION_FAILED + 1));;
+        interrupted) RUNS_AUTOMATION_INTERRUPTED=$((RUNS_AUTOMATION_INTERRUPTED + 1));;
+        running) RUNS_AUTOMATION_RUNNING=$((RUNS_AUTOMATION_RUNNING + 1));;
+      esac
       candidate_key=$(printf '%s\n' "$candidate_id" | awk -F- '{suffix=1; if (NF>3) suffix=$NF; printf "%s%s%06d",$1,$2,suffix}')
       if [ -z "$latest_key" ] || [ "$candidate_key" \> "$latest_key" ]; then
         latest_key=$candidate_key; RUNS_LATEST=$candidate_id; RUNS_LATEST_STATUS=$RUN_STATUS

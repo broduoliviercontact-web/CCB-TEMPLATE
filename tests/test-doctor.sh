@@ -110,6 +110,51 @@ run "$CLI" doctor "$project" --no-ollama; [ "$status" -eq 0 ] || fail 'normal re
 run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted transaction residual'
 rm -f "$doctor_run/.ccb-transaction.residual/run.conf.old"; rmdir "$doctor_run/.ccb-transaction.residual"
 
+d3="$WORK/d3 project"; "$CLI" init "$d3" --yes >/dev/null
+start=$(CCB_TEST_RUN_TIMESTAMP=20260730-120000 "$CLI" workflow start feature "$d3"); d3_id=$(printf '%s\n' "$start" | sed -n 's/^Run ID: //p'); d3_run="$d3/.ccb/runs/$d3_id"; d3_step="$d3_run/01-manager"
+"$CLI" workflow resume "$d3_id" "$d3" >/dev/null || fail 'D3 retry resume'
+run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_ERROR=unavailable "$CLI" workflow execute-step "$d3_id" "$d3"; [ "$status" -eq 1 ] || fail 'D3 first failure'
+"$CLI" workflow retry-step "$d3_id" "$d3" >/dev/null || fail 'D3 first retry'
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 0 ] || fail "valid first retry rejected: $output"
+run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_ERROR=timeout "$CLI" workflow execute-step "$d3_id" "$d3"; [ "$status" -eq 1 ] || fail 'D3 second failure'
+"$CLI" workflow retry-step "$d3_id" "$d3" >/dev/null || fail 'D3 second retry'
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 0 ] || fail "valid second retry rejected: $output"
+run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_ERROR=invalid-response "$CLI" workflow execute-step "$d3_id" "$d3"; [ "$status" -eq 1 ] || fail 'D3 limit failure'
+before=$(find "$d3/.ccb/runs" -type f -exec cksum {} \; | LC_ALL=C sort)
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 0 ] || fail "valid retry limit rejected: $output"
+after=$(find "$d3/.ccb/runs" -type f -exec cksum {} \; | LC_ALL=C sort); [ "$before" = "$after" ] || fail 'Doctor changed valid D3 history'
+
+cp "$d3_step/execution.conf" "$WORK/d3-execution.saved"; cp "$d3_step/step.conf" "$WORK/d3-step.saved"
+cp "$d3_step/attempts/001.conf" "$WORK/d3-attempt-1.saved"; cp "$d3_step/attempts/002.conf" "$WORK/d3-attempt-2.saved"
+rm -f "$d3_step/attempts/002.conf"; sed 's/CCB_ATTEMPT_NUMBER=2/CCB_ATTEMPT_NUMBER=3/' "$WORK/d3-attempt-2.saved" >"$d3_step/attempts/003.conf"
+run "$CLI" doctor "$d3" --no-ollama; [ "$status" -eq 0 ] || fail 'normal Doctor rejected archive-hole warning'; contains "$output" "project.run.$d3_id — inconsistent" || fail 'archive-hole warning missing'
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict Doctor accepted archive hole'
+rm -f "$d3_step/attempts/003.conf"; cp "$WORK/d3-attempt-2.saved" "$d3_step/attempts/002.conf"
+sed 's/CCB_ATTEMPT_NUMBER=2/CCB_ATTEMPT_NUMBER=1/' "$WORK/d3-attempt-2.saved" >"$d3_step/attempts/002.conf"
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict Doctor accepted archive number mismatch'; cp "$WORK/d3-attempt-2.saved" "$d3_step/attempts/002.conf"
+sed 's/CCB_STEP_PROVIDER=ollama/CCB_STEP_PROVIDER=remote/' "$WORK/d3-step.saved" >"$d3_step/step.conf"
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict Doctor accepted provider mismatch'; cp "$WORK/d3-step.saved" "$d3_step/step.conf"
+sed 's/CCB_ATTEMPT_MODEL=qwen3:8b/CCB_ATTEMPT_MODEL=qwen3:4b/' "$WORK/d3-attempt-2.saved" >"$d3_step/attempts/002.conf"
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict Doctor accepted model mismatch'; cp "$WORK/d3-attempt-2.saved" "$d3_step/attempts/002.conf"
+rm -f "$d3_step/attempts/002.conf"; ln -s "$WORK/d3-attempt-2.saved" "$d3_step/attempts/002.conf"
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict Doctor accepted archive symlink'; rm -f "$d3_step/attempts/002.conf"; cp "$WORK/d3-attempt-2.saved" "$d3_step/attempts/002.conf"
+mv "$d3_step/attempts" "$WORK/d3-attempts.saved"; ln -s "$WORK/d3-attempts.saved" "$d3_step/attempts"
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict Doctor accepted attempts symlink'; rm -f "$d3_step/attempts"; mv "$WORK/d3-attempts.saved" "$d3_step/attempts"
+sed 's/CCB_EXECUTION_ATTEMPT=3/CCB_EXECUTION_ATTEMPT=2/' "$WORK/d3-execution.saved" >"$d3_step/execution.conf"
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict Doctor accepted incoherent execution attempt'; cp "$WORK/d3-execution.saved" "$d3_step/execution.conf"
+mkdir "$d3_step/.ccb-retry-transaction.residual"
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict Doctor accepted retry transaction residue'; rmdir "$d3_step/.ccb-retry-transaction.residual"
+mkdir "$d3_run/.ccb-transaction.cancel-residual"
+run "$CLI" doctor "$d3" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict Doctor accepted cancel transaction residue'; rmdir "$d3_run/.ccb-transaction.cancel-residual"
+
+cancel_ready="$WORK/cancel ready"; "$CLI" init "$cancel_ready" --yes >/dev/null; start=$(CCB_TEST_RUN_TIMESTAMP=20260730-130000 "$CLI" workflow start feature "$cancel_ready"); cancel_ready_id=$(printf '%s\n' "$start" | sed -n 's/^Run ID: //p'); "$CLI" workflow cancel "$cancel_ready_id" "$cancel_ready" >/dev/null
+run "$CLI" doctor "$cancel_ready" --no-ollama --strict; [ "$status" -eq 0 ] || fail "cancelled ready run rejected: $output"
+cancel_active="$WORK/cancel active"; "$CLI" init "$cancel_active" --yes >/dev/null; start=$(CCB_TEST_RUN_TIMESTAMP=20260730-140000 "$CLI" workflow start feature "$cancel_active"); cancel_active_id=$(printf '%s\n' "$start" | sed -n 's/^Run ID: //p'); "$CLI" workflow resume "$cancel_active_id" "$cancel_active" >/dev/null; "$CLI" workflow cancel "$cancel_active_id" "$cancel_active" >/dev/null
+run "$CLI" doctor "$cancel_active" --no-ollama --strict; [ "$status" -eq 0 ] || fail "cancelled active run rejected: $output"
+cancel_active_run="$cancel_active/.ccb/runs/$cancel_active_id"; cp "$cancel_active_run/run.conf" "$WORK/cancel-run.saved"; sed 's/^CCB_RUN_COMPLETED_AT=.*/CCB_RUN_COMPLETED_AT=/' "$WORK/cancel-run.saved" >"$cancel_active_run/run.conf"
+before=$(cksum "$cancel_active_run/run.conf"); run "$CLI" doctor "$cancel_active" --no-ollama; [ "$status" -eq 0 ] || fail 'normal Doctor rejected cancelled warning'; after=$(cksum "$cancel_active_run/run.conf"); [ "$before" = "$after" ] || fail 'Doctor repaired cancelled run'
+run "$CLI" doctor "$cancel_active" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict Doctor accepted cancelled run without completed_at'
+
 legacy="$WORK/legacy project"; "$CLI" init "$legacy" --yes >/dev/null
 sed 's/CCB_TEMPLATE_VERSION=1.7.0/CCB_TEMPLATE_VERSION=1.6.0/' "$legacy/.ccb/project.conf" >"$legacy/.ccb/project.next" && mv "$legacy/.ccb/project.next" "$legacy/.ccb/project.conf"
 rm -f "$legacy/.ccb/skills.conf"

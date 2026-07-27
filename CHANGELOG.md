@@ -4,6 +4,7 @@
 
 - Add bounded sequential `workflow run` automation with persistent checkpoints, safe interruption recovery, a distinct orchestration lock, and no automatic retries.
 - Expose automation metadata safely through Status, Inspect, Config, and Doctor while keeping model content opaque.
+- Add manual bounded retries, durable cancellation, and deterministic read-only workflow history.
 
 ### Added
 
@@ -14,16 +15,22 @@
 - Read-only workflow-run summaries in Config and state, transmission, and residue diagnostics in Doctor.
 - Controlled single-step execution through local Ollama, with bounded snapshot prompts, atomic pending results, execution metadata, and per-run locking.
 - Safe execution summaries in Status, Inspect, and Config, plus Doctor validation for metadata, locks, and temporary residue.
+- Explicit `workflow retry-step` with at most three attempts and metadata-only failure archives.
+- Transactional `workflow cancel` with preserved checkpoints and immutable execution history.
+- Read-only `workflow history` timelines plus D3 reliability and observability counters in Config.
 
 ### Security
 
 - Agent access is declarative only: no agent is launched and no filesystem sandbox is claimed.
 - Step results are bounded, parsed as data, and never executed; multi-file publication uses confined backups and logical rollback.
 - Ollama execution is fixed to loopback, does not follow redirects, and treats context, input, and model output as opaque data.
+- Retry and cancellation transactions use confined backups and logical rollback; no retry is automatic and no active orchestration is stopped implicitly.
+- History, Config, and Doctor never expose full errors, prompts, responses, Markdown bodies, tokens, or secrets and never repair a run.
 
 ### Testing
 
 - Integration coverage includes state progression, anti-injection, all transaction fail points, byte-identical rollback, Config summaries, and strict Doctor diagnostics.
+- D3 coverage includes retry limits and archives, cancellation policies, deterministic history, read-only observability, corruption diagnostics, and legacy-run compatibility.
 
 ## 1.6.1
 

@@ -26,7 +26,10 @@ assert_contains "$help_output" 'agents [TARGET]' 'help documents declarative age
 assert_contains "$help_output" 'agent show ROLE' 'help documents agent show'
 assert_contains "$help_output" 'workflow show|plan NAME' 'help documents workflows'
 assert_contains "$help_output" 'execute-step' 'help documents local workflow execution'
-assert_contains "$help_output" 'complete-step|run' 'help documents sequential workflow automation'
+assert_contains "$help_output" 'complete-step' 'help documents sequential workflow completion'
+assert_contains "$help_output" 'retry-step' 'help documents manual workflow retry'
+assert_contains "$help_output" 'cancel' 'help documents workflow cancellation'
+assert_contains "$help_output" 'history' 'help documents workflow history'
 workflow_run_help=$("$CLI" workflow run --help)
 assert_contains "$workflow_run_help" 'workflow run RUN_ID' 'workflow run help is available'
 assert_contains "$help_output" 'doctor [TARGET]' 'help documents doctor'

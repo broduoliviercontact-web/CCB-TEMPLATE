@@ -95,17 +95,21 @@ Resume a run and record an explicit step result before completing it:
 ```sh
 ./scripts/ccb.sh workflow resume --latest ./mon-projet
 ./scripts/ccb.sh workflow execute-step --latest ./mon-projet
+./scripts/ccb.sh workflow retry-step --latest ./mon-projet
 ./scripts/ccb.sh workflow run --latest ./mon-projet
 ./scripts/ccb.sh workflow complete-step --latest ./mon-projet
+./scripts/ccb.sh workflow history --latest ./mon-projet
+./scripts/ccb.sh workflow cancel RUN_ID ./mon-projet
 ```
 
-`execute-step` can generate one pending result through the local Ollama API after an explicit resume. It uses only the persistent run snapshot, never executes model output, and does not progress the workflow. `complete-step` remains the explicit progression command. See [project runs](docs/project-runs.md).
+`execute-step` can generate one pending result through the local Ollama API after an explicit resume. It uses only the persistent run snapshot, never executes model output, and does not progress the workflow. Failed executions are retried manually with `retry-step`, up to three attempts; CCB never retries automatically. `cancel` preserves all history and makes the run terminal. `history` reconstructs a deterministic, read-only timeline from bounded metadata. See [project runs](docs/project-runs.md) and [workflow reliability](docs/project-reliability.md).
 
 Status, Inspect, Config, and Doctor expose only bounded execution metadata. They never print prompts, snapshot Markdown, result bodies, or raw provider responses.
 
 ```sh
 ./scripts/ccb.sh workflow status --latest ./mon-projet
 ./scripts/ccb.sh workflow inspect RUN_ID ./mon-projet
+./scripts/ccb.sh workflow history RUN_ID ./mon-projet
 ./scripts/ccb.sh config ./mon-projet
 ```
 

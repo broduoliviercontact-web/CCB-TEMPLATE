@@ -1,4 +1,4 @@
-# Persistent workflow runs — D2
+# Persistent workflow runs — D3
 
 `ccb workflow start NAME TARGET` materializes a local workflow snapshot in `.ccb/runs/`. `workflow status` and `workflow inspect` are read-only; every run-oriented command accepts an explicit run ID, while inspection, resume, and completion also accept `--latest`.
 
@@ -8,9 +8,15 @@ The state progression is `pending/ready → in-progress → completed`, with `bl
 
 Completion prepares every affected file first, keeps backups inside a private `.ccb-transaction.*` directory, then publishes the current `step.conf`, current `result.md`, next `input.md`, next `step.conf`, and `run.conf` in that order. Each replacement uses a same-directory temporary plus `mv`. A failure triggers logical multi-file rollback and validation before transaction cleanup. POSIX filesystems provide atomic replacement per file, not one atomic operation spanning all files; an unrecoverable process or storage failure can therefore still require manual inspection. Fail points are reserved for automated tests.
 
-`ccb config TARGET` reports run counts and latest status without reading Markdown. Doctor checks state, timestamps, results, transmission, symlinks, and transaction residue; `--strict` turns warnings into failure.
+`workflow retry-step RUN_ID TARGET` and `workflow retry-step --latest TARGET` explicitly prepare the next attempt after a failed execution. The previous bounded metadata is archived as `attempts/NNN.conf`; prompts, responses, Markdown, provider details beyond the short error code, and secrets are never archived. Retry is manual only and the hard limit is three attempts per step.
 
-There is no C2-to-C3 migration. Progression commands do not launch a provider, access the network, invoke Git, or execute stored content; D1 execution is the narrowly scoped local exception described below.
+`workflow cancel RUN_ID TARGET` and `workflow cancel --latest TARGET` terminate a pending, in-progress, or blocked run without deleting history. A current `pending` or `ready` step becomes `skipped`; an `in-progress` step becomes `blocked` to preserve its checkpoint; a blocked step remains blocked. A cancelled run cannot be resumed, executed, completed, retried, or automated. Active orchestration cannot yet be stopped cooperatively and must finish or release its lock before cancellation.
+
+`workflow history RUN_ID TARGET` and `workflow history --latest TARGET` reconstruct a deterministic timeline from `run.conf`, `step.conf`, `execution.conf`, `attempts/NNN.conf`, and `orchestration.conf`. It creates no journal and never reads or prints Markdown bodies. Events are ordered by timestamp and a documented stable event priority. Because retry preparation has no dedicated persistent timestamp, its event uses the corresponding archived failure completion timestamp.
+
+`ccb config TARGET` reports D3 reliability and observability counts without reading Markdown. Doctor validates run state, timestamps, results, transmission, retry archives, cancellation, orchestration, symlinks, locks, and transaction residue; `--strict` turns warnings into failure. Neither command repairs state or contacts a provider.
+
+There is no migration for existing runs without retry archives or orchestration metadata. Progression and observability commands do not launch a provider, access the network, invoke Git, or execute stored content; D1 execution is the narrowly scoped local exception described below. VERSION remains 1.7.0.
 
 ## D1 local execution
 
@@ -22,4 +28,4 @@ After `workflow resume`, `workflow execute-step RUN_ID TARGET` (or `--latest`) m
 
 A per-run execution lock prevents concurrent provider calls. Doctor reports residual locks but never removes them. Provider failures leave run and step state unchanged and keep the prior result. The single-step command performs no automatic retry or completion; D2 supplies the separate bounded sequential loop. There is no project traversal, remote provider, shell execution, Git operation, or project write. Test-provider hooks work only when `CCB_TEST_MODE=1`.
 
-`workflow status` reports the current execution status, provider, snapshot model, and attempt. `workflow inspect` reports bounded execution metadata and result size, but never prints the prompt, context, input, result body, raw HTTP response, or secrets. Config reports how many runs contain succeeded or failed executions without contacting Ollama.
+`workflow status` reports current execution, retry availability, archive count, and cancellation state. `workflow inspect` reports bounded per-step attempt, archive, execution, cancellation, and orchestration metadata. Neither prints the prompt, context, input, result body, raw provider response, full error, or secrets.

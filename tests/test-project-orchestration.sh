@@ -12,7 +12,7 @@ contains() { printf '%s\n' "$1" | grep -Fq -- "$2" || fail "$3"; ok; }
 
 project="$WORK/automation project"
 "$CLI" init "$project" --project-name 'Automation Project' --profile web --yes >/dev/null || fail init
-start=$(CCB_TEST_RUN_TIMESTAMP=20260727-120000 "$CLI" workflow start feature "$project") || fail start
+start=$(CCB_TEST_MODE=1 CCB_TEST_NOW=2026-07-27T12:00:00+0200 CCB_TEST_RUN_TIMESTAMP=20260727-120000 "$CLI" workflow start feature "$project") || fail start
 run_id=$(printf '%s\n' "$start" | sed -n 's/^Run ID: //p')
 run_dir="$project/.ccb/runs/$run_id"
 response="$WORK/provider-response.txt"; witness="$WORK/witness"; witness2="$WORK/witness-2"
@@ -83,6 +83,10 @@ contains "$config" 'Runs with failed automation: 1' 'failed automation count'
 [ ! -e "$failed_run/.ccb-orchestration-lock" ] && [ ! -e "$failed_run/.ccb-execution-lock" ] || fail 'failure lock residue'; ok
 if CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$response" "$CLI" workflow run --latest "$failed_project" >/dev/null 2>&1; then fail 'failed execution was retried'; fi; ok
 attempt=$(sed -n 's/^CCB_EXECUTION_ATTEMPT=//p' "$failed_run/01-manager/execution.conf"); [ "$attempt" = 1 ] || fail 'failed execution attempt changed'; ok
+"$CLI" workflow retry-step "$failed_id" "$failed_project" >/dev/null || fail 'manual retry preparation for automation'
+grep -Fqx 'CCB_EXECUTION_ATTEMPT=2' "$failed_run/01-manager/execution.conf" || fail 'automation retry attempt not prepared'; ok
+CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$response" "$CLI" workflow run "$failed_id" "$failed_project" >/dev/null || fail 'automation did not resume after manual retry'; ok
+grep -Fqx 'CCB_RUN_STATUS=completed' "$failed_run/run.conf" || fail 'retried automation did not complete'; ok
 
 corrupt="$WORK/corrupt-orchestration.conf"
 cp "$run_dir/orchestration.conf" "$corrupt"; printf 'CCB_ORCHESTRATION_STATUS=succeeded\n' >>"$corrupt"
@@ -98,5 +102,10 @@ rmdir "$locked_run/.ccb-orchestration-lock"
 if "$CLI" workflow run >/dev/null 2>&1; then fail 'missing run accepted'; else [ "$?" -eq 2 ] || fail 'missing run code'; fi; ok
 if "$CLI" workflow run bad/id "$project" >/dev/null 2>&1; then fail 'unsafe id accepted'; else [ "$?" -eq 2 ] || fail 'unsafe id code'; fi; ok
 if "$CLI" workflow run "$run_id" "$project" extra >/dev/null 2>&1; then fail 'extra argument accepted'; else [ "$?" -eq 2 ] || fail 'extra argument code'; fi; ok
+
+cancel_project="$WORK/cancelled automation"; "$CLI" init "$cancel_project" --yes >/dev/null
+cancel_start=$(CCB_TEST_RUN_TIMESTAMP=20260728-235800 "$CLI" workflow start feature "$cancel_project"); cancel_id=$(printf '%s\n' "$cancel_start" | sed -n 's/^Run ID: //p')
+"$CLI" workflow cancel "$cancel_id" "$cancel_project" >/dev/null || fail 'automation cancellation setup'
+if "$CLI" workflow run "$cancel_id" "$cancel_project" >/dev/null 2>&1; then fail 'cancelled run automated'; fi; ok
 
 printf 'project orchestration tests passed: %s/%s\n' "$tests" "$tests"

@@ -103,4 +103,9 @@ after=$(snapshot_intermediate)
 assert_no_transaction_residue
 run "$CLI" workflow complete-step "$transaction_run_id" "$project"; [ "$status" -eq 0 ] || fail "final validation retry: $output"
 assert_no_transaction_residue
+run "$CLI" workflow start feature "$project"; [ "$status" -eq 0 ] || fail 'cancel compatibility start'
+cancel_id=$(printf '%s\n' "$output" | sed -n 's/^Run ID: //p')
+run "$CLI" workflow cancel "$cancel_id" "$project"; [ "$status" -eq 0 ] || fail 'cancel compatibility'
+run "$CLI" workflow resume "$cancel_id" "$project"; [ "$status" -eq 1 ] || fail 'cancelled run resumed'
+run "$CLI" workflow complete-step "$cancel_id" "$project"; [ "$status" -eq 1 ] || fail 'cancelled run completed'
 printf 'project runs tests passed\n'

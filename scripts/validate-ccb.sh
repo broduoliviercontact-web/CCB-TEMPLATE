@@ -106,7 +106,7 @@ if [ -s "$TEMPLATE_ROOT/scripts/project-agents-lib.sh" ] && sh -n "$TEMPLATE_ROO
 require_template_executable scripts/project-upgrade.sh
 require_template_executable scripts/doctor.sh
 
-for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-runs.sh tests/test-project-execution.sh tests/test-project-orchestration.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
+for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-runs.sh tests/test-project-execution.sh tests/test-project-orchestration.sh tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
   require_template_executable "$project_test"
 done
 
@@ -120,7 +120,7 @@ else
   error "missing or unreadable template library: scripts/mascot-lib.sh"
 fi
 
-for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-orchestration.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/project-agents.md docs/project-runs.md docs/project-workflows.md docs/project-execution.md docs/project-orchestration.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md docs/v1.7.0.md CHANGELOG.md; do
+for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-orchestration.sh tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/project-agents.md docs/project-runs.md docs/project-workflows.md docs/project-execution.md docs/project-orchestration.md docs/project-reliability.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md docs/v1.7.0.md CHANGELOG.md; do
   if [ -s "$TEMPLATE_ROOT/$template_file" ]; then
     ok "template file: $template_file"
   else
@@ -200,6 +200,9 @@ validate_workflow_progression() {
   scenario_response="$scenario_root/provider-response"
   printf 'Literal $(touch "%s")\n' "$scenario_witness" >"$scenario_response"
   if env CCB_TEST_MODE=1 CCB_OLLAMA_ENDPOINT=http://example.invalid:11434 CCB_TEST_PROVIDER_RESPONSE_FILE="$scenario_response" "$TEMPLATE_ROOT/scripts/ccb.sh" workflow execute-step --latest "$scenario_project" >/dev/null 2>&1; then error 'workflow execute-step accepted remote provider endpoint'; else ok 'workflow execute-step: remote endpoint refused'; fi
+  if ! "$TEMPLATE_ROOT/scripts/ccb.sh" workflow retry-step --latest "$scenario_project" >/dev/null; then error 'workflow retry-step preparation failed'; return; fi
+  if [ -f "$scenario_run/01-manager/attempts/001.conf" ] &&
+    grep -Fqx 'CCB_EXECUTION_ATTEMPT=2' "$scenario_run/01-manager/execution.conf"; then ok 'workflow retry-step: archived attempt and prepared attempt 2'; else error 'workflow retry metadata invalid'; fi
   if env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$scenario_response" "$TEMPLATE_ROOT/scripts/ccb.sh" workflow execute-step --latest "$scenario_project" >/dev/null &&
     grep -Fq 'Literal $(touch "' "$scenario_run/01-manager/result.md" && [ ! -e "$scenario_witness" ]; then ok 'workflow execute-step: local test provider'; else error 'workflow execute-step failed'; fi
   scenario_status=$("$TEMPLATE_ROOT/scripts/ccb.sh" workflow status --latest "$scenario_project")
@@ -207,6 +210,12 @@ validate_workflow_progression() {
   scenario_inspect=$("$TEMPLATE_ROOT/scripts/ccb.sh" workflow inspect --latest "$scenario_project")
   if printf '%s\n' "$scenario_inspect" | grep -Fq 'Status: succeeded' && ! printf '%s\n' "$scenario_inspect" | grep -Fq 'Literal $(touch'; then ok 'workflow inspect: safe execution metadata'; else error 'workflow inspect exposed or omitted execution data'; fi
   "$TEMPLATE_ROOT/scripts/ccb.sh" config "$scenario_project" | grep -Fq 'Runs with succeeded execution: 1' && ok 'workflow config: execution count' || error 'workflow config execution count failed'
+  scenario_history_before=$(find "$scenario_run" -type f -exec cksum {} \; | LC_ALL=C sort)
+  scenario_history=$("$TEMPLATE_ROOT/scripts/ccb.sh" workflow history "$scenario_id" "$scenario_project")
+  scenario_history_after=$(find "$scenario_run" -type f -exec cksum {} \; | LC_ALL=C sort)
+  if printf '%s\n' "$scenario_history" | grep -Fq 'Event: retry-prepared' &&
+    ! printf '%s\n' "$scenario_history" | grep -Fq 'Literal $(touch' &&
+    [ "$scenario_history_before" = "$scenario_history_after" ]; then ok 'workflow history: explicit, safe, and read-only'; else error 'workflow history validation failed'; fi
   scenario_before=$(cksum "$scenario_run/run.conf" "$scenario_run/01-manager/step.conf" "$scenario_run/01-manager/result.md" "$scenario_run/02-developer/input.md" "$scenario_run/02-developer/step.conf")
   if env CCB_TEST_FAIL_POINT=after-result "$TEMPLATE_ROOT/scripts/ccb.sh" workflow complete-step --latest "$scenario_project" >/dev/null 2>&1; then error 'workflow rollback fail point was ignored'
   else
@@ -226,8 +235,25 @@ validate_workflow_progression() {
     ok 'workflow automation: sequential, checkpointed, and non-executing'
   else error 'workflow automation failed'; fi
   "$TEMPLATE_ROOT/scripts/ccb.sh" config "$scenario_project" | grep -Fq 'Runs automated successfully: 1' && ok 'workflow config: automation count' || error 'workflow automation config count failed'
+  if ! "$TEMPLATE_ROOT/scripts/ccb.sh" workflow start feature "$scenario_project" >/dev/null; then error 'workflow cancellation scenario start failed'; return; fi
+  cancel_id=$(cancel_status=$("$TEMPLATE_ROOT/scripts/ccb.sh" workflow status --latest "$scenario_project") && printf '%s\n' "$cancel_status" | sed -n 's/^Run ID: //p')
+  cancel_run="$scenario_project/.ccb/runs/$cancel_id"
+  cancel_before=$(cksum "$cancel_run/run.conf" "$cancel_run/01-manager/step.conf")
+  if env CCB_TEST_MODE=1 CCB_TEST_CANCEL_FAIL_POINT=after-current-step "$TEMPLATE_ROOT/scripts/ccb.sh" workflow cancel "$cancel_id" "$scenario_project" >/dev/null 2>&1; then error 'workflow cancel rollback fail point ignored'
+  else
+    cancel_after=$(cksum "$cancel_run/run.conf" "$cancel_run/01-manager/step.conf")
+    [ "$cancel_before" = "$cancel_after" ] && ok 'workflow cancel rollback: byte-identical' || error 'workflow cancel rollback changed files'
+  fi
+  if "$TEMPLATE_ROOT/scripts/ccb.sh" workflow cancel --latest "$scenario_project" >/dev/null &&
+    grep -Fqx 'CCB_RUN_STATUS=cancelled' "$cancel_run/run.conf" &&
+    grep -Fqx 'CCB_STEP_STATUS=skipped' "$cancel_run/01-manager/step.conf"; then ok 'workflow cancel: terminal transition'; else error 'workflow cancel failed'; fi
+  if "$TEMPLATE_ROOT/scripts/ccb.sh" workflow resume "$cancel_id" "$scenario_project" >/dev/null 2>&1; then error 'cancelled workflow resumed'; else ok 'workflow cancel: mutation refused'; fi
+  "$TEMPLATE_ROOT/scripts/ccb.sh" workflow history --latest "$scenario_project" >/dev/null && ok 'workflow history: latest' || error 'workflow history latest failed'
+  "$TEMPLATE_ROOT/scripts/ccb.sh" workflow status "$cancel_id" "$scenario_project" >/dev/null && "$TEMPLATE_ROOT/scripts/ccb.sh" workflow inspect "$cancel_id" "$scenario_project" >/dev/null && ok 'cancelled workflow status and inspect' || error 'cancelled workflow observability failed'
+  scenario_config=$("$TEMPLATE_ROOT/scripts/ccb.sh" config "$scenario_project")
+  if printf '%s\n' "$scenario_config" | grep -Fq 'Runs with archived retries: 1' && printf '%s\n' "$scenario_config" | grep -Fq 'Cancelled runs: 1'; then ok 'workflow config: D3 counters'; else error 'workflow config D3 counters failed'; fi
   "$TEMPLATE_ROOT/scripts/ccb.sh" doctor "$scenario_project" --no-ollama --strict >/dev/null && ok 'workflow doctor strict: valid' || error 'workflow doctor strict failed'
-  residue=$(find "$scenario_run" \( -name '.ccb-transaction.*' -o -name '*.old' -o -name '*.new' \) -print -quit)
+  residue=$(find "$scenario_project/.ccb/runs" \( -name '.ccb-transaction.*' -o -name '.ccb-retry-transaction.*' -o -name '*.old' -o -name '*.new' -o -name '.ccb-backup*' -o -name '.ccb-execution-lock' -o -name '.ccb-orchestration-lock' \) -print -quit)
   [ -z "$residue" ] && ok 'workflow transaction residue: none' || error 'workflow transaction residue found'
   find "$scenario_root" -depth -type f -exec rm -f {} \;
   find "$scenario_root" -depth -type l -exec rm -f {} \;
@@ -235,6 +261,10 @@ validate_workflow_progression() {
 }
 
 validate_workflow_progression
+
+for d3_suite in tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-config.sh tests/test-doctor.sh; do
+  if "$TEMPLATE_ROOT/$d3_suite" >/dev/null; then ok "D3 functional suite: $d3_suite"; else error "D3 functional suite failed: $d3_suite"; fi
+done
 
 for role in manager graph graphiste developer reviewer; do
   if grep -qi "$role" "$TARGET/.ccb/AGENT_POLICY.md"; then

@@ -77,6 +77,7 @@ for injected_error in timeout unavailable invalid-response empty-response oversi
   [ "$failed_before" = "$(cksum "$failed_run/run.conf" "$failed_run/01-manager/step.conf" "$failed_run/01-manager/result.md")" ] || fail "$injected_error changed workflow state"
   [ ! -e "$failed_run/.ccb-execution-lock" ] || fail "$injected_error lock residue"
   [ -z "$(find "$failed_run/01-manager" \( -name '.result.md.execution*' -o -name '.execution.conf.tmp.*' \) -print -quit)" ] || fail "$injected_error temporary residue"
+  [ "$injected_error" = oversized-response ] || rm -f "$failed_run/01-manager/execution.conf"
 done
 run "$CLI" workflow status "$failed_id" "$project"; [ "$status" -eq 0 ] && contains "$output" 'Execution status: failed' || fail 'status failed metadata'
 run "$CLI" config "$project"; [ "$status" -eq 0 ] && contains "$output" 'Runs with failed execution: 1' || fail 'config failed count'
@@ -87,11 +88,13 @@ run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$response" "$CLI" workf
 [ -d "$failed_run/.ccb-execution-lock" ] || fail 'foreign lock removed'; rmdir "$failed_run/.ccb-execution-lock"
 
 oversized="$WORK/oversized"; awk 'BEGIN { for (i=0;i<262145;i++) printf "x" }' >"$oversized"
+rm -f "$failed_run/01-manager/execution.conf"
 run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$oversized" "$CLI" workflow execute-step "$failed_id" "$project"
 [ "$status" -eq 1 ] && contains "$output" 'response is too large' || fail 'oversized response accepted'
 
 cp "$failed_run/context.md" "$WORK/context.saved"
 awk 'BEGIN { for (i=0;i<1048577;i++) printf "p" }' >"$failed_run/context.md"
+rm -f "$failed_run/01-manager/execution.conf"
 run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$response" "$CLI" workflow execute-step "$failed_id" "$project"
 [ "$status" -eq 1 ] && contains "$output" 'prompt is too large' || fail 'oversized prompt accepted'
 cp "$WORK/context.saved" "$failed_run/context.md"
@@ -105,5 +108,12 @@ sed 's/^CCB_STEP_MODEL=.*/CCB_STEP_MODEL=/' "$WORK/step.conf.saved" >"$failed_ru
 run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$response" "$CLI" workflow execute-step "$failed_id" "$project"
 [ "$status" -eq 1 ] || fail 'missing snapshot model accepted'
 cp "$WORK/step.conf.saved" "$failed_run/01-manager/step.conf"
+
+cancel_project="$WORK/cancel execution"; "$CLI" init "$cancel_project" --yes >/dev/null
+cancel_start=$(CCB_TEST_RUN_TIMESTAMP=20260728-235900 "$CLI" workflow start feature "$cancel_project")
+cancel_id=$(printf '%s\n' "$cancel_start" | sed -n 's/^Run ID: //p')
+"$CLI" workflow cancel "$cancel_id" "$cancel_project" >/dev/null || fail 'execution cancellation setup'
+run "$CLI" workflow execute-step "$cancel_id" "$cancel_project"
+[ "$status" -eq 1 ] && contains "$output" 'cancelled workflow run cannot be executed' || fail 'cancelled run executed'
 
 printf 'project execution tests passed\n'

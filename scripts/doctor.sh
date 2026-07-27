@@ -74,7 +74,7 @@ done
 for profile in generic web node python audio; do
   if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$profile.conf" && [ "$PROJECT_PROFILE_ID" = "$profile" ]; then emit OK "template.profile.$profile" valid; else emit FAIL "template.profile.$profile" invalid; fi
 done
-for file in docs/project-bootstrap.md docs/project-skills.md docs/project-runs.md docs/project-execution.md docs/project-orchestration.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md tests/test-doctor.sh tests/test-project-execution.sh tests/test-project-orchestration.sh tests/test-project-upgrade.sh .github/workflows/validate.yml; do
+for file in docs/project-bootstrap.md docs/project-skills.md docs/project-runs.md docs/project-execution.md docs/project-orchestration.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md tests/test-doctor.sh tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-execution.sh tests/test-project-orchestration.sh tests/test-project-upgrade.sh .github/workflows/validate.yml; do
   [ -s "$TEMPLATE_ROOT/$file" ] && emit OK "template.$file" present || emit FAIL "template.$file" missing
 done
 if command -v git >/dev/null 2>&1; then
@@ -110,8 +110,10 @@ doctor_check_workflow_runs() {
   if [ ! -e "$runs_dir" ] && [ ! -L "$runs_dir" ]; then emit OK project.runs absent; return; fi
   if [ ! -d "$runs_dir" ] || [ -L "$runs_dir" ]; then emit WARN project.runs unsafe; return; fi
   emit OK project.runs present
-  residual=$(find "$runs_dir" \( -name '.ccb-transaction.*' -o -name '*.old' -o -name '*.new' -o -name '.ccb-publish.*' \) -print -quit)
+  residual=$(find "$runs_dir" \( -name '.ccb-transaction.*' -o -name '.ccb-retry-transaction.*' -o -name '*.old' -o -name '*.new' -o -name '.ccb-publish.*' -o -name '.retry-publish.*' -o -name '.ccb-backup*' \) -print -quit)
   [ -z "$residual" ] && emit OK project.runs.transactions clean || emit WARN project.runs.transactions residual
+  unsafe_entry=$(find "$runs_dir" \( -type l -o \( ! -type f ! -type d \) \) -print -quit)
+  [ -z "$unsafe_entry" ] && emit OK project.runs.entries regular || emit WARN project.runs.entries unsafe
   execution_lock=$(find "$runs_dir" -name '.ccb-execution-lock' -print -quit)
   execution_residual=$(find "$runs_dir" \( -name '.result.md.execution-*' -o -name '.execution.conf.tmp.*' -o -name '*.prompt.tmp' -o -name '*.response.tmp' \) -print -quit)
   [ -z "$execution_residual" ] && emit OK project.runs.execution_files clean || emit WARN project.runs.execution_files residual
@@ -123,6 +125,7 @@ doctor_check_workflow_runs() {
     if [ ! -d "$run_dir" ] || [ -L "$run_dir" ] || ! run_parse_conf "$run_dir/run.conf"; then emit WARN "project.run.$run_name" invalid-or-unsafe; continue; fi
     run_status=$RUN_STATUS; run_current=$RUN_CURRENT; run_count=$RUN_COUNT; run_completed=$RUN_COMPLETED
     state_ok=1
+    project_run_execution_history_summary "$run_dir" || state_ok=0
     automation_file="$run_dir/orchestration.conf"; automation_lock="$run_dir/.ccb-orchestration-lock"
     automation_status=none
     orchestration_residual=$(find "$run_dir" -maxdepth 2 \( -name '.orchestration.conf.tmp.*' -o -name '.ccb-orchestration-*' \) ! -name '.ccb-orchestration-lock' -print -quit)
@@ -134,6 +137,9 @@ doctor_check_workflow_runs() {
         [ "$ORCHESTRATION_STEP_COUNT" = "$run_count" ] && [ "$ORCHESTRATION_CURRENT" = "$run_current" ] && [ "$ORCHESTRATION_STEPS_COMPLETED" = "${automation_done:-0}" ] || state_ok=0
         [ "$ORCHESTRATION_ACTIONS" -le $((run_count * 3 + 3)) ] || state_ok=0
         if [ "$automation_status" = succeeded ]; then [ "$run_status" = completed ] || state_ok=0; fi
+        if [ "$run_status" = cancelled ]; then
+          [ "$automation_status" = interrupted ] && [ "$ORCHESTRATION_ERROR" = cancelled-by-user ] && [ -n "$ORCHESTRATION_COMPLETED" ] || state_ok=0
+        fi
       else state_ok=0
       fi
     fi
@@ -141,9 +147,7 @@ doctor_check_workflow_runs() {
       [ -d "$automation_lock" ] && [ ! -L "$automation_lock" ] && [ "$automation_status" = running ] || state_ok=0
     elif [ "$automation_status" = running ]; then state_ok=0
     fi
-    if [ "$run_status" = completed ]; then [ -n "$run_completed" ] || state_ok=0
-    else [ -z "$run_completed" ] || state_ok=0
-    fi
+    case "$run_status" in completed|cancelled) [ -n "$run_completed" ] || state_ok=0;; *) [ -z "$run_completed" ] || state_ok=0;; esac
     previous_dir=; previous_status=
     i=1
     while [ "$i" -le "$run_count" ]; do
@@ -157,7 +161,12 @@ doctor_check_workflow_runs() {
         completed) [ -n "$STEP_STARTED" ] && [ -n "$STEP_COMPLETED" ] || state_ok=0;;
         ready|pending) [ -z "$STEP_STARTED" ] && [ -z "$STEP_COMPLETED" ] || state_ok=0;;
         blocked) [ -n "$STEP_STARTED" ] && [ -z "$STEP_COMPLETED" ] || state_ok=0;;
-        skipped) [ -n "$STEP_COMPLETED" ] || state_ok=0;;
+        skipped)
+          if [ "$run_status" = cancelled ] && [ "$i" -eq "$run_current" ]; then
+            [ -z "$STEP_STARTED" ] && [ -z "$STEP_COMPLETED" ] || state_ok=0
+          else
+            [ -n "$STEP_COMPLETED" ] || state_ok=0
+          fi;;
       esac
       result_file="$doctor_step_dir/result.md"
       if [ "$step_status" = completed ]; then project_run_validate_completed_result "$result_file" || state_ok=0
@@ -186,7 +195,7 @@ doctor_check_workflow_runs() {
     done
     current_dir=$(find "$run_dir" -maxdepth 1 -type d -name "$(printf '%02d' "$run_current")-*" -print)
     if [ -n "$current_dir" ] && run_step_parse "$current_dir/step.conf"; then
-      case "$run_status:$STEP_STATUS" in pending:ready|in-progress:in-progress|in-progress:ready|blocked:blocked|completed:completed|completed:skipped) :;; *) state_ok=0;; esac
+      case "$run_status:$STEP_STATUS" in pending:pending|pending:ready|in-progress:in-progress|in-progress:ready|blocked:blocked|completed:completed|completed:skipped|cancelled:skipped|cancelled:blocked) :;; *) state_ok=0;; esac
     else state_ok=0
     fi
     [ "$state_ok" -eq 1 ] && emit OK "project.run.$run_name" valid || emit WARN "project.run.$run_name" inconsistent

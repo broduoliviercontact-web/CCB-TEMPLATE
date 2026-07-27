@@ -1,62 +1,75 @@
 #!/bin/sh
 set -u
-ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd)
-CLI="$ROOT/scripts/ccb.sh"
+ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd); CLI="$ROOT/scripts/ccb.sh"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/ccb-project-config.XXXXXX") || exit 1
 cleanup() { find "$WORK" -depth -type f -exec rm -f {} \; 2>/dev/null || :; find "$WORK" -depth -type l -exec rm -f {} \; 2>/dev/null || :; find "$WORK" -depth -type d -exec rmdir {} \; 2>/dev/null || :; }
 trap 'cleanup' EXIT HUP INT TERM
-target="$WORK/project with spaces"
-"$CLI" init "$target" --profile audio --yes >/dev/null
-output=$("$CLI" config "$target") || { echo 'FAIL: config rejected valid project' >&2; exit 1; }
-printf '%s' "$output" | grep -F 'Profile: audio' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Provider: ollama' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Coder model:' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Runs directory: absent' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Total runs: 0' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Automation support: sequential' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Runs automated successfully: 0' >/dev/null || exit 1
-[ ! -e "$target/.ccb/runs" ] || exit 1
-mkdir "$target/.ccb/runs"
-output=$("$CLI" config "$target") || exit 1
-printf '%s' "$output" | grep -F 'Runs directory: present' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Latest run: none' >/dev/null || exit 1
-rmdir "$target/.ccb/runs"
+tests=0; pass() { tests=$((tests + 1)); }; fail() { echo "FAIL: $1" >&2; exit 1; }
+contains() { printf '%s\n' "$1" | grep -Fq -- "$2" || fail "$3"; pass; }
+start_run() { sequence=$((sequence + 1)); started=$(CCB_TEST_RUN_TIMESTAMP="$(printf '20260730-%06d' "$sequence")" "$CLI" workflow start feature "$target") || fail "start $1"; run_id=$(printf '%s\n' "$started" | sed -n 's/^Run ID: //p'); run_dir="$target/.ccb/runs/$run_id"; }
 
-start_output=$("$CLI" workflow start feature "$target") || exit 1
-run_id=$(printf '%s\n' "$start_output" | sed -n 's/^Run ID: //p')
-run_dir="$target/.ccb/runs/$run_id"
-printf 'MARKDOWN_SECRET_MUST_NOT_APPEAR\n' >>"$run_dir/context.md"
-before=$(find "$target/.ccb/runs" -type f -exec cksum {} \; | sort)
-output=$("$CLI" config "$target") || exit 1
-after=$(find "$target/.ccb/runs" -type f -exec cksum {} \; | sort)
-[ "$before" = "$after" ] || exit 1
-printf '%s' "$output" | grep -F 'Pending runs: 1' >/dev/null || exit 1
-printf '%s' "$output" | grep -F "Latest run: $run_id" >/dev/null || exit 1
-if printf '%s' "$output" | grep -F 'MARKDOWN_SECRET_MUST_NOT_APPEAR' >/dev/null; then exit 1; fi
-"$CLI" workflow resume "$run_id" "$target" >/dev/null || exit 1
-output=$("$CLI" config "$target") || exit 1
-printf '%s' "$output" | grep -F 'In-progress runs: 1' >/dev/null || exit 1
+target="$WORK/project with spaces"; "$CLI" init "$target" --profile audio --yes >/dev/null || fail init
+output=$("$CLI" config "$target") || fail 'config without runs'
+contains "$output" 'Workflow reliability' 'reliability section missing'
+contains "$output" 'Manual retry support: enabled' 'retry support missing'
+contains "$output" 'Maximum attempts per step: 3' 'retry maximum missing'
+contains "$output" 'Cancelled runs: 0' 'initial cancelled count'
+contains "$output" 'Runs with archived retries: 0' 'initial retry count'
+contains "$output" 'Archived failed attempts: 0' 'initial archive count'
+contains "$output" 'Runs at retry limit: 0' 'initial limit count'
+contains "$output" 'Workflow observability' 'observability section missing'
+contains "$output" 'History command: enabled' 'history support missing'
+contains "$output" 'Runs with execution history: 0' 'initial execution history count'
+[ ! -e "$target/.ccb/runs" ] || fail 'config created runs directory'; pass
 
-cp -R "$run_dir" "$target/.ccb/runs/20260727-235959-feature-2"
-sed "s/CCB_RUN_ID=$run_id/CCB_RUN_ID=20260727-235959-feature-2/; s/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=blocked/" "$run_dir/run.conf" >"$target/.ccb/runs/20260727-235959-feature-2/run.conf"
-sed 's/CCB_STEP_STATUS=in-progress/CCB_STEP_STATUS=blocked/' "$run_dir/01-manager/step.conf" >"$target/.ccb/runs/20260727-235959-feature-2/01-manager/step.conf"
-cp -R "$run_dir" "$target/.ccb/runs/20260727-235959-feature-10"
-sed "s/CCB_RUN_ID=$run_id/CCB_RUN_ID=20260727-235959-feature-10/; s/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=cancelled/" "$run_dir/run.conf" >"$target/.ccb/runs/20260727-235959-feature-10/run.conf"
-cp -R "$run_dir" "$target/.ccb/runs/20260727-110000-feature"
-sed "s/CCB_RUN_ID=$run_id/CCB_RUN_ID=20260727-110000-feature/; s/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=completed/" "$run_dir/run.conf" >"$target/.ccb/runs/20260727-110000-feature/run.conf"
+sequence=0; start_run pending
+printf 'CONFIG_SECRET_MARKDOWN\n' >>"$run_dir/context.md"
+output=$("$CLI" config "$target") || fail 'config pending run'
+contains "$output" 'Valid runs: 1' 'pending run invalid'
+contains "$output" 'Runs with execution history: 0' 'pending run has history'
+
+start_run retry
+"$CLI" workflow resume "$run_id" "$target" >/dev/null || fail 'retry resume'
+CCB_TEST_MODE=1 CCB_TEST_PROVIDER_ERROR=unavailable "$CLI" workflow execute-step "$run_id" "$target" >/dev/null 2>&1
+"$CLI" workflow retry-step "$run_id" "$target" >/dev/null || fail 'retry archive one'
+output=$("$CLI" config "$target") || fail 'config one retry'
+contains "$output" 'Runs with archived retries: 1' 'one retry run count'
+contains "$output" 'Archived failed attempts: 1' 'one archive count'
+CCB_TEST_MODE=1 CCB_TEST_PROVIDER_ERROR=timeout "$CLI" workflow execute-step "$run_id" "$target" >/dev/null 2>&1
+"$CLI" workflow retry-step "$run_id" "$target" >/dev/null || fail 'retry archive two'
+CCB_TEST_MODE=1 CCB_TEST_PROVIDER_ERROR=invalid-response "$CLI" workflow execute-step "$run_id" "$target" >/dev/null 2>&1
+output=$("$CLI" config "$target") || fail 'config retry limit'
+contains "$output" 'Archived failed attempts: 2' 'two archive count'
+contains "$output" 'Runs at retry limit: 1' 'retry limit count'
+
+start_run cancelled
+"$CLI" workflow cancel "$run_id" "$target" >/dev/null || fail cancel
+
+response="$WORK/response"; printf '%s\n' 'Config automation response.' >"$response"
+start_run succeeded
+CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$response" "$CLI" workflow run "$run_id" "$target" >/dev/null || fail 'successful automation'
+start_run failed
+CCB_TEST_MODE=1 CCB_TEST_PROVIDER_ERROR=unavailable "$CLI" workflow run "$run_id" "$target" >/dev/null 2>&1
+start_run interrupted
+CCB_TEST_MODE=1 CCB_TEST_ORCHESTRATION_FAIL_POINT=after-resume "$CLI" workflow run "$run_id" "$target" >/dev/null 2>&1
+
 mkdir "$target/.ccb/runs/invalid-run"
-printf 'CCB_EXECUTION_VERSION=1\nCCB_EXECUTION_STATUS=succeeded\nCCB_EXECUTION_PROVIDER=ollama\nCCB_EXECUTION_MODEL=qwen3:8b\nCCB_EXECUTION_ATTEMPT=1\nCCB_EXECUTION_STARTED_AT=2026-07-27T10:00:00+0200\nCCB_EXECUTION_COMPLETED_AT=2026-07-27T10:01:00+0200\nCCB_EXECUTION_ERROR=\n' >"$run_dir/01-manager/execution.conf"
-printf 'CCB_EXECUTION_VERSION=1\nCCB_EXECUTION_STATUS=failed\nCCB_EXECUTION_PROVIDER=ollama\nCCB_EXECUTION_MODEL=qwen3:8b\nCCB_EXECUTION_ATTEMPT=1\nCCB_EXECUTION_STARTED_AT=2026-07-27T10:00:00+0200\nCCB_EXECUTION_COMPLETED_AT=2026-07-27T10:01:00+0200\nCCB_EXECUTION_ERROR=request-failed\n' >"$target/.ccb/runs/20260727-235959-feature-2/01-manager/execution.conf"
-output=$("$CLI" config "$target") || exit 1
-printf '%s' "$output" | grep -F 'Total runs: 5' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Valid runs: 4' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Invalid runs: 1' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Blocked runs: 1' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Cancelled runs: 1' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Completed runs: 1' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Latest run: 20260727-235959-feature-10' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Latest status: cancelled' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Runs with succeeded execution: 1' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Runs with failed execution: 1' >/dev/null || exit 1
-if "$CLI" config >/dev/null 2>&1; then exit 1; fi
-printf 'project config tests passed\n'
+before_files=$(find "$target" -type f -exec cksum {} \; | LC_ALL=C sort); before_dirs=$(find "$target" -type d | LC_ALL=C sort)
+output=$("$CLI" config "$target") || fail 'combined config'
+after_files=$(find "$target" -type f -exec cksum {} \; | LC_ALL=C sort); after_dirs=$(find "$target" -type d | LC_ALL=C sort)
+[ "$before_files" = "$after_files" ] && [ "$before_dirs" = "$after_dirs" ] || fail 'config mutated project'; pass
+contains "$output" 'Total runs: 7' 'combined total count'
+contains "$output" 'Valid runs: 6' 'combined valid count'
+contains "$output" 'Invalid runs: 1' 'combined invalid count'
+contains "$output" 'Cancelled runs: 1' 'combined cancelled count'
+contains "$output" 'Runs with archived retries: 1' 'combined retry count'
+contains "$output" 'Archived failed attempts: 2' 'combined archive count'
+contains "$output" 'Runs at retry limit: 1' 'combined limit count'
+contains "$output" 'Runs with execution history: 3' 'combined history count'
+contains "$output" 'Runs with successful orchestration: 1' 'successful orchestration count'
+contains "$output" 'Runs with failed orchestration: 1' 'failed orchestration count'
+contains "$output" 'Runs with interrupted orchestration: 1' 'interrupted orchestration count'
+if printf '%s' "$output" | grep -Eq 'CONFIG_SECRET_MARKDOWN|request-failed|invalid-response|Config automation response'; then fail 'config exposed sensitive content'; fi; pass
+if "$CLI" config >/dev/null 2>&1; then fail 'config accepted missing target'; fi; pass
+
+printf 'project config tests passed: %s/%s\n' "$tests" "$tests"

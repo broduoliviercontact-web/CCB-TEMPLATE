@@ -12,7 +12,7 @@ SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/project-orchestration-lib.sh"
 
 usage() {
-  echo 'usage: ccb.sh workflow start|status|inspect|resume|execute-step|complete-step|run ...' >&2
+  echo 'usage: ccb.sh workflow start|status|inspect|history|resume|execute-step|retry-step|complete-step|cancel|run ...' >&2
   exit "${1:-2}"
 }
 now() {
@@ -49,13 +49,13 @@ load_project() {
 resolve_run_args() {
   requested=${1:-}; resolved_target=${2:-.}
   [ -n "$requested" ] || return 2
+  if [ "$requested" != --latest ]; then run_id_is_valid "$requested" || return 2; fi
   resolved_target=$(CDPATH= cd "$resolved_target" 2>/dev/null && pwd) || return 1
   runs="$resolved_target/.ccb/runs"
   [ -d "$runs" ] && [ ! -L "$runs" ] || return 1
   if [ "$requested" = --latest ]; then
     resolved_id=$(run_latest_id "$runs") || return 1
   else
-    run_id_is_valid "$requested" || return 2
     resolved_id=$requested
   fi
   resolved_dir="$runs/$resolved_id"
@@ -73,6 +73,7 @@ load_execution_summary() {
   if [ -e "$execution_summary_file" ] || [ -L "$execution_summary_file" ]; then
     project_execution_parse_conf "$execution_summary_file" || return 1
   fi
+  project_execution_attempts_summary "$execution_step_dir" || return 1
 }
 
 load_orchestration_summary() {
@@ -130,6 +131,46 @@ complete_step_abort() {
 
 complete_step_trap() {
   complete_step_abort
+}
+
+cancel_restore_all() {
+  restored=0
+  project_run_transaction_restore "$transaction_dir/current-step.conf.old" "$cancel_step_file" || restored=1
+  if [ "$cancel_has_orchestration" = 1 ]; then
+    project_run_transaction_restore "$transaction_dir/orchestration.conf.old" "$cancel_orchestration_file" || restored=1
+  fi
+  project_run_transaction_restore "$transaction_dir/run.conf.old" "$cancel_run_file" || restored=1
+  [ "$restored" -eq 0 ] || return 1
+  cmp -s "$transaction_dir/current-step.conf.old" "$cancel_step_file" &&
+    cmp -s "$transaction_dir/run.conf.old" "$cancel_run_file" || return 1
+  if [ "$cancel_has_orchestration" = 1 ]; then
+    cmp -s "$transaction_dir/orchestration.conf.old" "$cancel_orchestration_file" || return 1
+  fi
+  run_validate_directory "$resolved_dir"
+}
+
+cancel_abort() {
+  trap - EXIT HUP INT TERM
+  if [ "${transaction_started:-0}" = 1 ]; then
+    if cancel_restore_all && project_run_transaction_cleanup "$transaction_dir" "$resolved_dir"; then
+      transaction_dir=
+      echo 'error: workflow cancellation failed and was rolled back' >&2
+      exit 1
+    fi
+    echo 'error: workflow cancellation rollback failed' >&2
+    exit 1
+  fi
+  if [ -n "${transaction_dir:-}" ]; then
+    project_run_transaction_cleanup "$transaction_dir" "$resolved_dir" || {
+      echo 'error: workflow cancellation cleanup failed' >&2
+      exit 1
+    }
+  fi
+  exit 1
+}
+
+cancel_trap() {
+  cancel_abort
 }
 
 execution_lock_cleanup() {
@@ -194,6 +235,302 @@ workflow_resume_current() {
   printf '[OK] workflow run resumed\nRun ID: %s\nStatus: in-progress\nCurrent step: %s — %s\nExecution: disabled\n' "$RUN_ID" "$RUN_CURRENT" "$STEP_ROLE"
 }
 
+workflow_retry_current() {
+  case "$RUN_STATUS" in
+    pending) echo 'error: pending workflow run cannot retry a step' >&2; return 1;;
+    blocked) echo 'error: blocked workflow run cannot retry a step' >&2; return 1;;
+    completed) echo 'error: completed workflow run cannot retry a step' >&2; return 1;;
+    cancelled) echo 'error: cancelled workflow run cannot retry a step' >&2; return 1;;
+    in-progress) :;; *) echo 'error: invalid workflow run' >&2; return 1;;
+  esac
+  automation_lock_refuse_manual || return 1
+  execution_lock="$resolved_dir/.ccb-execution-lock"
+  if [ -e "$execution_lock" ] || [ -L "$execution_lock" ]; then echo 'error: workflow run execution is already locked' >&2; return 1; fi
+  [ -z "$(find "$resolved_dir" -maxdepth 1 -name '.ccb-transaction.*' -print -quit)" ] || { echo 'error: residual workflow transaction' >&2; return 1; }
+  step_dir=$(current_step_directory); run_step_parse "$step_dir/step.conf" || { echo 'error: invalid current workflow step' >&2; return 1; }
+  [ "$STEP_STATUS" = in-progress ] || { echo 'error: current workflow step is not in progress' >&2; return 1; }
+  project_execution_state_is_coherent "$resolved_dir" || { echo 'error: invalid workflow run state' >&2; return 1; }
+  result_file="$step_dir/result.md"
+  project_execution_result_is_template "$result_file" || { echo 'error: current step already contains an explicit result' >&2; return 1; }
+  execution_file="$step_dir/execution.conf"
+  [ -e "$execution_file" ] || { echo 'error: current workflow step has no failed execution' >&2; return 1; }
+  project_execution_parse_conf "$execution_file" || { echo 'error: invalid execution metadata' >&2; return 1; }
+  [ "$EXECUTION_MODEL" = "$STEP_MODEL" ] && [ "$EXECUTION_PROVIDER" = "$STEP_PROVIDER" ] || { echo 'error: execution metadata does not match the workflow snapshot' >&2; return 1; }
+  case "$EXECUTION_STATUS:$EXECUTION_ERROR" in
+    failed:retry-prepared) echo 'error: workflow step retry is already prepared' >&2; return 1;;
+    failed:*) :;;
+    running:*) echo 'error: running workflow step execution cannot be retried' >&2; return 1;;
+    succeeded:*) echo 'error: succeeded workflow step execution cannot be retried' >&2; return 1;;
+    *) echo 'error: workflow step execution cannot be retried' >&2; return 1;;
+  esac
+  case "$EXECUTION_ERROR" in timeout|invalid-response|oversized-response|unsafe-endpoint|request-failed|empty-result) :;; *) echo 'error: unsupported workflow execution error metadata' >&2; return 1;; esac
+  [ "$EXECUTION_ATTEMPT" -lt 3 ] || { echo 'error: workflow step retry limit reached' >&2; return 1; }
+  previous_attempt=$EXECUTION_ATTEMPT
+  project_execution_prepare_retry "$step_dir" || return 1
+  printf '[OK] workflow step retry prepared\nRun ID: %s\nStep: %s — %s\nArchived attempt: %s\nNext attempt: %s\nProvider executed: no\n' "$RUN_ID" "$STEP_NUMBER" "$STEP_ROLE" "$previous_attempt" "$EXECUTION_ATTEMPT"
+}
+
+workflow_cancel_current() {
+  case "$RUN_STATUS" in
+    completed) echo 'error: completed workflow run cannot be cancelled' >&2; return 1;;
+    cancelled) echo 'error: workflow run is already cancelled' >&2; return 1;;
+    pending|in-progress|blocked) :;;
+    *) echo 'error: invalid workflow run' >&2; return 1;;
+  esac
+  automation_lock_refuse_manual || return 1
+  execution_lock="$resolved_dir/.ccb-execution-lock"
+  if [ -e "$execution_lock" ] || [ -L "$execution_lock" ]; then
+    echo 'error: workflow step execution is currently locked' >&2
+    return 1
+  fi
+  if [ -n "$(find "$resolved_dir" \( -name '.ccb-transaction.*' -o -name '.ccb-retry-transaction.*' \) -print -quit)" ]; then
+    echo 'error: residual workflow transaction' >&2
+    return 1
+  fi
+  project_run_validate_cancel_source "$resolved_dir" || { echo 'error: invalid workflow run state' >&2; return 1; }
+  project_run_cancel_fail_point_is_valid || { echo 'error: invalid workflow cancellation test hook' >&2; return 1; }
+
+  cancel_step_dir=$(current_step_directory)
+  cancel_step_file="$cancel_step_dir/step.conf"
+  run_step_parse "$cancel_step_file" || { echo 'error: invalid current workflow step' >&2; return 1; }
+  cancel_step_number=$STEP_NUMBER; cancel_step_role=$STEP_ROLE
+  case "$STEP_STATUS" in pending|ready) cancel_step_status=skipped;; in-progress) cancel_step_status=blocked;; blocked) cancel_step_status=blocked;; *) echo 'error: invalid current workflow step' >&2; return 1;; esac
+
+  cancel_orchestration_file="$resolved_dir/orchestration.conf"; cancel_has_orchestration=0
+  if [ -e "$cancel_orchestration_file" ] || [ -L "$cancel_orchestration_file" ]; then
+    project_orchestration_parse_conf "$cancel_orchestration_file" || { echo 'error: invalid orchestration metadata' >&2; return 1; }
+    [ "$ORCHESTRATION_STATUS" != running ] || { echo 'error: workflow run is controlled by an active automation' >&2; return 1; }
+    cancel_has_orchestration=1
+    cancel_orchestration_started=$ORCHESTRATION_STARTED
+    cancel_orchestration_current=$ORCHESTRATION_CURRENT
+    cancel_orchestration_done=$ORCHESTRATION_STEPS_COMPLETED
+    cancel_orchestration_count=$ORCHESTRATION_STEP_COUNT
+    cancel_orchestration_actions=$ORCHESTRATION_ACTIONS
+  fi
+
+  cancel_run_file="$resolved_dir/run.conf"; cancel_current=$RUN_CURRENT
+  transaction_dir=; transaction_started=0
+  project_run_transaction_create "$resolved_dir" || { echo 'error: cannot create workflow cancellation transaction' >&2; return 1; }
+  trap 'cancel_trap' EXIT HUP INT TERM
+  prepared_cancel_step="$transaction_dir/current-step.conf.new"
+  prepared_cancel_run="$transaction_dir/run.conf.new"
+  prepared_cancel_orchestration="$transaction_dir/orchestration.conf.new"
+  cancel_timestamp=$(now) || cancel_abort
+
+  run_step_parse "$cancel_step_file" || cancel_abort
+  STEP_STATUS=$cancel_step_status
+  project_run_write_step_prepared "$prepared_cancel_step" || cancel_abort
+  RUN_STATUS=cancelled; RUN_UPDATED=$cancel_timestamp; RUN_COMPLETED=$cancel_timestamp
+  project_run_write_run_prepared "$prepared_cancel_run" || cancel_abort
+  if [ "$cancel_has_orchestration" = 1 ]; then
+    project_orchestration_write_conf "$prepared_cancel_orchestration" interrupted \
+      "$cancel_orchestration_started" "$cancel_timestamp" "$cancel_timestamp" \
+      "$cancel_orchestration_current" "$cancel_orchestration_done" "$cancel_orchestration_count" \
+      "$cancel_orchestration_actions" cancelled-by-user || cancel_abort
+  fi
+
+  project_run_validate_cancelled_step_prepared "$prepared_cancel_step" "$cancel_step_number" "$cancel_step_role" "$cancel_step_status" || cancel_abort
+  project_run_validate_cancelled_run_prepared "$prepared_cancel_run" "$cancel_current" "$cancel_timestamp" || cancel_abort
+  if [ "$cancel_has_orchestration" = 1 ]; then
+    project_orchestration_parse_conf "$prepared_cancel_orchestration" &&
+      [ "$ORCHESTRATION_STATUS" = interrupted ] && [ "$ORCHESTRATION_COMPLETED" = "$cancel_timestamp" ] &&
+      [ "$ORCHESTRATION_ERROR" = cancelled-by-user ] || cancel_abort
+  fi
+
+  project_run_transaction_copy "$cancel_step_file" "$transaction_dir/current-step.conf.old" || cancel_abort
+  if [ "$cancel_has_orchestration" = 1 ]; then
+    project_run_transaction_copy "$cancel_orchestration_file" "$transaction_dir/orchestration.conf.old" || cancel_abort
+  fi
+  project_run_transaction_copy "$cancel_run_file" "$transaction_dir/run.conf.old" || cancel_abort
+  transaction_started=1
+
+  project_run_cancel_fail_point before-publish || cancel_abort
+  project_run_transaction_publish "$prepared_cancel_step" "$cancel_step_file" || cancel_abort
+  project_run_cancel_fail_point after-current-step || cancel_abort
+  if [ "$cancel_has_orchestration" = 1 ]; then
+    project_run_transaction_publish "$prepared_cancel_orchestration" "$cancel_orchestration_file" || cancel_abort
+  fi
+  project_run_cancel_fail_point after-orchestration || cancel_abort
+  project_run_cancel_fail_point before-run || cancel_abort
+  project_run_transaction_publish "$prepared_cancel_run" "$cancel_run_file" || cancel_abort
+  project_run_cancel_fail_point after-run || cancel_abort
+
+  run_validate_directory "$resolved_dir" || cancel_abort
+  project_run_validate_cancelled_step_prepared "$cancel_step_file" "$cancel_step_number" "$cancel_step_role" "$cancel_step_status" || cancel_abort
+  run_parse_conf "$cancel_run_file" && [ "$RUN_STATUS" = cancelled ] &&
+    [ "$RUN_UPDATED" = "$cancel_timestamp" ] && [ "$RUN_COMPLETED" = "$cancel_timestamp" ] || cancel_abort
+  if [ "$cancel_has_orchestration" = 1 ]; then
+    project_orchestration_parse_conf "$cancel_orchestration_file" && [ "$ORCHESTRATION_STATUS" = interrupted ] &&
+      [ "$ORCHESTRATION_ERROR" = cancelled-by-user ] || cancel_abort
+  fi
+  transaction_started=0
+  project_run_transaction_cleanup "$transaction_dir" "$resolved_dir" || cancel_abort
+  transaction_dir=; trap - EXIT HUP INT TERM
+  printf '[OK] workflow run cancelled\nRun ID: %s\nStatus: cancelled\nCompleted: %s\nCurrent step: %s — %s (%s)\nProvider executed: no\n' \
+    "$RUN_ID" "$RUN_COMPLETED" "$cancel_step_number" "$cancel_step_role" "$cancel_step_status"
+}
+
+history_timestamp_is_valid() {
+  case "$1" in ????-??-??T??:??:??[+-]????) return 0;; *) return 1;; esac
+}
+
+workflow_history_validate() {
+  history_timestamp_is_valid "$RUN_CREATED" && history_timestamp_is_valid "$RUN_UPDATED" || return 1
+  [ "$RUN_UPDATED" \< "$RUN_CREATED" ] && return 1
+  case "$RUN_STATUS" in
+    completed|cancelled) history_timestamp_is_valid "$RUN_COMPLETED" || return 1;;
+    *) [ -z "$RUN_COMPLETED" ] || return 1;;
+  esac
+  if [ -n "$RUN_COMPLETED" ] && [ "$RUN_COMPLETED" \< "$RUN_UPDATED" ]; then return 1; fi
+
+  history_step=1
+  while [ "$history_step" -le "$RUN_COUNT" ]; do
+    history_step_dir=$(find "$resolved_dir" -maxdepth 1 -type d -name "$(printf '%02d' "$history_step")-*" -print)
+    run_step_parse "$history_step_dir/step.conf" || return 1
+    if [ -n "$STEP_STARTED" ]; then history_timestamp_is_valid "$STEP_STARTED" || return 1; fi
+    if [ -n "$STEP_COMPLETED" ]; then history_timestamp_is_valid "$STEP_COMPLETED" || return 1; fi
+    case "$STEP_STATUS" in
+      completed) [ -n "$STEP_STARTED" ] && [ -n "$STEP_COMPLETED" ] || return 1;;
+      in-progress) [ -n "$STEP_STARTED" ] && [ -z "$STEP_COMPLETED" ] || return 1;;
+      pending|ready) [ -z "$STEP_COMPLETED" ] || return 1;;
+      blocked|skipped) :;;
+    esac
+    if [ -n "$STEP_STARTED" ] && [ -n "$STEP_COMPLETED" ] && [ "$STEP_COMPLETED" \< "$STEP_STARTED" ]; then return 1; fi
+
+    history_snapshot_provider=$STEP_PROVIDER; history_snapshot_model=$STEP_MODEL
+    history_execution_file="$history_step_dir/execution.conf"; history_has_execution=0
+    if [ -e "$history_execution_file" ] || [ -L "$history_execution_file" ]; then
+      project_execution_parse_conf "$history_execution_file" || return 1
+      [ "$EXECUTION_PROVIDER" = "$history_snapshot_provider" ] && [ "$EXECUTION_MODEL" = "$history_snapshot_model" ] || return 1
+      [ "$EXECUTION_ATTEMPT" -le 3 ] || return 1
+      if [ -n "$EXECUTION_STARTED" ] && [ -n "$EXECUTION_COMPLETED" ] && [ "$EXECUTION_COMPLETED" \< "$EXECUTION_STARTED" ]; then return 1; fi
+      history_has_execution=1; history_execution_attempt=$EXECUTION_ATTEMPT
+    fi
+    project_execution_attempts_summary "$history_step_dir" || return 1
+    if [ "$history_has_execution" -eq 1 ]; then
+      [ "$history_execution_attempt" -eq $((EXECUTION_ARCHIVED_ATTEMPTS + 1)) ] || return 1
+      if [ "$EXECUTION_ERROR" = retry-prepared ]; then [ "$EXECUTION_ARCHIVED_ATTEMPTS" -gt 0 ] || return 1; fi
+    else
+      [ "$EXECUTION_ARCHIVED_ATTEMPTS" -eq 0 ] || return 1
+    fi
+    history_archive_number=1; history_previous_completion=
+    while [ "$history_archive_number" -le "$EXECUTION_ARCHIVED_ATTEMPTS" ]; do
+      history_archive="$history_step_dir/attempts/$(printf '%03d.conf' "$history_archive_number")"
+      project_execution_attempt_parse_conf "$history_archive" || return 1
+      [ "$ATTEMPT_PROVIDER" = "$history_snapshot_provider" ] && [ "$ATTEMPT_MODEL" = "$history_snapshot_model" ] || return 1
+      [ "$ATTEMPT_COMPLETED" \< "$ATTEMPT_STARTED" ] && return 1
+      if [ -n "$history_previous_completion" ] && [ "$ATTEMPT_STARTED" \< "$history_previous_completion" ]; then return 1; fi
+      history_previous_completion=$ATTEMPT_COMPLETED
+      history_archive_number=$((history_archive_number + 1))
+    done
+    if [ "$history_has_execution" -eq 1 ] && [ -n "$EXECUTION_STARTED" ] &&
+      [ -n "$history_previous_completion" ] && [ "$EXECUTION_STARTED" \< "$history_previous_completion" ]; then return 1; fi
+    history_step=$((history_step + 1))
+  done
+
+  history_orchestration="$resolved_dir/orchestration.conf"
+  if [ -e "$history_orchestration" ] || [ -L "$history_orchestration" ]; then
+    project_orchestration_parse_conf "$history_orchestration" || return 1
+    [ "$ORCHESTRATION_STEP_COUNT" -eq "$RUN_COUNT" ] || return 1
+  fi
+}
+
+history_emit_event() {
+  history_sequence=$((history_sequence + 1))
+  printf '%s|%02d|%04d|%s|%s|%s|%s|%s|%s|%s\n' \
+    "$1" "$2" "$history_sequence" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
+}
+
+workflow_history_timeline() {
+  history_sequence=0
+  {
+    history_emit_event "$RUN_CREATED" 1 run-created none '' '' '' '' none
+    history_orchestration="$resolved_dir/orchestration.conf"
+    if [ -e "$history_orchestration" ]; then
+      project_orchestration_parse_conf "$history_orchestration" || return 1
+      history_emit_event "$ORCHESTRATION_STARTED" 2 orchestration-started none '' '' '' '' none
+    fi
+    history_step=1
+    while [ "$history_step" -le "$RUN_COUNT" ]; do
+      history_step_dir=$(find "$resolved_dir" -maxdepth 1 -type d -name "$(printf '%02d' "$history_step")-*" -print)
+      run_step_parse "$history_step_dir/step.conf" || return 1
+      history_role=$STEP_ROLE
+      if [ -n "$STEP_STARTED" ]; then history_emit_event "$STEP_STARTED" 3 step-started "$history_step" "$history_role" '' '' '' none; fi
+      project_execution_attempts_summary "$history_step_dir" || return 1
+      history_archived=$EXECUTION_ARCHIVED_ATTEMPTS; history_archive_number=1
+      while [ "$history_archive_number" -le "$history_archived" ]; do
+        project_execution_attempt_parse_conf "$history_step_dir/attempts/$(printf '%03d.conf' "$history_archive_number")" || return 1
+        history_emit_event "$ATTEMPT_COMPLETED" 4 execution-failed "$history_step" "$history_role" "$ATTEMPT_NUMBER/3" "$ATTEMPT_PROVIDER" "$ATTEMPT_MODEL" present
+        history_emit_event "$ATTEMPT_COMPLETED" 5 retry-prepared "$history_step" "$history_role" "$((ATTEMPT_NUMBER + 1))/3" '' '' none
+        history_archive_number=$((history_archive_number + 1))
+      done
+      history_execution="$history_step_dir/execution.conf"
+      if [ -e "$history_execution" ]; then
+        project_execution_parse_conf "$history_execution" || return 1
+        case "$EXECUTION_STATUS:$EXECUTION_ERROR" in
+          succeeded:*) history_emit_event "$EXECUTION_COMPLETED" 6 execution-succeeded "$history_step" "$history_role" "$EXECUTION_ATTEMPT/3" "$EXECUTION_PROVIDER" "$EXECUTION_MODEL" none;;
+          failed:retry-prepared) :;;
+          failed:*) history_emit_event "$EXECUTION_COMPLETED" 4 execution-failed "$history_step" "$history_role" "$EXECUTION_ATTEMPT/3" "$EXECUTION_PROVIDER" "$EXECUTION_MODEL" present;;
+        esac
+      fi
+      if [ -n "$STEP_COMPLETED" ]; then history_emit_event "$STEP_COMPLETED" 7 step-completed "$history_step" "$history_role" '' '' '' none; fi
+      history_step=$((history_step + 1))
+    done
+    if [ -e "$history_orchestration" ]; then
+      project_orchestration_parse_conf "$history_orchestration" || return 1
+      case "$ORCHESTRATION_STATUS" in
+        interrupted) history_emit_event "$ORCHESTRATION_COMPLETED" 8 orchestration-interrupted none '' '' '' '' "$( [ -n "$ORCHESTRATION_ERROR" ] && printf present || printf none)";;
+        failed) history_emit_event "$ORCHESTRATION_COMPLETED" 9 orchestration-failed none '' '' '' '' "$( [ -n "$ORCHESTRATION_ERROR" ] && printf present || printf none)";;
+        succeeded) history_emit_event "$ORCHESTRATION_COMPLETED" 10 orchestration-succeeded none '' '' '' '' none;;
+      esac
+    fi
+    case "$RUN_STATUS" in
+      cancelled) history_emit_event "$RUN_COMPLETED" 11 run-cancelled none '' '' '' '' none;;
+      completed) history_emit_event "$RUN_COMPLETED" 12 run-completed none '' '' '' '' none;;
+    esac
+  } | LC_ALL=C sort -t '|' -k1,1 -k2,2n -k3,3n | awk -F '|' '
+    {
+      printf "%d. %s\n   Event: %s\n   Step: ", NR, $1, $4
+      if ($5 == "none") print "none"; else printf "%s - %s\n", $5, $6
+      if ($7 != "") printf "   Attempt: %s\n", $7
+      if ($8 != "") printf "   Provider: %s\n", $8
+      if ($9 != "") printf "   Model: %s\n", $9
+      if ($10 != "none") printf "   Error: %s\n", $10
+      print ""
+    }
+  '
+}
+
+workflow_history_steps() {
+  history_step=1
+  while [ "$history_step" -le "$RUN_COUNT" ]; do
+    history_step_dir=$(find "$resolved_dir" -maxdepth 1 -type d -name "$(printf '%02d' "$history_step")-*" -print)
+    run_step_parse "$history_step_dir/step.conf" || return 1
+    history_role=$STEP_ROLE; history_status=$STEP_STATUS; history_started=$STEP_STARTED; history_completed=$STEP_COMPLETED
+    history_execution_status=none; history_attempts=0
+    if [ -e "$history_step_dir/execution.conf" ]; then
+      project_execution_parse_conf "$history_step_dir/execution.conf" || return 1
+      history_execution_status=$EXECUTION_STATUS; history_attempts=$EXECUTION_ATTEMPT
+    fi
+    project_execution_attempts_summary "$history_step_dir" || return 1
+    printf '%s. %s\n   Status: %s\n   Attempts: %s/3\n   Archived failures: %s\n   Current execution: %s\n   Started: %s\n   Completed: %s\n\n' \
+      "$history_step" "$history_role" "$history_status" "$history_attempts" "$EXECUTION_ARCHIVED_ATTEMPTS" \
+      "$history_execution_status" "$history_started" "$history_completed"
+    history_step=$((history_step + 1))
+  done
+}
+
+workflow_history_current() {
+  workflow_history_validate || { echo 'error: invalid workflow history metadata' >&2; return 1; }
+  load_orchestration_summary || { echo 'error: invalid workflow history metadata' >&2; return 1; }
+  printf 'Workflow history\n================\n\nRun ID: %s\nWorkflow: %s\nStatus: %s\nProgress: %s/%s\nCreated: %s\nUpdated: %s\nCompleted: %s\nAutomation: %s\nCancelled: %s\n\nTimeline\n--------\n\n' \
+    "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_COUNT" "$RUN_CREATED" "$RUN_UPDATED" \
+    "${RUN_COMPLETED:-none}" "$ORCHESTRATION_STATUS" "$( [ "$RUN_STATUS" = cancelled ] && printf yes || printf no)"
+  workflow_history_timeline || return 1
+  printf 'Steps\n-----\n\n'
+  workflow_history_steps
+}
+
 orchestration_internal=0
 dispatch() {
 command=${1:-}
@@ -239,9 +576,11 @@ case "$command" in
     load_orchestration_summary || { echo 'error: invalid orchestration metadata' >&2; exit 1; }
     if [ "$command" = status ]; then
       status_step_dir=$(current_step_directory); load_execution_summary "$status_step_dir" || { echo 'error: invalid execution metadata' >&2; exit 1; }
-      printf 'CCB Workflow Run\nRun ID: %s\nWorkflow: %s\nStatus: %s\nCurrent step: %s/%s\nCreated: %s\nUpdated: %s\nExecution status: %s\nExecution provider: %s\nExecution model: %s\nExecution attempt: %s\nAutomation status: %s\nAutomation mode: %s\nAutomation steps: %s/%s\nAutomation actions: %s\nAutomation error: %s\n\nSteps:\n' "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_COUNT" "$RUN_CREATED" "$RUN_UPDATED" "$EXECUTION_STATUS" "$EXECUTION_PROVIDER" "$EXECUTION_MODEL" "$EXECUTION_ATTEMPT" "$ORCHESTRATION_STATUS" "$ORCHESTRATION_MODE" "$ORCHESTRATION_STEPS_COMPLETED" "$ORCHESTRATION_STEP_COUNT" "$ORCHESTRATION_ACTIONS" "$( [ -n "$ORCHESTRATION_ERROR" ] && printf present || printf none)"
+      retry_available=no
+      if [ "$RUN_STATUS" = in-progress ] && [ "$EXECUTION_STATUS" = failed ] && [ "${EXECUTION_ERROR:-}" != retry-prepared ] && [ "$EXECUTION_ATTEMPT" -lt 3 ] 2>/dev/null && project_execution_result_is_template "$status_step_dir/result.md"; then retry_available=yes; fi
+      printf 'CCB Workflow Run\nRun ID: %s\nWorkflow: %s\nStatus: %s\nCurrent step: %s/%s\nCreated: %s\nUpdated: %s\nCompleted: %s\nCancellation: %s\nExecution status: %s\nExecution provider: %s\nExecution model: %s\nExecution attempt: %s\nRetry limit: 3\nRetry available: %s\nArchived attempts: %s\nAutomation status: %s\nAutomation mode: %s\nAutomation steps: %s/%s\nAutomation actions: %s\nAutomation error: %s\n\nSteps:\n' "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_COUNT" "$RUN_CREATED" "$RUN_UPDATED" "${RUN_COMPLETED:-none}" "$( [ "$RUN_STATUS" = cancelled ] && printf final || printf none)" "$EXECUTION_STATUS" "$EXECUTION_PROVIDER" "$EXECUTION_MODEL" "$EXECUTION_ATTEMPT" "$retry_available" "$EXECUTION_ARCHIVED_ATTEMPTS" "$ORCHESTRATION_STATUS" "$ORCHESTRATION_MODE" "$ORCHESTRATION_STEPS_COMPLETED" "$ORCHESTRATION_STEP_COUNT" "$ORCHESTRATION_ACTIONS" "$( [ -n "$ORCHESTRATION_ERROR" ] && printf present || printf none)"
     else
-      printf 'Run ID: %s\nPath: .ccb/runs/%s\nWorkflow: %s\nStatus: %s\nCurrent step: %s\nCreated: %s\nUpdated: %s\n' "$RUN_ID" "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_CREATED" "$RUN_UPDATED"
+      printf 'Run ID: %s\nPath: .ccb/runs/%s\nWorkflow: %s\nStatus: %s\nCurrent step: %s\nCreated: %s\nUpdated: %s\nCompleted: %s\nCancellation: %s\n' "$RUN_ID" "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_CREATED" "$RUN_UPDATED" "${RUN_COMPLETED:-none}" "$( [ "$RUN_STATUS" = cancelled ] && printf final || printf none)"
     fi
     i=1
     while [ "$i" -le "$RUN_COUNT" ]; do
@@ -255,6 +594,7 @@ case "$command" in
         if [ "$EXECUTION_STATUS" != none ]; then
           printf '    Provider: %s\n    Model: %s\n    Attempt: %s\n    Started: %s\n    Completed: %s\n    Result: present\n    Result size: %s bytes\n' "$EXECUTION_PROVIDER" "$EXECUTION_MODEL" "$EXECUTION_ATTEMPT" "$EXECUTION_STARTED" "${EXECUTION_COMPLETED:-none}" "$size"
         fi
+        printf '  Attempts\n    Archived: %s\n    Current attempt: %s\n    Maximum attempts: 3\n    Last archived status: %s\n' "$EXECUTION_ARCHIVED_ATTEMPTS" "$EXECUTION_ATTEMPT" "$EXECUTION_LAST_ARCHIVED_STATUS"
       fi
       i=$((i + 1))
     done
@@ -262,6 +602,11 @@ case "$command" in
       lock_status=absent; [ ! -e "$resolved_dir/.ccb-orchestration-lock" ] && [ ! -L "$resolved_dir/.ccb-orchestration-lock" ] || lock_status=present
       printf '\nAutomation\n  Status: %s\n  Mode: %s\n  Started: %s\n  Updated: %s\n  Completed: %s\n  Steps completed: %s/%s\n  Actions: %s\n  Error: %s\n  Lock: %s\n' "$ORCHESTRATION_STATUS" "$ORCHESTRATION_MODE" "${ORCHESTRATION_STARTED:-none}" "${ORCHESTRATION_UPDATED:-none}" "${ORCHESTRATION_COMPLETED:-none}" "$ORCHESTRATION_STEPS_COMPLETED" "$ORCHESTRATION_STEP_COUNT" "$ORCHESTRATION_ACTIONS" "$( [ -n "$ORCHESTRATION_ERROR" ] && printf present || printf none)" "$lock_status"
     fi
+    ;;
+  history)
+    [ "$#" -le 2 ] || usage 2
+    resolve_run_args "${1:-}" "${2:-.}" || { code=$?; [ "$code" -eq 2 ] && usage 2; echo 'error: invalid or missing workflow run' >&2; exit 1; }
+    workflow_history_current || exit 1
     ;;
   resume)
     [ "$#" -le 2 ] || usage 2
@@ -278,6 +623,16 @@ case "$command" in
       trap 'execution_lock_cleanup; exit 1' HUP INT TERM
     fi
     project_execution_run_current || exit 1
+    ;;
+  retry-step)
+    [ "$#" -le 2 ] || usage 2
+    resolve_run_args "${1:-}" "${2:-.}" || { code=$?; [ "$code" -eq 2 ] && usage 2; echo 'error: invalid workflow run' >&2; exit 1; }
+    workflow_retry_current || exit 1
+    ;;
+  cancel)
+    [ "$#" -le 2 ] || usage 2
+    resolve_run_args "${1:-}" "${2:-.}" || { code=$?; [ "$code" -eq 2 ] && usage 2; echo 'error: invalid workflow run' >&2; exit 1; }
+    workflow_cancel_current || exit 1
     ;;
   complete-step)
     [ "$#" -le 2 ] || usage 2
@@ -448,12 +803,15 @@ case "$command" in
           if [ -e "$execution_file" ] || [ -L "$execution_file" ]; then
             project_execution_parse_conf "$execution_file" || { orchestration_exit_error=invalid-execution; echo 'error: invalid execution metadata' >&2; exit 1; }
             case "$EXECUTION_STATUS" in
-              failed) orchestration_exit_error=previous-execution-failed; echo 'error: workflow step execution previously failed; automatic retry is disabled' >&2; exit 1;;
+              failed)
+                if [ "$EXECUTION_ERROR" = retry-prepared ]; then action=execute-step
+                else orchestration_exit_error=previous-execution-failed; echo 'error: workflow step execution previously failed; automatic retry is disabled' >&2; exit 1
+                fi;;
               running) orchestration_exit_error=execution-running; echo 'error: workflow step execution is already running' >&2; exit 1;;
               succeeded) orchestration_exit_error=invalid-result; echo 'error: successful execution has no explicit result' >&2; exit 1;;
             esac
           fi
-          action=execute-step
+          [ -n "$action" ] || action=execute-step
         elif project_run_validate_pending_result "$result_file"; then action=complete-step
         else orchestration_exit_error=invalid-result; echo 'error: invalid current workflow result' >&2; exit 1
         fi
