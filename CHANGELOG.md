@@ -5,6 +5,7 @@
 ### Added
 
 - Declarative `.ccb/agents.conf`, agent roles, and read-only agent inspection commands.
+- Declarative `.ccb/workflows.conf` and read-only workflow inspection and planning commands.
 
 ### Security
 

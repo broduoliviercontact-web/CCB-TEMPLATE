@@ -21,6 +21,8 @@ jobs:
           sh -n scripts/project-init.sh
           sh -n scripts/project-agents-lib.sh
           sh -n scripts/project-agents.sh
+          sh -n scripts/project-workflows-lib.sh
+          sh -n scripts/project-workflows.sh
           sh -n scripts/project-upgrade.sh
           sh -n scripts/project-skills.sh
           sh -n scripts/mascot-lib.sh
@@ -36,6 +38,7 @@ jobs:
           sh -n tests/test-cli.sh
           sh -n tests/test-project-init.sh
           sh -n tests/test-project-agents.sh
+          sh -n tests/test-project-workflows.sh
           sh -n tests/test-project-upgrade.sh
           sh -n tests/test-project-profiles.sh
           sh -n tests/test-project-models.sh
@@ -52,6 +55,7 @@ jobs:
           ./tests/test-cli.sh
           ./tests/test-project-init.sh
           ./tests/test-project-agents.sh
+          ./tests/test-project-workflows.sh
           ./tests/test-project-upgrade.sh
           ./tests/test-project-profiles.sh
           ./tests/test-project-models.sh

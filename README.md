@@ -77,6 +77,15 @@ The upgrade never runs automatically and stops on customized managed files. See 
 
 Agent access is declarative only; it is not an operating-system sandbox. See [project agents](docs/project-agents.md).
 
+### Declarative workflows
+
+```sh
+./scripts/ccb.sh workflows ./mon-projet
+./scripts/ccb.sh workflow plan feature ./mon-projet
+```
+
+Workflows are plans only: V1.7.0-B does not execute agents. See [project workflows](docs/project-workflows.md).
+
 ```sh
 ./scripts/ccb.sh doctor
 ./scripts/ccb.sh doctor ./mon-projet --no-ollama

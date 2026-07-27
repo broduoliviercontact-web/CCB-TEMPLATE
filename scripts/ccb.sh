@@ -9,6 +9,7 @@ PROJECT_CONFIG="$SCRIPT_DIR/project-config.sh"
 PROJECT_SKILLS="$SCRIPT_DIR/project-skills.sh"
 PROJECT_UPGRADE="$SCRIPT_DIR/project-upgrade.sh"
 PROJECT_AGENTS="$SCRIPT_DIR/project-agents.sh"
+PROJECT_WORKFLOWS="$SCRIPT_DIR/project-workflows.sh"
 VALIDATE="$SCRIPT_DIR/validate-ccb.sh"
 DOCTOR="$SCRIPT_DIR/doctor.sh"
 MODEL_SETUP="$SCRIPT_DIR/model-setup.sh"
@@ -44,6 +45,9 @@ Commands:
   models [show|list|validate|recommendations|setup|reset]
   agent run|model|command|check ROLE [TARGET] [OPTIONS]
   agents [TARGET]                 List declarative project agents
+  workflows [TARGET]              List declarative project workflows
+  workflow show|plan NAME [TARGET]
+  workflow validate [TARGET]
   agent show ROLE [TARGET]        Show one declarative agent
   agent validate [TARGET]         Validate declarative agents
   providers
@@ -291,6 +295,8 @@ case "${1:-}" in
   models) shift; models_command "$@"; exit $? ;;
   agent) shift; agent_command "$@"; exit $? ;;
   agents) shift; exec "$PROJECT_AGENTS" list "$@" ;;
+  workflows) shift; exec "$PROJECT_WORKFLOWS" list "$@" ;;
+  workflow) shift; exec "$PROJECT_WORKFLOWS" "$@" ;;
   providers)
     if "$SCRIPT_DIR/provider-router.sh" available ollama . >/dev/null 2>&1; then echo 'Provider   Status   Details'; echo 'Ollama     READY    CLI available'; else echo 'Provider   Status   Details'; echo 'Ollama     MISSING  Install Ollama and ensure it is in PATH'; fi ;;
   provider) shift; provider_command "$@"; exit $? ;;
