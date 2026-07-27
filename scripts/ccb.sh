@@ -92,8 +92,14 @@ models_command() {
     recommendations) model_recommendations ;;
     show|validate)
       file="$target/.ccb/models.conf"
-      if models_conf_validate "$file"; then
-        [ "$subcommand" = validate ] && echo '[OK] models.conf is valid' || sed '/API_KEY\|TOKEN\|SECRET/d' "$file"
+      if models_conf_parse "$file"; then
+        if [ "$subcommand" = validate ]; then
+          printf '[OK] models.conf is valid (%s format)\n' "$MODEL_CONF_FORMAT"
+        elif [ "$MODEL_CONF_FORMAT" = legacy ]; then
+          printf 'CCB_MODEL_PROVIDER=%s\nCCB_MODEL_DEFAULT=%s\nCCB_MODEL_PLANNER=%s\nCCB_MODEL_CODER=%s\nCCB_MODEL_REVIEWER=%s\n' "$MODEL_CONF_PROVIDER" "$MODEL_CONF_DEFAULT" "$MODEL_CONF_PLANNER" "$MODEL_CONF_CODER" "$MODEL_CONF_REVIEWER"
+        else
+          printf 'CCB_MODEL_PROVIDER=%s\nCCB_OLLAMA_MODE=%s\nCCB_OLLAMA_HOST=%s\nCCB_MODEL_PRESET=%s\nCCB_MODEL_MANAGER=%s\nCCB_MODEL_GRAPH=%s\nCCB_MODEL_GRAPHISTE=%s\nCCB_MODEL_DEVELOPER=%s\nCCB_MODEL_REVIEWER=%s\nCCB_MODEL_FALLBACK=%s\n' "$MODEL_CONF_PROVIDER" "$MODEL_CONF_MODE" "$MODEL_CONF_HOST" "$MODEL_CONF_PRESET" "$MODEL_CONF_MANAGER" "$MODEL_CONF_GRAPH" "$MODEL_CONF_GRAPHISTE" "$MODEL_CONF_DEVELOPER" "$MODEL_CONF_REVIEWER" "$MODEL_CONF_FALLBACK"
+        fi
       else echo "error: invalid or missing models.conf: $file" >&2; return 1; fi ;;
     setup) exec "$MODEL_SETUP" "$@" ;;
     reset) echo 'error: reset requires interactive model setup; existing configuration was preserved.' >&2; return 2 ;;

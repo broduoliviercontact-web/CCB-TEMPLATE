@@ -66,7 +66,7 @@ for tool in sh sed grep awk mktemp mv chmod mkdir rm basename dirname; do
   if command -v "$tool" >/dev/null 2>&1; then emit OK "shell.$tool" available; else emit FAIL "shell.$tool" missing; fi
 done
 
-if [ -f "$TEMPLATE_ROOT/VERSION" ] && [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.7.0 ]; then emit OK template.version 1.7.0; else emit FAIL template.version 'expected 1.7.0'; fi
+if [ -f "$TEMPLATE_ROOT/VERSION" ] && [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.7.1 ]; then emit OK template.version 1.7.1; else emit FAIL template.version 'expected 1.7.1'; fi
 for script in scripts/ccb.sh scripts/project-init.sh scripts/project-config.sh scripts/project-agents.sh scripts/project-workflows.sh scripts/project-runs.sh scripts/project-execution-lib.sh scripts/project-orchestration-lib.sh scripts/provider-router.sh scripts/runtime/provider-ollama.sh scripts/project-upgrade.sh scripts/validate-ccb.sh; do
   if [ -x "$TEMPLATE_ROOT/$script" ]; then emit OK "template.$script" executable; else emit FAIL "template.$script" missing-or-not-executable; fi
   if [ -f "$TEMPLATE_ROOT/$script" ] && sh -n "$TEMPLATE_ROOT/$script" >/dev/null 2>&1; then emit OK "syntax.$script" valid; else emit FAIL "syntax.$script" invalid; fi
@@ -228,13 +228,17 @@ if [ -n "$target" ]; then
     template_version=$(awk -F= '$1=="CCB_TEMPLATE_VERSION" {print $2}' "$target/.ccb/project.conf")
     if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$profile.conf" && [ "$PROJECT_PROFILE_ID" = "$profile" ]; then emit OK project.profile "$profile"; else emit FAIL project.profile unsupported; fi
     [ "$project_version" = 1 ] && emit OK project.version 1 || emit FAIL project.version unsupported
-    if [ "$template_version" = "$(cat "$TEMPLATE_ROOT/VERSION")" ]; then emit OK project.template_version "$template_version"; elif [ "$template_version" = 1.6.0 ] || [ "$template_version" = 1.6.1 ]; then emit WARN project.template_version upgrade-available; else emit FAIL project.template_version incompatible; fi
+    if [ "$template_version" = "$(cat "$TEMPLATE_ROOT/VERSION")" ]; then emit OK project.template_version "$template_version"; elif [ "$template_version" = 1.7.0 ]; then emit OK project.template_version legacy-compatible; elif [ "$template_version" = 1.6.0 ] || [ "$template_version" = 1.6.1 ]; then emit WARN project.template_version upgrade-available; else emit FAIL project.template_version incompatible; fi
     grep -Fq "Project: $PROJECT_NAME" "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.context_name present || emit WARN project.context_name missing
     grep -Fq "Profile: $profile" "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.context_profile present || emit WARN project.context_profile missing
     else emit FAIL project.project_conf invalid; fi
     if project_models_parse "$target/.ccb/models.conf"; then
     emit OK project.provider "$PROJECT_MODEL_PROVIDER"
-    for role in default planner coder reviewer; do model_value=$(awk -F= -v key="CCB_MODEL_$(printf '%s' "$role" | tr '[:lower:]' '[:upper:]')" '$1==key {print $2}' "$target/.ccb/models.conf"); [ -n "$model_value" ] && emit OK "project.model.$role" "$model_value" || emit FAIL "project.model.$role" missing; done
+    emit OK project.models_format "$PROJECT_MODEL_FORMAT"
+    for role in manager graph graphiste developer reviewer fallback; do
+      case "$role" in manager) model_value=$PROJECT_MODEL_MANAGER;; graph) model_value=$PROJECT_MODEL_GRAPH;; graphiste) model_value=$PROJECT_MODEL_GRAPHISTE;; developer) model_value=$PROJECT_MODEL_DEVELOPER;; reviewer) model_value=$PROJECT_MODEL_REVIEWER;; fallback) model_value=$PROJECT_MODEL_FALLBACK;; esac
+      emit OK "project.model.$role" "$model_value"
+    done
     else emit FAIL project.models_conf invalid; fi
     if project_skills_parse "$target/.ccb/skills.conf"; then
       emit OK project.ponytail_mode "$PROJECT_SKILL_PONYTAIL_MODE"
@@ -273,7 +277,7 @@ else
     local_models=$(ollama list 2>/dev/null | awk 'NR>1 {print $1}')
     if [ -z "$local_models" ]; then emit WARN ollama.models unavailable-or-empty
     else
-      for configured in "$PROJECT_MODEL_DEFAULT" "$PROJECT_MODEL_PLANNER" "$PROJECT_MODEL_CODER" "$PROJECT_MODEL_REVIEWER"; do printf '%s\n' "$local_models" | grep -Fqx "$configured" && emit OK "ollama.model.$configured" installed || emit WARN "ollama.model.$configured" not-installed; done
+      for configured in "$PROJECT_MODEL_MANAGER" "$PROJECT_MODEL_GRAPH" "$PROJECT_MODEL_GRAPHISTE" "$PROJECT_MODEL_DEVELOPER" "$PROJECT_MODEL_REVIEWER" "$PROJECT_MODEL_FALLBACK"; do printf '%s\n' "$local_models" | grep -Fqx "$configured" && emit OK "ollama.model.$configured" installed || emit WARN "ollama.model.$configured" not-installed; done
     fi
   else emit SKIP ollama.models no-project; fi
 fi

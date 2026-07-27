@@ -106,7 +106,7 @@ if [ -s "$TEMPLATE_ROOT/scripts/project-agents-lib.sh" ] && sh -n "$TEMPLATE_ROO
 require_template_executable scripts/project-upgrade.sh
 require_template_executable scripts/doctor.sh
 
-for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-runs.sh tests/test-project-execution.sh tests/test-project-orchestration.sh tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
+for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-runs.sh tests/test-project-execution.sh tests/test-project-orchestration.sh tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-v1.7.1-regressions.sh; do
   require_template_executable "$project_test"
 done
 
@@ -120,7 +120,7 @@ else
   error "missing or unreadable template library: scripts/mascot-lib.sh"
 fi
 
-for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-orchestration.sh tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/project-agents.md docs/project-runs.md docs/project-workflows.md docs/project-execution.md docs/project-orchestration.md docs/project-reliability.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md docs/v1.7.0.md CHANGELOG.md; do
+for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-orchestration.sh tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh tests/test-v1.7.1-regressions.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/project-agents.md docs/project-runs.md docs/project-workflows.md docs/project-execution.md docs/project-orchestration.md docs/project-reliability.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md docs/v1.7.0.md CHANGELOG.md; do
   if [ -s "$TEMPLATE_ROOT/$template_file" ]; then
     ok "template file: $template_file"
   else
@@ -128,7 +128,7 @@ for template_file in VERSION profiles/README.md profiles/generic/profile.conf te
   fi
 done
 
-if [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.7.0 ]; then ok 'template version: 1.7.0'; else error 'template VERSION must be 1.7.0'; fi
+if [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.7.1 ]; then ok 'template version: 1.7.1'; else error 'template VERSION must be 1.7.1'; fi
 
 for project_profile in generic web node python audio; do
   if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$project_profile.conf" && [ "$PROJECT_PROFILE_ID" = "$project_profile" ]; then
@@ -138,7 +138,7 @@ for project_profile in generic web node python audio; do
   fi
 done
 
-for audited_script in scripts/doctor.sh scripts/project-init.sh scripts/project-upgrade.sh scripts/project-config.sh scripts/project-config-lib.sh scripts/project-profile-lib.sh scripts/project-runs.sh scripts/project-runs-lib.sh scripts/project-execution-lib.sh scripts/project-orchestration-lib.sh scripts/provider-router.sh; do
+for audited_script in scripts/doctor.sh scripts/model-lib.sh scripts/model-resolve.sh scripts/project-init.sh scripts/project-upgrade.sh scripts/project-config.sh scripts/project-config-lib.sh scripts/project-profile-lib.sh scripts/project-runs.sh scripts/project-runs-lib.sh scripts/project-execution-lib.sh scripts/project-orchestration-lib.sh scripts/provider-router.sh; do
   if awk '
     /^[[:space:]]*#/ { next }
     /(^|[[:space:];])eval([[:space:];]|$)|(^|[[:space:];])source[[:space:]]|(^|[[:space:];])(bash|sh)[[:space:]]+-c|curl[[:space:]]|wget[[:space:]]|sudo[[:space:]]|chmod[[:space:]]+777|mktemp[[:space:]]+-u|rm[[:space:]]+-rf/ { bad=1 }

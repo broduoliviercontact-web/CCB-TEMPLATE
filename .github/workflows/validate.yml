@@ -35,6 +35,7 @@ jobs:
           sh -n scripts/model-setup.sh
           sh -n scripts/model-resolve.sh
           sh -n tests/test-models.sh
+          sh -n tests/test-v1.7.1-regressions.sh
           sh -n scripts/provider-router.sh
           sh -n scripts/runtime/provider-ollama.sh
           sh -n tests/test-provider-routing.sh
@@ -81,6 +82,7 @@ jobs:
           ./tests/test-skills-command.sh
           ./tests/test-doctor.sh
           ./tests/test-models.sh
+          ./tests/test-v1.7.1-regressions.sh
           ./tests/test-provider-routing.sh
           ./tests/test-setup-wizard.sh
           ./scripts/ccb.sh doctor --no-ollama --strict

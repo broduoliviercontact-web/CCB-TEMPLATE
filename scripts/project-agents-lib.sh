@@ -79,3 +79,4 @@ project_agent_details() {
   esac
 }
 project_agent_model_value() { case "$1" in default) printf '%s\n' "$PROJECT_MODEL_DEFAULT";; planner) printf '%s\n' "$PROJECT_MODEL_PLANNER";; coder) printf '%s\n' "$PROJECT_MODEL_CODER";; reviewer) printf '%s\n' "$PROJECT_MODEL_REVIEWER";; *) return 1;; esac; }
+project_agent_role_model_value() { case "$1" in manager) printf '%s\n' "$PROJECT_MODEL_MANAGER";; graph) printf '%s\n' "$PROJECT_MODEL_GRAPH";; graphiste) printf '%s\n' "$PROJECT_MODEL_GRAPHISTE";; developer) printf '%s\n' "$PROJECT_MODEL_DEVELOPER";; reviewer) printf '%s\n' "$PROJECT_MODEL_REVIEWER";; *) return 1;; esac; }

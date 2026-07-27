@@ -129,6 +129,6 @@ start=$(CCB_TEST_RUN_TIMESTAMP=20260727-230000 "$CLI" workflow start feature "$p
 run "$CLI" workflow retry-step "$pending_id" "$pending"; [ "$status" -eq 1 ] || fail 'pending run retried'; pass
 "$CLI" workflow cancel "$pending_id" "$pending" >/dev/null || fail 'cancel retry compatibility run'
 run "$CLI" workflow retry-step "$pending_id" "$pending"; [ "$status" -eq 1 ] || fail 'cancelled run retried'; pass
-[ "$(cat "$ROOT/VERSION")" = 1.7.0 ] || fail version; pass
+[ "$(cat "$ROOT/VERSION")" = 1.7.1 ] || fail version; pass
 
 printf 'project retry tests passed: %s/%s\n' "$tests" "$tests"

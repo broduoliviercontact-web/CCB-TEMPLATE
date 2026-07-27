@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.7.1
+
+### Fixed
+
+- Accept both historical and role-based `.ccb/models.conf` files through one centralized parser.
+- Preserve distinct role model assignments in Config, Doctor, model commands, and workflow snapshots.
+- Normalize provider result line endings before CCB appends workflow transmission delimiters.
+
+### Compatibility and security
+
+- Keep V1.7.0 model files and runs valid without migration, using the documented planner/coder/default mapping.
+- Render only validated non-secret model fields; stored configuration is never evaluated.
+- Preserve the 256 KiB response limit, atomic publication, rollback behavior, and literal treatment of model output.
+
+### Testing
+
+- Add explicit regression coverage for both model schemas, normal and strict Doctor, cloud role snapshots, Inspect, newline and no-newline responses, context transmission, and full sequential orchestration.
+- Continue covering retries, cancellation, history, transaction rollback, and residue cleanup in the historical suites.
+
 ## 1.7.0
 
 - Add bounded sequential `workflow run` automation with persistent checkpoints, safe interruption recovery, a distinct orchestration lock, and no automatic retries.

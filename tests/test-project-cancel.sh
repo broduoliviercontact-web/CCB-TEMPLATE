@@ -173,7 +173,7 @@ done
 
 new_pending old-d2
 run "$CLI" workflow status "$run_id" "$project"; [ "$status" -eq 0 ] || fail 'D2 run invalid'; pass
-[ "$(cat "$ROOT/VERSION")" = 1.7.0 ] || fail 'version changed'; pass
+[ "$(cat "$ROOT/VERSION")" = 1.7.1 ] || fail 'version changed'; pass
 managed=$(find "$project/.ccb" -type f ! -path '*/runs/*' | wc -l | tr -d ' '); managed=$((managed + 1)); [ "$managed" -eq 7 ] || fail 'init file count'; pass
 
 printf 'project cancel tests passed: %s/%s\n' "$tests" "$tests"

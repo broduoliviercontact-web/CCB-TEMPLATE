@@ -24,8 +24,10 @@ previews the changes, installs CCB and runs validation automatically.
 Première installation ? Lancez l’assistant guidé : il vérifie le projet, propose un profil,
 prévisualise les changements, installe CCB puis lance la validation.
 
-CCB 1.4 can keep non-secret Ollama model assignments in `.ccb/models.conf`. Inspect local models
-with `./scripts/ccb.sh models list` and recommendations with `./scripts/ccb.sh models recommendations`.
+CCB keeps non-secret Ollama model assignments in `.ccb/models.conf`. V1.7.1 accepts both the
+historical default/planner/coder format and the role-based format produced by `models setup`.
+Inspect local models with `./scripts/ccb.sh models list` and recommendations with
+`./scripts/ccb.sh models recommendations`.
 
 ### Minimal project bootstrap
 
@@ -84,7 +86,10 @@ Agent access is declarative only; it is not an operating-system sandbox. See [pr
 ./scripts/ccb.sh workflow plan feature ./mon-projet
 ```
 
-Workflows are persistent local orchestration records. V1.7.0 can execute their fixed snapshots sequentially through loopback-only Ollama; responses remain inert Markdown data. See [project workflows](docs/project-workflows.md).
+Workflows are persistent local orchestration records. V1.7.1 resolves each snapshot from its
+configured agent role and executes fixed snapshots sequentially through loopback-only Ollama.
+Responses remain inert Markdown data, and CCB normalizes the final line boundary before adding
+its own transmission markers. See [project workflows](docs/project-workflows.md).
 
 ```sh
 ./scripts/ccb.sh workflow start feature ./mon-projet

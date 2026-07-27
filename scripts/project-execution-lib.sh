@@ -290,7 +290,12 @@ project_execution_run_current() {
     rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup
     echo 'error: workflow provider returned an empty result' >&2; return 1
   fi
-  { printf '# Step Result\n\nStatus: pending\n\n'; cat "$response_file"; } >"$prepared_result" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; return 1; }
+  {
+    printf '# Step Result\n\nStatus: pending\n\n'
+    cat "$response_file"
+    response_last_byte_lines=$(tail -c 1 "$response_file" | wc -l | tr -d ' ')
+    [ "$response_last_byte_lines" = 1 ] || printf '\n'
+  } >"$prepared_result" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; return 1; }
   if ! project_run_validate_pending_result "$prepared_result"; then
     completed=$(now); project_execution_write_conf "$execution_conf" failed ollama "$STEP_MODEL" "$attempt" "$started" "$completed" invalid-response || :
     rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: invalid Ollama response' >&2; return 1

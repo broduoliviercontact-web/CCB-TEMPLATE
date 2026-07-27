@@ -21,6 +21,11 @@ It never downloads, runs, starts, modifies, or removes models, and it never
 repairs project files or permissions. The text format is the supported stable
 format in V1.6.0.
 
+V1.7.1 accepts both the historical default/planner/coder model schema and the role-based schema
+written by `models setup`. Normal and strict mode use the same centralized parser as Config,
+`models validate`, `models show`, and workflow startup. Doctor reports only validated model names
+and never exposes secrets.
+
 A valid bootstrap project at template version `1.6.0` receives a `WARN` that
 skills are not configured and an explicit `ccb upgrade TARGET --yes` recommendation.
 Doctor remains read-only: it does not start an upgrade.

@@ -32,7 +32,7 @@ run "$CLI" init "$existing"
 assert_status 0 "$status" 'initial creation in existing directory'
 for file in .ccb/project.conf .ccb/models.conf .ccb/skills.conf .ccb/agents.conf .ccb/context/project.md AGENTS.md; do assert_file "$existing/$file"; done
 assert_contains "$(cat "$existing/.ccb/project.conf")" 'CCB_PROJECT_NAME=existing project' 'basename project name'
-assert_contains "$(cat "$existing/.ccb/project.conf")" 'CCB_TEMPLATE_VERSION=1.7.0' 'template version'
+assert_contains "$(cat "$existing/.ccb/project.conf")" 'CCB_TEMPLATE_VERSION=1.7.1' 'template version'
 assert_contains "$(cat "$existing/.ccb/context/project.md")" 'Project: existing project' 'context name'
 assert_contains "$(cat "$existing/AGENTS.md")" 'Read .ccb/context/project.md' 'agent guidance'
 assert_no_temps "$existing"

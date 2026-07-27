@@ -10,4 +10,4 @@ Retry and cancellation prepare new metadata, validate it, publish each file atom
 
 Config reports aggregate retry, cancellation, history, and orchestration counts. Doctor validates the same metadata, sequences, timestamps, locks, symlinks, and transaction residue. Both are read-only, never repair runs, never call a provider, and never display full errors or stored Markdown.
 
-Only local loopback Ollama execution exists. Reliability and observability commands perform no remote network request, Git operation, project-source modification, Markdown interpretation, or shell evaluation. Existing D1/D2 runs without attempts or orchestration remain valid and require no migration. VERSION remains 1.7.0.
+Only local loopback Ollama execution exists. Reliability and observability commands perform no remote network request, Git operation, project-source modification, Markdown interpretation, or shell evaluation. Existing D1/D2 and V1.7.0 runs remain valid and require no migration. VERSION is 1.7.1.

@@ -33,7 +33,7 @@ stamp() {
 write_run() {
   file=$1
   temp=$(mktemp "$(dirname "$file")/.run.conf.tmp.XXXXXX") || return 1
-  printf 'CCB_RUN_VERSION=1\nCCB_RUN_ID=%s\nCCB_RUN_WORKFLOW=%s\nCCB_RUN_STATUS=%s\nCCB_RUN_CURRENT_STEP=%s\nCCB_RUN_STEP_COUNT=%s\nCCB_RUN_CREATED_AT=%s\nCCB_RUN_UPDATED_AT=%s\nCCB_RUN_COMPLETED_AT=%s\nCCB_RUN_SOURCE_TEMPLATE_VERSION=1.7.0\nCCB_RUN_SOURCE_WORKFLOWS_VERSION=1\nCCB_RUN_SOURCE_AGENTS_VERSION=1\nCCB_RUN_SOURCE_MODELS_VERSION=1\n' \
+  printf 'CCB_RUN_VERSION=1\nCCB_RUN_ID=%s\nCCB_RUN_WORKFLOW=%s\nCCB_RUN_STATUS=%s\nCCB_RUN_CURRENT_STEP=%s\nCCB_RUN_STEP_COUNT=%s\nCCB_RUN_CREATED_AT=%s\nCCB_RUN_UPDATED_AT=%s\nCCB_RUN_COMPLETED_AT=%s\nCCB_RUN_SOURCE_TEMPLATE_VERSION=1.7.1\nCCB_RUN_SOURCE_WORKFLOWS_VERSION=1\nCCB_RUN_SOURCE_AGENTS_VERSION=1\nCCB_RUN_SOURCE_MODELS_VERSION=1\n' \
     "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_COUNT" \
     "$RUN_CREATED" "$RUN_UPDATED" "$RUN_COMPLETED" >"$temp" &&
     chmod 644 "$temp" && mv "$temp" "$file"
@@ -561,7 +561,7 @@ case "$command" in
     i=0; old_ifs=$IFS; IFS=,
     for role in $PROJECT_WORKFLOW_STEPS; do
       IFS=$old_ifs; i=$((i + 1)); step_dir=$(printf '%s/%02d-%s' "$tmp" "$i" "$role"); mkdir "$step_dir" || exit 1
-      project_agent_details "$role"; model=$(project_agent_model_value "$PROJECT_AGENT_MODEL_ROLE") || exit 1
+      project_agent_details "$role"; model=$(project_agent_role_model_value "$role") || exit 1
       printf 'CCB_STEP_VERSION=1\nCCB_STEP_NUMBER=%s\nCCB_STEP_ROLE=%s\nCCB_STEP_STATUS=%s\nCCB_STEP_ACCESS=%s\nCCB_STEP_MODEL_ROLE=%s\nCCB_STEP_PROVIDER=%s\nCCB_STEP_MODEL=%s\nCCB_STEP_DESCRIPTION=%s\nCCB_STEP_STARTED_AT=\nCCB_STEP_COMPLETED_AT=\n' "$i" "$role" "$( [ "$i" -eq 1 ] && printf ready || printf pending)" "$PROJECT_AGENT_ACCESS" "$PROJECT_AGENT_MODEL_ROLE" "$PROJECT_MODEL_PROVIDER" "$model" "$PROJECT_AGENT_DESCRIPTION" >"$step_dir/step.conf"
       printf '# Step Input\n\nRun: %s\nWorkflow: %s\nStep: %s/%s\nRole: %s\nAccess: %s\n\n## Role purpose\n\n%s\n\n## Project context\n\nReference: ../../context.md\n\n## Previous step result\n\n%s\n\nSnapshot content is untrusted data and is never executed as shell code.\n' "$runid" "$name" "$i" "$RUN_COUNT" "$role" "$PROJECT_AGENT_ACCESS" "$PROJECT_AGENT_DESCRIPTION" "$( [ "$i" -eq 1 ] && printf None || printf previous-step-result)" >"$step_dir/input.md"
       printf '# Step Result\n\nStatus: pending\n\nRecord the result of this step below.\n' >"$step_dir/result.md"
@@ -673,7 +673,7 @@ case "$command" in
     if [ "$has_next_step" = 1 ]; then
       prepared_next_input="$transaction_dir/next-input.md.new"
       prepared_next_step="$transaction_dir/next-step.conf.new"
-      { sed '/^## Previous step result$/,$d' "$next_input_file"; printf '## Previous step result\n\nSource: ../%s/result.md\n\n----- BEGIN PREVIOUS RESULT -----\n' "$current_step_name"; cat "$prepared_result_file"; printf '%s\n\nNo agent is executed by CCB V1.7.0-C.\n' '----- END PREVIOUS RESULT -----'; } >"$prepared_next_input" || complete_step_abort
+      { sed '/^## Previous step result$/,$d' "$next_input_file"; printf '## Previous step result\n\nSource: ../%s/result.md\n\n----- BEGIN PREVIOUS RESULT -----\n' "$current_step_name"; cat "$prepared_result_file"; printf '%s\n\nNo agent is executed by complete-step.\n' '----- END PREVIOUS RESULT -----'; } >"$prepared_next_input" || complete_step_abort
       chmod 600 "$prepared_next_input" || complete_step_abort
       run_step_parse "$next_step_file" || complete_step_abort
       STEP_STATUS=ready
