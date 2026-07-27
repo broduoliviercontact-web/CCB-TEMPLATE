@@ -24,6 +24,7 @@ assert_contains "$help_output" 'skills TARGET' 'help documents skills'
 assert_contains "$help_output" 'upgrade TARGET [OPTIONS]' 'help documents project upgrade'
 assert_contains "$help_output" 'agents [TARGET]' 'help documents declarative agents'
 assert_contains "$help_output" 'agent show ROLE' 'help documents agent show'
+assert_contains "$help_output" 'workflow show|plan NAME' 'help documents workflows'
 assert_contains "$help_output" 'doctor [TARGET]' 'help documents doctor'
 version_output=$("$CLI" version)
 [ "$version_output" = 1.7.0 ] || {

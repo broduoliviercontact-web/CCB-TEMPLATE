@@ -93,6 +93,11 @@ Workflows are plans only: V1.7.0-B does not execute agents. See [project workflo
 This C1 foundation creates a local workflow snapshot only; it executes no agent. See [project runs](docs/project-runs.md).
 
 ```sh
+./scripts/ccb.sh workflow status --latest ./mon-projet
+./scripts/ccb.sh workflow inspect RUN_ID ./mon-projet
+```
+
+```sh
 ./scripts/ccb.sh doctor
 ./scripts/ccb.sh doctor ./mon-projet --no-ollama
 ./scripts/ccb.sh doctor ./mon-projet --strict

@@ -8,4 +8,7 @@ run "$CLI" workflow start feature "$project"; [ "$status" -eq 0 ] || fail start;
 run_dir=$(find "$project/.ccb/runs" -mindepth 1 -maxdepth 1 -type d -print | head -1); [ -f "$run_dir/run.conf" ] && [ -f "$run_dir/context.md" ] || fail snapshot; [ -f "$run_dir/01-manager/step.conf" ] && [ -f "$run_dir/02-developer/input.md" ] && [ -f "$run_dir/03-reviewer/result.md" ] || fail steps
 grep -Fqx 'CCB_RUN_STATUS=pending' "$run_dir/run.conf" || fail status; grep -Fqx 'CCB_STEP_STATUS=ready' "$run_dir/01-manager/step.conf" || fail ready
 run "$CLI" workflow start nope "$project"; [ "$status" -eq 2 ] || fail invalid-workflow
+run "$CLI" workflow status "$run_dir" "$project"; [ "$status" -eq 2 ] || fail invalid-run-id
+run "$CLI" workflow status --latest "$project"; [ "$status" -eq 0 ] || fail latest; printf '%s' "$output" | grep -Fq 'Steps:' || fail status-output
+run "$CLI" workflow inspect --latest "$project"; [ "$status" -eq 0 ] || fail inspect; printf '%s' "$output" | grep -Fq 'Result:' || fail inspect-output
 printf 'project runs tests passed\n'
