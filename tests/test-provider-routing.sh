@@ -11,5 +11,10 @@ EOF
 chmod +x "$TMP/bin/ollama"
 PATH="$TMP/bin:$PATH" "$ROOT/scripts/provider-router.sh" available ollama .
 PATH="$TMP/bin:$PATH" "$ROOT/scripts/provider-router.sh" check ollama model:latest . local
+printf 'prompt\n' >"$TMP/prompt"
+printf 'literal $(touch "%s")\n' "$TMP/witness" >"$TMP/response"
+CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$TMP/response" "$ROOT/scripts/provider-router.sh" generate-file ollama model:latest "$TMP/prompt" "$TMP/output"
+cmp -s "$TMP/response" "$TMP/output"
+[ ! -e "$TMP/witness" ]
 if PATH="$TMP/bin:$PATH" "$ROOT/scripts/provider-router.sh" available unknown . >/dev/null 2>&1; then exit 1; fi
 echo '[OK] provider routing tests passed'

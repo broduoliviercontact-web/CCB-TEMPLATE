@@ -94,10 +94,11 @@ Resume a run and record an explicit step result before completing it:
 
 ```sh
 ./scripts/ccb.sh workflow resume --latest ./mon-projet
+./scripts/ccb.sh workflow execute-step --latest ./mon-projet
 ./scripts/ccb.sh workflow complete-step --latest ./mon-projet
 ```
 
-`complete-step` validates the pending result, publishes it as completed, and transfers it literally to the next input through a rollback-protected multi-file transaction. No Markdown or shell is executed. See [project runs](docs/project-runs.md).
+`execute-step` can generate one pending result through the local Ollama API after an explicit resume. It uses only the persistent run snapshot, never executes model output, and does not progress the workflow. `complete-step` remains the explicit progression command. See [project runs](docs/project-runs.md).
 
 ```sh
 ./scripts/ccb.sh workflow status --latest ./mon-projet

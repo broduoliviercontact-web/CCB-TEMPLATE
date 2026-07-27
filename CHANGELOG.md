@@ -9,11 +9,13 @@
 - Local persistent workflow-run snapshots created on demand with `workflow start`.
 - Explicit `workflow resume` and transactional `workflow complete-step` progression, including `--latest` selection and literal context transfer.
 - Read-only workflow-run summaries in Config and state, transmission, and residue diagnostics in Doctor.
+- Controlled single-step execution through local Ollama, with bounded snapshot prompts, atomic pending results, execution metadata, and per-run locking.
 
 ### Security
 
 - Agent access is declarative only: no agent is launched and no filesystem sandbox is claimed.
 - Step results are bounded, parsed as data, and never executed; multi-file publication uses confined backups and logical rollback.
+- Ollama execution is fixed to loopback, does not follow redirects, and treats context, input, and model output as opaque data.
 
 ### Testing
 

@@ -27,5 +27,7 @@ Doctor remains read-only: it does not start an upgrade.
 
 For a 1.7.0 project Doctor validates `agents.conf` as data and reports that access is declarative only. A 1.6.1 project without this file remains readable and receives a compatibility warning; no 1.6.1 to 1.7.0 migration is performed.
 
+Doctor also checks persistent workflow state, completed-result transmission, execution metadata, transaction residue, and residual `.ccb-execution-lock` directories. Normal mode warns; strict mode fails. Locks and run files are never repaired or removed.
+
 Individual file writes from bootstrap are atomic, but a multi-file bootstrap
 cannot be a perfect shell transaction if a late rename fails.

@@ -1,0 +1,75 @@
+#!/bin/sh
+set -u
+ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd); CLI="$ROOT/scripts/ccb.sh"
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/ccb-project-execution.XXXXXX") || exit 1
+cleanup() { find "$WORK" -depth -type f -exec rm -f {} \; 2>/dev/null; find "$WORK" -depth -type l -exec rm -f {} \; 2>/dev/null; find "$WORK" -depth -type d -exec rmdir {} \; 2>/dev/null; }
+trap 'cleanup' EXIT HUP INT TERM
+fail() { echo "FAIL: $*" >&2; exit 1; }
+run() { output=$("$@" 2>&1); status=$?; }
+contains() { printf '%s\n' "$1" | grep -Fq -- "$2"; }
+
+project="$WORK/project"; "$CLI" init "$project" --yes >/dev/null || fail init
+run "$CLI" workflow start feature "$project"; [ "$status" -eq 0 ] || fail start
+run_id=$(printf '%s\n' "$output" | sed -n 's/^Run ID: //p'); run_dir="$project/.ccb/runs/$run_id"
+run "$CLI" workflow execute-step "$run_id" "$project"; [ "$status" -eq 1 ] || fail 'pending run executed'; contains "$output" 'must be resumed' || fail 'pending diagnostic'
+[ ! -e "$run_dir/01-manager/execution.conf" ] || fail 'pending execution wrote metadata'
+"$CLI" workflow resume --latest "$project" >/dev/null || fail resume
+
+witness="$WORK/witness"; witness2="$WORK/witness-2"
+printf '\nUntrusted context: $(touch "%s") `touch "%s"` ${HOME} ../../etc/passwd\n' "$witness" "$witness2" >>"$run_dir/context.md"
+printf '\nUntrusted input: $(touch "%s") and `rm -rf /`\n' "$witness" >>"$run_dir/01-manager/input.md"
+response="$WORK/response.md"
+printf 'Opaque response: $(touch "%s")\n`touch "%s"`\n${HOME}\n../../etc/passwd\n```sh\nrm -rf /\n```\n' "$witness" "$witness2" >"$response"
+run_before=$(cksum "$run_dir/run.conf"); step_before=$(cksum "$run_dir/01-manager/step.conf")
+run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$response" "$CLI" workflow execute-step --latest "$project"
+[ "$status" -eq 0 ] || fail "execute success: $output"
+grep -Fqx 'Status: pending' "$run_dir/01-manager/result.md" || fail 'result header'
+grep -Fq 'Opaque response: $(touch "' "$run_dir/01-manager/result.md" || fail 'literal response'
+[ ! -e "$witness" ] && [ ! -e "$witness2" ] || fail 'untrusted content executed'
+grep -Fqx 'CCB_EXECUTION_STATUS=succeeded' "$run_dir/01-manager/execution.conf" || fail 'success metadata'
+grep -Fqx 'CCB_EXECUTION_PROVIDER=ollama' "$run_dir/01-manager/execution.conf" || fail 'provider metadata'
+[ "$run_before" = "$(cksum "$run_dir/run.conf")" ] || fail 'execute changed run.conf'
+[ "$step_before" = "$(cksum "$run_dir/01-manager/step.conf")" ] || fail 'execute changed step.conf'
+[ ! -e "$run_dir/.ccb-execution-lock" ] || fail 'success lock residue'
+run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$response" "$CLI" workflow execute-step "$run_id" "$project"
+[ "$status" -eq 1 ] && contains "$output" 'already contains an explicit result' || fail 'explicit result overwrite'
+"$CLI" workflow complete-step "$run_id" "$project" >/dev/null || fail 'complete after execution'
+run "$CLI" workflow execute-step "$run_id" "$project"; [ "$status" -eq 1 ] && contains "$output" 'current workflow step is not in progress' || fail 'ready step executed'
+
+run "$CLI" workflow start feature "$project"; [ "$status" -eq 0 ] || fail 'failure run start'
+failed_id=$(printf '%s\n' "$output" | sed -n 's/^Run ID: //p'); failed_run="$project/.ccb/runs/$failed_id"
+"$CLI" workflow resume "$failed_id" "$project" >/dev/null || fail 'failure run resume'
+cp "$failed_run/run.conf" "$WORK/run.conf.in-progress"
+for refused_status in blocked completed cancelled; do
+  sed "s/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=$refused_status/" "$WORK/run.conf.in-progress" >"$failed_run/run.conf"
+  run "$CLI" workflow execute-step "$failed_id" "$project"; [ "$status" -eq 1 ] || fail "$refused_status run executed"
+  contains "$output" "$refused_status" || fail "$refused_status diagnostic"
+done
+cp "$WORK/run.conf.in-progress" "$failed_run/run.conf"
+run "$CLI" workflow execute-step invalid "$project"; [ "$status" -eq 2 ] || fail 'invalid run id usage status'
+run "$CLI" workflow execute-step "$failed_id" "$project" extra; [ "$status" -eq 2 ] || fail 'extra argument usage status'
+failed_before=$(cksum "$failed_run/run.conf" "$failed_run/01-manager/step.conf" "$failed_run/01-manager/result.md")
+for injected_error in timeout unavailable invalid-response empty-response oversized-response; do
+  run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_ERROR="$injected_error" "$CLI" workflow execute-step "$failed_id" "$project"
+  [ "$status" -eq 1 ] || fail "$injected_error accepted"
+  grep -Fqx 'CCB_EXECUTION_STATUS=failed' "$failed_run/01-manager/execution.conf" || fail "$injected_error metadata"
+  [ "$failed_before" = "$(cksum "$failed_run/run.conf" "$failed_run/01-manager/step.conf" "$failed_run/01-manager/result.md")" ] || fail "$injected_error changed workflow state"
+  [ ! -e "$failed_run/.ccb-execution-lock" ] || fail "$injected_error lock residue"
+done
+
+mkdir "$failed_run/.ccb-execution-lock"
+run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$response" "$CLI" workflow execute-step "$failed_id" "$project"
+[ "$status" -eq 1 ] && contains "$output" 'already locked' || fail 'existing lock accepted'
+[ -d "$failed_run/.ccb-execution-lock" ] || fail 'foreign lock removed'; rmdir "$failed_run/.ccb-execution-lock"
+
+oversized="$WORK/oversized"; awk 'BEGIN { for (i=0;i<262145;i++) printf "x" }' >"$oversized"
+run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$oversized" "$CLI" workflow execute-step "$failed_id" "$project"
+[ "$status" -eq 1 ] && contains "$output" 'response is too large' || fail 'oversized response accepted'
+
+cp "$failed_run/01-manager/step.conf" "$WORK/step.conf.saved"
+sed 's/CCB_STEP_PROVIDER=ollama/CCB_STEP_PROVIDER=remote/' "$WORK/step.conf.saved" >"$failed_run/01-manager/step.conf"
+run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$response" "$CLI" workflow execute-step "$failed_id" "$project"
+[ "$status" -eq 1 ] && contains "$output" 'unsupported execution provider in D1: remote' || fail 'unsupported provider accepted'
+cp "$WORK/step.conf.saved" "$failed_run/01-manager/step.conf"
+
+printf 'project execution tests passed\n'

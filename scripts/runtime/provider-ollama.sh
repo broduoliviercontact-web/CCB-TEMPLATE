@@ -17,5 +17,35 @@ case "$cmd" in
     if [ "$interactive" = 1 ]; then exec ollama run "$model"; fi
     [ -f "$file" ] && [ ! -L "$file" ] || exit 2
     prompt=$(cat "$file"); ollama run "$model" "$prompt" ;;
-  *) echo 'usage: provider-ollama.sh available|check|command|list-models|run' >&2; exit 2;;
+  generate-file)
+    model=${1:-}; prompt_file=${2:-}; output_file=${3:-}
+    runtime_model_is_safe "$model" || exit 2
+    [ -f "$prompt_file" ] && [ ! -L "$prompt_file" ] && [ -n "$output_file" ] || exit 2
+    case "${CCB_TEST_PROVIDER_ERROR:-}" in
+      '') :;;
+      timeout) [ "${CCB_TEST_MODE:-}" = 1 ] || exit 2; exit 28;;
+      unavailable) [ "${CCB_TEST_MODE:-}" = 1 ] || exit 2; exit 7;;
+      invalid-response) [ "${CCB_TEST_MODE:-}" = 1 ] || exit 2; exit 65;;
+      empty-response) [ "${CCB_TEST_MODE:-}" = 1 ] || exit 2; : >"$output_file"; exit 0;;
+      oversized-response) [ "${CCB_TEST_MODE:-}" = 1 ] || exit 2; exit 67;;
+      *) exit 2;;
+    esac
+    if [ "${CCB_TEST_MODE:-}" = 1 ]; then
+      response_file=${CCB_TEST_PROVIDER_RESPONSE_FILE:-}
+      [ -f "$response_file" ] && [ ! -L "$response_file" ] || exit 65
+      cp "$response_file" "$output_file" || exit 1
+      exit 0
+    fi
+    [ -z "${CCB_TEST_PROVIDER_RESPONSE_FILE:-}" ] && [ -z "${CCB_TEST_PROVIDER_ERROR:-}" ] || exit 2
+    command -v curl >/dev/null 2>&1 || exit 7
+    request_file=$(mktemp "${TMPDIR:-/tmp}/ccb-ollama-request.XXXXXX") || exit 1
+    raw_file=$(mktemp "${TMPDIR:-/tmp}/ccb-ollama-response.XXXXXX") || { rm -f "$request_file"; exit 1; }
+    trap 'rm -f "$request_file" "$raw_file"' EXIT HUP INT TERM
+    runtime_ollama_request_file "$model" "$prompt_file" "$request_file" || exit 1
+    curl --silent --show-error --fail --proto '=http' --noproxy '*' --max-redirs 0 --connect-timeout 5 --max-time 120 --max-filesize 1048576 \
+      -H 'Content-Type: application/json' --data-binary "@$request_file" \
+      'http://127.0.0.1:11434/api/generate' -o "$raw_file" || exit $?
+    runtime_ollama_extract_response "$raw_file" "$output_file" || exit 65
+    ;;
+  *) echo 'usage: provider-ollama.sh available|check|command|list-models|run|generate-file' >&2; exit 2;;
 esac

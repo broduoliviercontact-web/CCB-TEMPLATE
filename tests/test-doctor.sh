@@ -28,6 +28,10 @@ doctor_run="$project/.ccb/runs/$doctor_run_id"
 run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "pending run rejected: $output"
 run "$CLI" workflow resume --latest "$project"; [ "$status" -eq 0 ] || fail 'doctor run resume'
 run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "in-progress run rejected: $output"
+mkdir "$doctor_run/.ccb-execution-lock"
+run "$CLI" doctor "$project" --no-ollama; [ "$status" -eq 0 ] || fail 'normal execution lock warning failed'; contains "$output" 'project.runs.execution_locks — residual' || fail 'execution lock warning missing'
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted execution lock residue'
+[ -d "$doctor_run/.ccb-execution-lock" ] || fail 'doctor removed execution lock'; rmdir "$doctor_run/.ccb-execution-lock"
 cp "$doctor_run/run.conf" "$WORK/in-progress-run.saved"; cp "$doctor_run/01-manager/step.conf" "$WORK/in-progress-step.saved"
 sed 's/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=blocked/' "$WORK/in-progress-run.saved" >"$doctor_run/run.conf"
 sed 's/CCB_STEP_STATUS=in-progress/CCB_STEP_STATUS=blocked/' "$WORK/in-progress-step.saved" >"$doctor_run/01-manager/step.conf"

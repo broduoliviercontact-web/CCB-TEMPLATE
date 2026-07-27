@@ -98,13 +98,14 @@ require_template_executable scripts/project-skills.sh
 require_template_executable scripts/project-agents.sh
 require_template_executable scripts/project-workflows.sh
 require_template_executable scripts/project-runs.sh
+require_template_executable scripts/project-execution-lib.sh
 if [ -s "$TEMPLATE_ROOT/scripts/project-runs-lib.sh" ] && sh -n "$TEMPLATE_ROOT/scripts/project-runs-lib.sh"; then ok 'template library: scripts/project-runs-lib.sh'; else error 'invalid runs library'; fi
 if [ -s "$TEMPLATE_ROOT/scripts/project-workflows-lib.sh" ] && sh -n "$TEMPLATE_ROOT/scripts/project-workflows-lib.sh"; then ok 'template library: scripts/project-workflows-lib.sh'; else error 'invalid workflows library'; fi
 if [ -s "$TEMPLATE_ROOT/scripts/project-agents-lib.sh" ] && sh -n "$TEMPLATE_ROOT/scripts/project-agents-lib.sh"; then ok 'template library: scripts/project-agents-lib.sh'; else error 'invalid agents library'; fi
 require_template_executable scripts/project-upgrade.sh
 require_template_executable scripts/doctor.sh
 
-for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-runs.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
+for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-runs.sh tests/test-project-execution.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
   require_template_executable "$project_test"
 done
 
@@ -136,7 +137,7 @@ for project_profile in generic web node python audio; do
   fi
 done
 
-for audited_script in scripts/doctor.sh scripts/project-init.sh scripts/project-upgrade.sh scripts/project-config.sh scripts/project-config-lib.sh scripts/project-profile-lib.sh scripts/project-runs.sh scripts/project-runs-lib.sh; do
+for audited_script in scripts/doctor.sh scripts/project-init.sh scripts/project-upgrade.sh scripts/project-config.sh scripts/project-config-lib.sh scripts/project-profile-lib.sh scripts/project-runs.sh scripts/project-runs-lib.sh scripts/project-execution-lib.sh scripts/provider-router.sh; do
   if awk '
     /^[[:space:]]*#/ { next }
     /(^|[[:space:];])eval([[:space:];]|$)|(^|[[:space:];])source[[:space:]]|(^|[[:space:];])(bash|sh)[[:space:]]+-c|curl[[:space:]]|wget[[:space:]]|sudo[[:space:]]|chmod[[:space:]]+777|mktemp[[:space:]]+-u|rm[[:space:]]+-rf/ { bad=1 }
@@ -147,6 +148,17 @@ for audited_script in scripts/doctor.sh scripts/project-init.sh scripts/project-
     error "unsafe production construction: $audited_script"
   fi
 done
+if awk '
+  /^[[:space:]]*#/ { next }
+  /(^|[[:space:];])eval([[:space:];]|$)|(^|[[:space:];])source[[:space:]]|(^|[[:space:];])(bash|sh)[[:space:]]+-c|wget[[:space:]]|sudo[[:space:]]|chmod[[:space:]]+777|mktemp[[:space:]]+-u|rm[[:space:]]+-rf/ { bad=1 }
+  END { exit bad ? 1 : 0 }
+' "$TEMPLATE_ROOT/scripts/runtime/provider-ollama.sh" &&
+  grep -Fq "'http://127.0.0.1:11434/api/generate'" "$TEMPLATE_ROOT/scripts/runtime/provider-ollama.sh" &&
+  grep -Fq -- '--max-redirs 0' "$TEMPLATE_ROOT/scripts/runtime/provider-ollama.sh"; then
+  ok 'safe local Ollama execution provider'
+else
+  error 'unsafe local Ollama execution provider'
+fi
 
 validate_profiles() {
   if [ ! -d "$PROFILE_ROOT" ]; then error "missing profiles directory"; return; fi
@@ -183,7 +195,10 @@ validate_workflow_progression() {
   scenario_id=$(run_output=$("$TEMPLATE_ROOT/scripts/ccb.sh" workflow status --latest "$scenario_project") && printf '%s\n' "$run_output" | sed -n 's/^Run ID: //p')
   scenario_run="$scenario_project/.ccb/runs/$scenario_id"
   if ! "$TEMPLATE_ROOT/scripts/ccb.sh" workflow resume --latest "$scenario_project" >/dev/null; then error 'workflow scenario resume failed'; return; fi
-  printf '# Step Result\n\nStatus: pending\n\nLiteral $(touch "%s")\n' "$scenario_witness" >"$scenario_run/01-manager/result.md"
+  scenario_response="$scenario_root/provider-response"
+  printf 'Literal $(touch "%s")\n' "$scenario_witness" >"$scenario_response"
+  if env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$scenario_response" "$TEMPLATE_ROOT/scripts/ccb.sh" workflow execute-step --latest "$scenario_project" >/dev/null &&
+    grep -Fq 'Literal $(touch "' "$scenario_run/01-manager/result.md" && [ ! -e "$scenario_witness" ]; then ok 'workflow execute-step: local test provider'; else error 'workflow execute-step failed'; fi
   scenario_before=$(cksum "$scenario_run/run.conf" "$scenario_run/01-manager/step.conf" "$scenario_run/01-manager/result.md" "$scenario_run/02-developer/input.md" "$scenario_run/02-developer/step.conf")
   if env CCB_TEST_FAIL_POINT=after-result "$TEMPLATE_ROOT/scripts/ccb.sh" workflow complete-step --latest "$scenario_project" >/dev/null 2>&1; then error 'workflow rollback fail point was ignored'
   else

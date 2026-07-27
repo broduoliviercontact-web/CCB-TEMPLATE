@@ -11,6 +11,8 @@ TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 . "$SCRIPT_DIR/project-agents-lib.sh"
 . "$SCRIPT_DIR/project-workflows-lib.sh"
 . "$SCRIPT_DIR/project-runs-lib.sh"
+. "$SCRIPT_DIR/runtime/runtime-lib.sh"
+. "$SCRIPT_DIR/project-execution-lib.sh"
 
 strict=0
 no_ollama=0
@@ -64,14 +66,14 @@ for tool in sh sed grep awk mktemp mv chmod mkdir rm basename dirname; do
 done
 
 if [ -f "$TEMPLATE_ROOT/VERSION" ] && [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.7.0 ]; then emit OK template.version 1.7.0; else emit FAIL template.version 'expected 1.7.0'; fi
-for script in scripts/ccb.sh scripts/project-init.sh scripts/project-config.sh scripts/project-agents.sh scripts/project-workflows.sh scripts/project-upgrade.sh scripts/validate-ccb.sh; do
+for script in scripts/ccb.sh scripts/project-init.sh scripts/project-config.sh scripts/project-agents.sh scripts/project-workflows.sh scripts/project-runs.sh scripts/project-execution-lib.sh scripts/provider-router.sh scripts/runtime/provider-ollama.sh scripts/project-upgrade.sh scripts/validate-ccb.sh; do
   if [ -x "$TEMPLATE_ROOT/$script" ]; then emit OK "template.$script" executable; else emit FAIL "template.$script" missing-or-not-executable; fi
   if [ -f "$TEMPLATE_ROOT/$script" ] && sh -n "$TEMPLATE_ROOT/$script" >/dev/null 2>&1; then emit OK "syntax.$script" valid; else emit FAIL "syntax.$script" invalid; fi
 done
 for profile in generic web node python audio; do
   if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$profile.conf" && [ "$PROJECT_PROFILE_ID" = "$profile" ]; then emit OK "template.profile.$profile" valid; else emit FAIL "template.profile.$profile" invalid; fi
 done
-for file in docs/project-bootstrap.md docs/project-skills.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md tests/test-doctor.sh tests/test-project-upgrade.sh .github/workflows/validate.yml; do
+for file in docs/project-bootstrap.md docs/project-skills.md docs/project-runs.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md tests/test-doctor.sh tests/test-project-execution.sh tests/test-project-upgrade.sh .github/workflows/validate.yml; do
   [ -s "$TEMPLATE_ROOT/$file" ] && emit OK "template.$file" present || emit FAIL "template.$file" missing
 done
 if command -v git >/dev/null 2>&1; then
@@ -109,6 +111,8 @@ doctor_check_workflow_runs() {
   emit OK project.runs present
   residual=$(find "$runs_dir" \( -name '.ccb-transaction.*' -o -name '*.old' -o -name '*.new' -o -name '.ccb-publish.*' \) -print -quit)
   [ -z "$residual" ] && emit OK project.runs.transactions clean || emit WARN project.runs.transactions residual
+  execution_lock=$(find "$runs_dir" -name '.ccb-execution-lock' -print -quit)
+  [ -z "$execution_lock" ] && emit OK project.runs.execution_locks clean || emit WARN project.runs.execution_locks residual
   found=0
   for run_dir in "$runs_dir"/*; do
     [ -e "$run_dir" ] || [ -L "$run_dir" ] || continue
@@ -139,6 +143,10 @@ doctor_check_workflow_runs() {
       if [ "$step_status" = completed ]; then project_run_validate_completed_result "$result_file" || state_ok=0
       else
         [ -f "$result_file" ] && [ ! -L "$result_file" ] && [ "$(grep -c '^Status: pending$' "$result_file" 2>/dev/null)" = 1 ] && [ "$(grep -c '^Status: ' "$result_file" 2>/dev/null)" = 1 ] || state_ok=0
+      fi
+      execution_file="$doctor_step_dir/execution.conf"
+      if [ -e "$execution_file" ] || [ -L "$execution_file" ]; then
+        project_execution_parse_conf "$execution_file" && [ "$EXECUTION_PROVIDER" = "$STEP_PROVIDER" ] && [ "$EXECUTION_MODEL" = "$STEP_MODEL" ] || state_ok=0
       fi
       if [ "$i" -gt 1 ] && [ "$previous_status" = completed ] && [ "$step_status" != pending ]; then
         transmission_scratch=$(mktemp "${TMPDIR:-/tmp}/ccb-doctor-transmission.XXXXXX") || { state_ok=0; transmission_scratch=; }

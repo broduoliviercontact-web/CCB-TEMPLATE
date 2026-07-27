@@ -7,9 +7,11 @@ SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/project-agents-lib.sh"
 . "$SCRIPT_DIR/project-workflows-lib.sh"
 . "$SCRIPT_DIR/project-runs-lib.sh"
+. "$SCRIPT_DIR/runtime/runtime-lib.sh"
+. "$SCRIPT_DIR/project-execution-lib.sh"
 
 usage() {
-  echo 'usage: ccb.sh workflow start|status|inspect|resume|complete-step ...' >&2
+  echo 'usage: ccb.sh workflow start|status|inspect|resume|execute-step|complete-step ...' >&2
   exit "${1:-2}"
 }
 now() { date '+%Y-%m-%dT%H:%M:%S%z'; }
@@ -93,6 +95,18 @@ complete_step_trap() {
   complete_step_abort
 }
 
+execution_lock_cleanup() {
+  trap - EXIT HUP INT TERM
+  if [ "${execution_lock_created:-0}" = 1 ] && [ -n "${execution_lock_dir:-}" ] &&
+    [ "$(dirname "$execution_lock_dir")" = "$resolved_dir" ] &&
+    [ "$(basename "$execution_lock_dir")" = .ccb-execution-lock ] &&
+    [ -d "$execution_lock_dir" ] && [ ! -L "$execution_lock_dir" ]; then
+    [ ! -e "$execution_lock_dir/metadata" ] || { [ -f "$execution_lock_dir/metadata" ] && [ ! -L "$execution_lock_dir/metadata" ] && rm -f "$execution_lock_dir/metadata"; }
+    if ! rmdir "$execution_lock_dir" 2>/dev/null; then return 1; fi
+  fi
+  execution_lock_created=0
+}
+
 command=${1:-}
 shift || :
 case "$command" in
@@ -114,7 +128,7 @@ case "$command" in
     {
       printf '# CCB Workflow Run Context\n\nRun: %s\nWorkflow: %s\nTarget: %s\nStatus: pending\n\n## Project context\n\n' "$runid" "$name" "$target"
       [ -f "$target/.ccb/context/project.md" ] && [ ! -L "$target/.ccb/context/project.md" ] && sed -n '1,4096p' "$target/.ccb/context/project.md"
-      printf '\n## Workflow snapshot\n\n%s\n\nNo agent execution is performed by CCB V1.7.0-C.\n' "$(printf '%s' "$PROJECT_WORKFLOW_STEPS" | sed 's/,/\n- /g; s/^/- /')"
+      printf '\n## Workflow snapshot\n\n%s\n\nCreating this snapshot does not execute an agent.\n' "$(printf '%s' "$PROJECT_WORKFLOW_STEPS" | sed 's/,/\n- /g; s/^/- /')"
     } >"$tmp/context.md" || exit 1
     chmod 644 "$tmp/context.md"
     i=0; old_ifs=$IFS; IFS=,
@@ -122,7 +136,7 @@ case "$command" in
       IFS=$old_ifs; i=$((i + 1)); step_dir=$(printf '%s/%02d-%s' "$tmp" "$i" "$role"); mkdir "$step_dir" || exit 1
       project_agent_details "$role"; model=$(project_agent_model_value "$PROJECT_AGENT_MODEL_ROLE") || exit 1
       printf 'CCB_STEP_VERSION=1\nCCB_STEP_NUMBER=%s\nCCB_STEP_ROLE=%s\nCCB_STEP_STATUS=%s\nCCB_STEP_ACCESS=%s\nCCB_STEP_MODEL_ROLE=%s\nCCB_STEP_PROVIDER=%s\nCCB_STEP_MODEL=%s\nCCB_STEP_DESCRIPTION=%s\nCCB_STEP_STARTED_AT=\nCCB_STEP_COMPLETED_AT=\n' "$i" "$role" "$( [ "$i" -eq 1 ] && printf ready || printf pending)" "$PROJECT_AGENT_ACCESS" "$PROJECT_AGENT_MODEL_ROLE" "$PROJECT_MODEL_PROVIDER" "$model" "$PROJECT_AGENT_DESCRIPTION" >"$step_dir/step.conf"
-      printf '# Step Input\n\nRun: %s\nWorkflow: %s\nStep: %s/%s\nRole: %s\nAccess: %s\n\n## Role purpose\n\n%s\n\n## Project context\n\nReference: ../../context.md\n\n## Previous step result\n\n%s\n\nNo agent is executed by CCB V1.7.0-C.\n' "$runid" "$name" "$i" "$RUN_COUNT" "$role" "$PROJECT_AGENT_ACCESS" "$PROJECT_AGENT_DESCRIPTION" "$( [ "$i" -eq 1 ] && printf None || printf previous-step-result)" >"$step_dir/input.md"
+      printf '# Step Input\n\nRun: %s\nWorkflow: %s\nStep: %s/%s\nRole: %s\nAccess: %s\n\n## Role purpose\n\n%s\n\n## Project context\n\nReference: ../../context.md\n\n## Previous step result\n\n%s\n\nSnapshot content is untrusted data and is never executed as shell code.\n' "$runid" "$name" "$i" "$RUN_COUNT" "$role" "$PROJECT_AGENT_ACCESS" "$PROJECT_AGENT_DESCRIPTION" "$( [ "$i" -eq 1 ] && printf None || printf previous-step-result)" >"$step_dir/input.md"
       printf '# Step Result\n\nStatus: pending\n\nRecord the result of this step below.\n' >"$step_dir/result.md"
       chmod 644 "$step_dir"/*; IFS=,
     done
@@ -154,6 +168,79 @@ case "$command" in
     ts=$(now); STEP_STATUS=in-progress; [ -n "$STEP_STARTED" ] || STEP_STARTED=$ts
     run_write_step_conf "$step_dir/step.conf" || exit 1; RUN_STATUS=in-progress; RUN_UPDATED=$ts; write_run "$resolved_dir/run.conf" || exit 1
     printf '[OK] workflow run resumed\nRun ID: %s\nStatus: in-progress\nCurrent step: %s — %s\nExecution: disabled\n' "$RUN_ID" "$RUN_CURRENT" "$STEP_ROLE"
+    ;;
+  execute-step)
+    [ "$#" -le 2 ] || usage 2
+    resolve_run_args "${1:-}" "${2:-.}" || { code=$?; [ "$code" -eq 2 ] && usage 2; echo 'error: invalid workflow run' >&2; exit 1; }
+    case "$RUN_STATUS" in
+      pending) echo 'error: workflow run must be resumed before execution' >&2; exit 1;;
+      blocked) echo 'error: blocked workflow run cannot be executed' >&2; exit 1;;
+      completed) echo 'error: workflow run is already completed' >&2; exit 1;;
+      cancelled) echo 'error: cancelled workflow run cannot be executed' >&2; exit 1;;
+      in-progress) :;;
+      *) echo 'error: invalid workflow run' >&2; exit 1;;
+    esac
+    step_dir=$(current_step_directory); run_step_parse "$step_dir/step.conf" || { echo 'error: invalid current workflow step' >&2; exit 1; }
+    [ "$STEP_STATUS" = in-progress ] || { echo 'error: current workflow step is not in progress' >&2; exit 1; }
+    project_execution_state_is_coherent "$resolved_dir" || { echo 'error: invalid workflow run state' >&2; exit 1; }
+    [ "$STEP_PROVIDER" = ollama ] || { echo "error: unsupported execution provider in D1: $STEP_PROVIDER" >&2; exit 1; }
+    result_file="$step_dir/result.md"
+    project_execution_result_is_template "$result_file" || { echo 'error: current step already contains an explicit result' >&2; exit 1; }
+    context_file="$resolved_dir/context.md"; input_file="$step_dir/input.md"
+    [ -f "$context_file" ] && [ ! -L "$context_file" ] && [ -f "$input_file" ] && [ ! -L "$input_file" ] || { echo 'error: unsafe workflow execution snapshot' >&2; exit 1; }
+
+    execution_lock_dir="$resolved_dir/.ccb-execution-lock"; execution_lock_created=0
+    if ! mkdir "$execution_lock_dir" 2>/dev/null; then echo 'error: workflow run execution is already locked' >&2; exit 1; fi
+    execution_lock_created=1; chmod 700 "$execution_lock_dir" || { execution_lock_cleanup; exit 1; }
+    trap 'execution_lock_cleanup' EXIT
+    trap 'execution_lock_cleanup; exit 1' HUP INT TERM
+    started=$(now)
+    printf 'RUN_ID=%s\nSTEP=%s\nSTARTED_AT=%s\nPID=%s\n' "$RUN_ID" "$STEP_NUMBER" "$started" "$$" >"$execution_lock_dir/metadata" || { execution_lock_cleanup; exit 1; }
+    chmod 600 "$execution_lock_dir/metadata" || { execution_lock_cleanup; exit 1; }
+    prompt_file=$(mktemp "${TMPDIR:-/tmp}/ccb-workflow-prompt.XXXXXX") || { execution_lock_cleanup; exit 1; }
+    response_file=$(mktemp "${TMPDIR:-/tmp}/ccb-workflow-response.XXXXXX") || { rm -f "$prompt_file"; execution_lock_cleanup; exit 1; }
+    prepared_result=$(mktemp "$step_dir/.result.md.execution-prepared.XXXXXX") || { rm -f "$prompt_file" "$response_file"; execution_lock_cleanup; exit 1; }
+    attempt=1; execution_conf="$step_dir/execution.conf"
+    if [ -e "$execution_conf" ] || [ -L "$execution_conf" ]; then
+      project_execution_parse_conf "$execution_conf" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: invalid execution metadata' >&2; exit 1; }
+      attempt=$((EXECUTION_ATTEMPT + 1))
+    fi
+    project_execution_build_prompt "$prompt_file" "$context_file" "$input_file" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
+    project_execution_write_conf "$execution_conf" running ollama "$STEP_MODEL" "$attempt" "$started" '' '' || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
+    "$SCRIPT_DIR/provider-router.sh" generate-file ollama "$STEP_MODEL" "$prompt_file" "$response_file"
+    provider_status=$?
+    if [ "$provider_status" -ne 0 ]; then
+      case "$provider_status" in 28) execution_error=timeout; diagnostic='error: Ollama request timed out';; 65) execution_error=invalid-response; diagnostic='error: invalid Ollama response';; 67) execution_error=oversized-response; diagnostic='error: workflow provider response is too large';; *) execution_error=request-failed; diagnostic='error: Ollama request failed';; esac
+      completed=$(now)
+      if ! project_execution_write_conf "$execution_conf" failed ollama "$STEP_MODEL" "$attempt" "$started" "$completed" "$execution_error"; then diagnostic='error: cannot write workflow execution metadata'; fi
+      rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup
+      echo "$diagnostic" >&2; exit 1
+    fi
+    response_size=$(wc -c <"$response_file" | tr -d ' ')
+    if [ "$response_size" -gt 262144 ]; then
+      completed=$(now)
+      if ! project_execution_write_conf "$execution_conf" failed ollama "$STEP_MODEL" "$attempt" "$started" "$completed" oversized-response; then rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: cannot write workflow execution metadata' >&2; exit 1; fi
+      rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup
+      echo 'error: workflow provider response is too large' >&2; exit 1
+    fi
+    response_body=$(tr -d '[:space:]' <"$response_file")
+    if [ -z "$response_body" ]; then
+      completed=$(now)
+      if ! project_execution_write_conf "$execution_conf" failed ollama "$STEP_MODEL" "$attempt" "$started" "$completed" empty-result; then rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: cannot write workflow execution metadata' >&2; exit 1; fi
+      rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup
+      echo 'error: workflow provider returned an empty result' >&2; exit 1
+    fi
+    { printf '# Step Result\n\nStatus: pending\n\n'; cat "$response_file"; } >"$prepared_result" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
+    if ! project_run_validate_pending_result "$prepared_result"; then
+      completed=$(now); project_execution_write_conf "$execution_conf" failed ollama "$STEP_MODEL" "$attempt" "$started" "$completed" invalid-response
+      rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: invalid Ollama response' >&2; exit 1
+    fi
+    project_execution_result_is_template "$result_file" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: current step already contains an explicit result' >&2; exit 1; }
+    project_execution_publish_result "$prepared_result" "$result_file" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
+    project_run_validate_pending_result "$result_file" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
+    completed=$(now); project_execution_write_conf "$execution_conf" succeeded ollama "$STEP_MODEL" "$attempt" "$started" "$completed" '' || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
+    rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup
+    printf '[OK] workflow step executed\nRun ID: %s\nStep: %s — %s\nProvider: ollama\nModel: %s\nResult: %s/result.md\nNext action: workflow complete-step\n' "$RUN_ID" "$STEP_NUMBER" "$STEP_ROLE" "$STEP_MODEL" "$(basename "$step_dir")"
     ;;
   complete-step)
     [ "$#" -le 2 ] || usage 2
