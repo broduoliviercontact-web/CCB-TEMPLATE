@@ -51,6 +51,16 @@ current_step_directory() {
   find "$resolved_dir" -maxdepth 1 -type d -name "$(printf '%02d' "$RUN_CURRENT")-*" -print
 }
 
+load_execution_summary() {
+  execution_step_dir=$1
+  EXECUTION_STATUS=none; EXECUTION_PROVIDER=none; EXECUTION_MODEL=none; EXECUTION_ATTEMPT=0
+  EXECUTION_STARTED=; EXECUTION_COMPLETED=
+  execution_summary_file="$execution_step_dir/execution.conf"
+  if [ -e "$execution_summary_file" ] || [ -L "$execution_summary_file" ]; then
+    project_execution_parse_conf "$execution_summary_file" || return 1
+  fi
+}
+
 complete_step_restore_all() {
   restored=0
   project_run_transaction_restore "$transaction_dir/current-step.conf.old" "$current_step_file" || restored=1
@@ -147,7 +157,8 @@ case "$command" in
     [ "$#" -le 2 ] || usage 2
     resolve_run_args "${1:-}" "${2:-.}" || { code=$?; [ "$code" -eq 2 ] && usage 2; echo 'error: invalid or missing workflow run' >&2; exit 1; }
     if [ "$command" = status ]; then
-      printf 'CCB Workflow Run\nRun ID: %s\nWorkflow: %s\nStatus: %s\nCurrent step: %s/%s\nCreated: %s\nUpdated: %s\nExecution: disabled\n\nSteps:\n' "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_COUNT" "$RUN_CREATED" "$RUN_UPDATED"
+      status_step_dir=$(current_step_directory); load_execution_summary "$status_step_dir" || { echo 'error: invalid execution metadata' >&2; exit 1; }
+      printf 'CCB Workflow Run\nRun ID: %s\nWorkflow: %s\nStatus: %s\nCurrent step: %s/%s\nCreated: %s\nUpdated: %s\nExecution status: %s\nExecution provider: %s\nExecution model: %s\nExecution attempt: %s\n\nSteps:\n' "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_COUNT" "$RUN_CREATED" "$RUN_UPDATED" "$EXECUTION_STATUS" "$EXECUTION_PROVIDER" "$EXECUTION_MODEL" "$EXECUTION_ATTEMPT"
     else
       printf 'Run ID: %s\nPath: .ccb/runs/%s\nWorkflow: %s\nStatus: %s\nCurrent step: %s\nCreated: %s\nUpdated: %s\n' "$RUN_ID" "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_CREATED" "$RUN_UPDATED"
     fi
@@ -155,10 +166,18 @@ case "$command" in
     while [ "$i" -le "$RUN_COUNT" ]; do
       step_dir=$(find "$resolved_dir" -maxdepth 1 -type d -name "$(printf '%02d' "$i")-*" -print); run_step_parse "$step_dir/step.conf" || exit 1
       if [ "$command" = status ]; then printf '%s. %-12s %s\n' "$i" "$STEP_ROLE" "$STEP_STATUS"
-      else size=$(wc -c <"$step_dir/result.md" | tr -d ' '); printf '\nStep %s\n  Role: %s\n  Status: %s\n  Access: %s\n  Provider: %s\n  Model: %s\n  Input: %s/input.md\n  Result: %s/result.md (%s bytes)\n' "$i" "$STEP_ROLE" "$STEP_STATUS" "$STEP_ACCESS" "$STEP_PROVIDER" "$STEP_MODEL" "$(basename "$step_dir")" "$(basename "$step_dir")" "$size"; fi
+      else
+        size=$(wc -c <"$step_dir/result.md" | tr -d ' ')
+        printf '\nStep %s\n  Role: %s\n  Status: %s\n  Access: %s\n  Provider: %s\n  Model: %s\n  Input: %s/input.md\n  Result: %s/result.md (%s bytes)\n' "$i" "$STEP_ROLE" "$STEP_STATUS" "$STEP_ACCESS" "$STEP_PROVIDER" "$STEP_MODEL" "$(basename "$step_dir")" "$(basename "$step_dir")" "$size"
+        load_execution_summary "$step_dir" || { echo 'error: invalid execution metadata' >&2; exit 1; }
+        printf '  Execution\n    Status: %s\n' "$EXECUTION_STATUS"
+        if [ "$EXECUTION_STATUS" != none ]; then
+          printf '    Provider: %s\n    Model: %s\n    Attempt: %s\n    Started: %s\n    Completed: %s\n    Result: present\n    Result size: %s bytes\n' "$EXECUTION_PROVIDER" "$EXECUTION_MODEL" "$EXECUTION_ATTEMPT" "$EXECUTION_STARTED" "${EXECUTION_COMPLETED:-none}" "$size"
+        fi
+      fi
       i=$((i + 1))
     done
-    [ "$command" = status ] || printf '\nExecution: disabled\nEnforcement: declarative only\n'
+    [ "$command" = status ] || printf '\nAutomatic workflow loop: disabled\n'
     ;;
   resume)
     [ "$#" -le 2 ] || usage 2
@@ -210,7 +229,7 @@ case "$command" in
     "$SCRIPT_DIR/provider-router.sh" generate-file ollama "$STEP_MODEL" "$prompt_file" "$response_file"
     provider_status=$?
     if [ "$provider_status" -ne 0 ]; then
-      case "$provider_status" in 28) execution_error=timeout; diagnostic='error: Ollama request timed out';; 65) execution_error=invalid-response; diagnostic='error: invalid Ollama response';; 67) execution_error=oversized-response; diagnostic='error: workflow provider response is too large';; *) execution_error=request-failed; diagnostic='error: Ollama request failed';; esac
+      case "$provider_status" in 28) execution_error=timeout; diagnostic='error: Ollama request timed out';; 65) execution_error=invalid-response; diagnostic='error: invalid Ollama response';; 67) execution_error=oversized-response; diagnostic='error: workflow provider response is too large';; 68) execution_error=unsafe-endpoint; diagnostic='error: unsupported Ollama endpoint in D1';; *) execution_error=request-failed; diagnostic='error: Ollama request failed';; esac
       completed=$(now)
       if ! project_execution_write_conf "$execution_conf" failed ollama "$STEP_MODEL" "$attempt" "$started" "$completed" "$execution_error"; then diagnostic='error: cannot write workflow execution metadata'; fi
       rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup

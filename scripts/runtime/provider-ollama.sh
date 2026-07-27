@@ -21,6 +21,8 @@ case "$cmd" in
     model=${1:-}; prompt_file=${2:-}; output_file=${3:-}
     runtime_model_is_safe "$model" || exit 2
     [ -f "$prompt_file" ] && [ ! -L "$prompt_file" ] && [ -n "$output_file" ] || exit 2
+    endpoint=${CCB_OLLAMA_ENDPOINT:-http://127.0.0.1:11434}
+    case "$endpoint" in http://127.0.0.1:11434|http://localhost:11434) :;; *) exit 68;; esac
     case "${CCB_TEST_PROVIDER_ERROR:-}" in
       '') :;;
       timeout) [ "${CCB_TEST_MODE:-}" = 1 ] || exit 2; exit 28;;
@@ -44,7 +46,7 @@ case "$cmd" in
     runtime_ollama_request_file "$model" "$prompt_file" "$request_file" || exit 1
     curl --silent --show-error --fail --proto '=http' --noproxy '*' --max-redirs 0 --connect-timeout 5 --max-time 120 --max-filesize 1048576 \
       -H 'Content-Type: application/json' --data-binary "@$request_file" \
-      'http://127.0.0.1:11434/api/generate' -o "$raw_file" || exit $?
+      "$endpoint/api/generate" -o "$raw_file" || exit $?
     runtime_ollama_extract_response "$raw_file" "$output_file" || exit 65
     ;;
   *) echo 'usage: provider-ollama.sh available|check|command|list-models|run|generate-file' >&2; exit 2;;

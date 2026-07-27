@@ -32,6 +32,10 @@ mkdir "$doctor_run/.ccb-execution-lock"
 run "$CLI" doctor "$project" --no-ollama; [ "$status" -eq 0 ] || fail 'normal execution lock warning failed'; contains "$output" 'project.runs.execution_locks — residual' || fail 'execution lock warning missing'
 run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted execution lock residue'
 [ -d "$doctor_run/.ccb-execution-lock" ] || fail 'doctor removed execution lock'; rmdir "$doctor_run/.ccb-execution-lock"
+printf 'CCB_EXECUTION_VERSION=1\nCCB_EXECUTION_STATUS=running\nCCB_EXECUTION_PROVIDER=ollama\nCCB_EXECUTION_MODEL=qwen3:8b\nCCB_EXECUTION_ATTEMPT=1\nCCB_EXECUTION_STARTED_AT=2026-07-27T10:00:00+0200\nCCB_EXECUTION_COMPLETED_AT=\nCCB_EXECUTION_ERROR=\n' >"$doctor_run/01-manager/execution.conf"
+mkdir "$doctor_run/.ccb-execution-lock"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "coherent running execution rejected: $output"
+rm -f "$doctor_run/01-manager/execution.conf"; rmdir "$doctor_run/.ccb-execution-lock"
 cp "$doctor_run/run.conf" "$WORK/in-progress-run.saved"; cp "$doctor_run/01-manager/step.conf" "$WORK/in-progress-step.saved"
 sed 's/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=blocked/' "$WORK/in-progress-run.saved" >"$doctor_run/run.conf"
 sed 's/CCB_STEP_STATUS=in-progress/CCB_STEP_STATUS=blocked/' "$WORK/in-progress-step.saved" >"$doctor_run/01-manager/step.conf"
@@ -42,7 +46,22 @@ sed 's/^CCB_STEP_STARTED_AT=.*/CCB_STEP_STARTED_AT=/' "$WORK/step.saved" >"$doct
 run "$CLI" doctor "$project" --no-ollama; [ "$status" -eq 0 ] || fail 'normal doctor rejected timestamp warning'; contains "$output" "project.run.$doctor_run_id — inconsistent" || fail 'missing timestamp warning'
 run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict doctor accepted missing started_at'
 cp "$WORK/step.saved" "$doctor_run/01-manager/step.conf"
-printf '# Step Result\n\nStatus: pending\n\nLiteral doctor result.\n' >"$doctor_run/01-manager/result.md"
+printf 'Literal doctor execution result.\n' >"$WORK/doctor-response"
+run env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$WORK/doctor-response" "$CLI" workflow execute-step --latest "$project"; [ "$status" -eq 0 ] || fail "doctor execute step: $output"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "valid execution metadata rejected: $output"
+cp "$doctor_run/01-manager/execution.conf" "$WORK/execution.saved"
+printf 'CCB_EXECUTION_STATUS=succeeded\n' >>"$doctor_run/01-manager/execution.conf"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted duplicate execution key'
+cp "$WORK/execution.saved" "$doctor_run/01-manager/execution.conf"
+printf 'CCB_UNKNOWN=1\n' >>"$doctor_run/01-manager/execution.conf"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted unknown execution key'
+cp "$WORK/execution.saved" "$doctor_run/01-manager/execution.conf"
+rm -f "$doctor_run/01-manager/execution.conf"; ln -s "$WORK/execution.saved" "$doctor_run/01-manager/execution.conf"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted execution metadata symlink'
+rm -f "$doctor_run/01-manager/execution.conf"; cp "$WORK/execution.saved" "$doctor_run/01-manager/execution.conf"
+printf 'residual\n' >"$doctor_run/01-manager/.result.md.execution-residual"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted execution temporary residue'
+[ -f "$doctor_run/01-manager/.result.md.execution-residual" ] || fail 'doctor removed execution temporary'; rm -f "$doctor_run/01-manager/.result.md.execution-residual"
 run "$CLI" workflow complete-step --latest "$project"; [ "$status" -eq 0 ] || fail "doctor complete step 1: $output"
 run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "between-step state rejected: $output"
 run "$CLI" workflow resume --latest "$project"; [ "$status" -eq 0 ] || fail 'doctor resume step 2'

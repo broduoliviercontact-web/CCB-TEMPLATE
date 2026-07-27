@@ -10,6 +10,7 @@
 - Explicit `workflow resume` and transactional `workflow complete-step` progression, including `--latest` selection and literal context transfer.
 - Read-only workflow-run summaries in Config and state, transmission, and residue diagnostics in Doctor.
 - Controlled single-step execution through local Ollama, with bounded snapshot prompts, atomic pending results, execution metadata, and per-run locking.
+- Safe execution summaries in Status, Inspect, and Config, plus Doctor validation for metadata, locks, and temporary residue.
 
 ### Security
 

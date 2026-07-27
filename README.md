@@ -100,6 +100,8 @@ Resume a run and record an explicit step result before completing it:
 
 `execute-step` can generate one pending result through the local Ollama API after an explicit resume. It uses only the persistent run snapshot, never executes model output, and does not progress the workflow. `complete-step` remains the explicit progression command. See [project runs](docs/project-runs.md).
 
+Status, Inspect, Config, and Doctor expose only bounded execution metadata. They never print prompts, snapshot Markdown, result bodies, or raw provider responses.
+
 ```sh
 ./scripts/ccb.sh workflow status --latest ./mon-projet
 ./scripts/ccb.sh workflow inspect RUN_ID ./mon-projet

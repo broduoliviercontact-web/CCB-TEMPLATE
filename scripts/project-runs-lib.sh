@@ -162,6 +162,7 @@ project_run_summary() {
   runs_dir=$1
   RUNS_DIRECTORY=absent; RUNS_TOTAL=0; RUNS_VALID=0; RUNS_INVALID=0
   RUNS_PENDING=0; RUNS_IN_PROGRESS=0; RUNS_BLOCKED=0; RUNS_COMPLETED=0; RUNS_CANCELLED=0
+  RUNS_EXECUTION_SUCCEEDED=0; RUNS_EXECUTION_FAILED=0
   RUNS_LATEST=none; RUNS_LATEST_STATUS=none; latest_key=
   [ ! -e "$runs_dir" ] && [ ! -L "$runs_dir" ] && return 0
   RUNS_DIRECTORY=present
@@ -180,6 +181,16 @@ project_run_summary() {
         cancelled) RUNS_CANCELLED=$((RUNS_CANCELLED + 1));;
       esac
       candidate_id=$(basename "$candidate")
+      candidate_succeeded=0; candidate_failed=0
+      for execution_candidate in "$candidate"/*/execution.conf; do
+        [ -e "$execution_candidate" ] || [ -L "$execution_candidate" ] || continue
+        if project_execution_parse_conf "$execution_candidate"; then
+          [ "$EXECUTION_STATUS" = succeeded ] && candidate_succeeded=1
+          [ "$EXECUTION_STATUS" = failed ] && candidate_failed=1
+        fi
+      done
+      RUNS_EXECUTION_SUCCEEDED=$((RUNS_EXECUTION_SUCCEEDED + candidate_succeeded))
+      RUNS_EXECUTION_FAILED=$((RUNS_EXECUTION_FAILED + candidate_failed))
       candidate_key=$(printf '%s\n' "$candidate_id" | awk -F- '{suffix=1; if (NF>3) suffix=$NF; printf "%s%s%06d",$1,$2,suffix}')
       if [ -z "$latest_key" ] || [ "$candidate_key" \> "$latest_key" ]; then
         latest_key=$candidate_key; RUNS_LATEST=$candidate_id; RUNS_LATEST_STATUS=$RUN_STATUS

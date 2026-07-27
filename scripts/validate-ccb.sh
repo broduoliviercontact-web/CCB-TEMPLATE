@@ -153,7 +153,8 @@ if awk '
   /(^|[[:space:];])eval([[:space:];]|$)|(^|[[:space:];])source[[:space:]]|(^|[[:space:];])(bash|sh)[[:space:]]+-c|wget[[:space:]]|sudo[[:space:]]|chmod[[:space:]]+777|mktemp[[:space:]]+-u|rm[[:space:]]+-rf/ { bad=1 }
   END { exit bad ? 1 : 0 }
 ' "$TEMPLATE_ROOT/scripts/runtime/provider-ollama.sh" &&
-  grep -Fq "'http://127.0.0.1:11434/api/generate'" "$TEMPLATE_ROOT/scripts/runtime/provider-ollama.sh" &&
+  grep -Fq 'http://127.0.0.1:11434' "$TEMPLATE_ROOT/scripts/runtime/provider-ollama.sh" &&
+  grep -Fq 'http://localhost:11434' "$TEMPLATE_ROOT/scripts/runtime/provider-ollama.sh" &&
   grep -Fq -- '--max-redirs 0' "$TEMPLATE_ROOT/scripts/runtime/provider-ollama.sh"; then
   ok 'safe local Ollama execution provider'
 else
@@ -197,8 +198,14 @@ validate_workflow_progression() {
   if ! "$TEMPLATE_ROOT/scripts/ccb.sh" workflow resume --latest "$scenario_project" >/dev/null; then error 'workflow scenario resume failed'; return; fi
   scenario_response="$scenario_root/provider-response"
   printf 'Literal $(touch "%s")\n' "$scenario_witness" >"$scenario_response"
+  if env CCB_TEST_MODE=1 CCB_OLLAMA_ENDPOINT=http://example.invalid:11434 CCB_TEST_PROVIDER_RESPONSE_FILE="$scenario_response" "$TEMPLATE_ROOT/scripts/ccb.sh" workflow execute-step --latest "$scenario_project" >/dev/null 2>&1; then error 'workflow execute-step accepted remote provider endpoint'; else ok 'workflow execute-step: remote endpoint refused'; fi
   if env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$scenario_response" "$TEMPLATE_ROOT/scripts/ccb.sh" workflow execute-step --latest "$scenario_project" >/dev/null &&
     grep -Fq 'Literal $(touch "' "$scenario_run/01-manager/result.md" && [ ! -e "$scenario_witness" ]; then ok 'workflow execute-step: local test provider'; else error 'workflow execute-step failed'; fi
+  scenario_status=$("$TEMPLATE_ROOT/scripts/ccb.sh" workflow status --latest "$scenario_project")
+  printf '%s\n' "$scenario_status" | grep -Fq 'Execution status: succeeded' && ok 'workflow status: execution metadata' || error 'workflow status omitted execution metadata'
+  scenario_inspect=$("$TEMPLATE_ROOT/scripts/ccb.sh" workflow inspect --latest "$scenario_project")
+  if printf '%s\n' "$scenario_inspect" | grep -Fq 'Status: succeeded' && ! printf '%s\n' "$scenario_inspect" | grep -Fq 'Literal $(touch'; then ok 'workflow inspect: safe execution metadata'; else error 'workflow inspect exposed or omitted execution data'; fi
+  "$TEMPLATE_ROOT/scripts/ccb.sh" config "$scenario_project" | grep -Fq 'Runs with succeeded execution: 1' && ok 'workflow config: execution count' || error 'workflow config execution count failed'
   scenario_before=$(cksum "$scenario_run/run.conf" "$scenario_run/01-manager/step.conf" "$scenario_run/01-manager/result.md" "$scenario_run/02-developer/input.md" "$scenario_run/02-developer/step.conf")
   if env CCB_TEST_FAIL_POINT=after-result "$TEMPLATE_ROOT/scripts/ccb.sh" workflow complete-step --latest "$scenario_project" >/dev/null 2>&1; then error 'workflow rollback fail point was ignored'
   else

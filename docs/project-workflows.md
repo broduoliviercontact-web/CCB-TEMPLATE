@@ -5,3 +5,5 @@
 Workflows resolve roles from `agents.conf` and models from `models.conf`; they do not redefine either. Projects created before this capability remain readable but are not changed automatically.
 
 Run state and literal context transfer are documented in [project runs](project-runs.md). There is no automatic C2-to-C3 migration.
+
+`workflow execute-step` is the only D1 execution entry point. It requires an explicitly resumed step and supports only a loopback Ollama endpoint; `complete-step` remains a separate manual action.

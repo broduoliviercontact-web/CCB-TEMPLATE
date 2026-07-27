@@ -43,6 +43,8 @@ sed "s/CCB_RUN_ID=$run_id/CCB_RUN_ID=20260727-120000-feature-10/; s/CCB_RUN_STAT
 cp -R "$run_dir" "$target/.ccb/runs/20260727-110000-feature"
 sed "s/CCB_RUN_ID=$run_id/CCB_RUN_ID=20260727-110000-feature/; s/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=completed/" "$run_dir/run.conf" >"$target/.ccb/runs/20260727-110000-feature/run.conf"
 mkdir "$target/.ccb/runs/invalid-run"
+printf 'CCB_EXECUTION_VERSION=1\nCCB_EXECUTION_STATUS=succeeded\nCCB_EXECUTION_PROVIDER=ollama\nCCB_EXECUTION_MODEL=qwen3:8b\nCCB_EXECUTION_ATTEMPT=1\nCCB_EXECUTION_STARTED_AT=2026-07-27T10:00:00+0200\nCCB_EXECUTION_COMPLETED_AT=2026-07-27T10:01:00+0200\nCCB_EXECUTION_ERROR=\n' >"$run_dir/01-manager/execution.conf"
+printf 'CCB_EXECUTION_VERSION=1\nCCB_EXECUTION_STATUS=failed\nCCB_EXECUTION_PROVIDER=ollama\nCCB_EXECUTION_MODEL=qwen3:8b\nCCB_EXECUTION_ATTEMPT=1\nCCB_EXECUTION_STARTED_AT=2026-07-27T10:00:00+0200\nCCB_EXECUTION_COMPLETED_AT=2026-07-27T10:01:00+0200\nCCB_EXECUTION_ERROR=request-failed\n' >"$target/.ccb/runs/20260727-120000-feature-2/01-manager/execution.conf"
 output=$("$CLI" config "$target") || exit 1
 printf '%s' "$output" | grep -F 'Total runs: 5' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Valid runs: 4' >/dev/null || exit 1
@@ -52,5 +54,7 @@ printf '%s' "$output" | grep -F 'Cancelled runs: 1' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Completed runs: 1' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Latest run: 20260727-120000-feature-10' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Latest status: cancelled' >/dev/null || exit 1
+printf '%s' "$output" | grep -F 'Runs with succeeded execution: 1' >/dev/null || exit 1
+printf '%s' "$output" | grep -F 'Runs with failed execution: 1' >/dev/null || exit 1
 if "$CLI" config >/dev/null 2>&1; then exit 1; fi
 printf 'project config tests passed\n'

@@ -14,6 +14,8 @@ There is no C2-to-C3 migration. Progression commands do not launch a provider, a
 
 ## D1 local execution
 
-After `workflow resume`, `workflow execute-step RUN_ID TARGET` (or `--latest`) may execute exactly the current step through Ollama at `127.0.0.1:11434`. It reads only the run's `context.md`, current `input.md`, and current `step.conf` snapshot. The bounded prompt is at most 1 MiB; the opaque response is at most 256 KiB and is atomically wrapped as a pending `result.md`. `execution.conf` records a bounded status without storing the prompt or HTTP response.
+After `workflow resume`, `workflow execute-step RUN_ID TARGET` (or `--latest`) may execute exactly the current step through Ollama at `http://127.0.0.1:11434` or `http://localhost:11434`. All other endpoints are rejected. Connection and total timeouts are 5 and 120 seconds, redirects and proxies are disabled, and no retry is attempted. The command reads only the run's `context.md`, current `input.md`, and current `step.conf` snapshot. The bounded prompt is at most 1 MiB; the opaque response is at most 256 KiB and is atomically wrapped as a pending `result.md`. `execution.conf` records a bounded status without storing the prompt or HTTP response.
 
 A per-run directory lock prevents concurrent execution. Doctor reports residual locks but never removes them. Provider failures leave run and step state unchanged and keep the prior result. There are no automatic retries, completion, workflow loops, project traversal, remote providers, shell execution, Git operations, or project writes. Test-provider hooks work only when `CCB_TEST_MODE=1`.
+
+`workflow status` reports the current execution status, provider, snapshot model, and attempt. `workflow inspect` reports bounded execution metadata and result size, but never prints the prompt, context, input, result body, raw HTTP response, or secrets. Config reports how many runs contain succeeded or failed executions without contacting Ollama.

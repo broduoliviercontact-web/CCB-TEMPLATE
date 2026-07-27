@@ -112,8 +112,9 @@ doctor_check_workflow_runs() {
   residual=$(find "$runs_dir" \( -name '.ccb-transaction.*' -o -name '*.old' -o -name '*.new' -o -name '.ccb-publish.*' \) -print -quit)
   [ -z "$residual" ] && emit OK project.runs.transactions clean || emit WARN project.runs.transactions residual
   execution_lock=$(find "$runs_dir" -name '.ccb-execution-lock' -print -quit)
-  [ -z "$execution_lock" ] && emit OK project.runs.execution_locks clean || emit WARN project.runs.execution_locks residual
-  found=0
+  execution_residual=$(find "$runs_dir" \( -name '.result.md.execution-*' -o -name '.execution.conf.tmp.*' -o -name '*.prompt.tmp' -o -name '*.response.tmp' \) -print -quit)
+  [ -z "$execution_residual" ] && emit OK project.runs.execution_files clean || emit WARN project.runs.execution_files residual
+  found=0; running_execution=0
   for run_dir in "$runs_dir"/*; do
     [ -e "$run_dir" ] || [ -L "$run_dir" ] || continue
     case "$(basename "$run_dir")" in .ccb-transaction.*) continue;; esac
@@ -146,7 +147,13 @@ doctor_check_workflow_runs() {
       fi
       execution_file="$doctor_step_dir/execution.conf"
       if [ -e "$execution_file" ] || [ -L "$execution_file" ]; then
-        project_execution_parse_conf "$execution_file" && [ "$EXECUTION_PROVIDER" = "$STEP_PROVIDER" ] && [ "$EXECUTION_MODEL" = "$STEP_MODEL" ] || state_ok=0
+        if project_execution_parse_conf "$execution_file" && [ "$EXECUTION_PROVIDER" = "$STEP_PROVIDER" ] && [ "$EXECUTION_MODEL" = "$STEP_MODEL" ]; then
+          if [ "$EXECUTION_STATUS" = succeeded ]; then project_execution_result_is_template "$result_file" && state_ok=0
+          elif [ "$EXECUTION_STATUS" = running ]; then
+            if [ "$execution_lock" = "$run_dir/.ccb-execution-lock" ] && [ -d "$execution_lock" ] && [ ! -L "$execution_lock" ]; then running_execution=1; else state_ok=0; fi
+          fi
+        else state_ok=0
+        fi
       fi
       if [ "$i" -gt 1 ] && [ "$previous_status" = completed ] && [ "$step_status" != pending ]; then
         transmission_scratch=$(mktemp "${TMPDIR:-/tmp}/ccb-doctor-transmission.XXXXXX") || { state_ok=0; transmission_scratch=; }
@@ -165,6 +172,10 @@ doctor_check_workflow_runs() {
     fi
     [ "$state_ok" -eq 1 ] && emit OK "project.run.$run_name" valid || emit WARN "project.run.$run_name" inconsistent
   done
+  if [ -z "$execution_lock" ]; then emit OK project.runs.execution_locks clean
+  elif [ "$running_execution" -eq 1 ] && [ -d "$execution_lock" ] && [ ! -L "$execution_lock" ]; then emit OK project.runs.execution_locks active
+  else emit WARN project.runs.execution_locks residual
+  fi
   [ "$found" -eq 1 ] || emit OK project.runs empty
 }
 

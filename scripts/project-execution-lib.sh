@@ -78,10 +78,17 @@ project_execution_parse_conf() {
     case "$seen" in *" $required "*) :;; *) return 1;; esac
   done
   case "$EXECUTION_STATUS" in running|succeeded|failed) :;; *) return 1;; esac
+  project_execution_value_is_safe "$EXECUTION_PROVIDER" 64 && project_execution_value_is_safe "$EXECUTION_MODEL" 256 &&
+    project_execution_value_is_safe "$EXECUTION_STARTED" 64 && project_execution_value_is_safe "$EXECUTION_COMPLETED" 64 &&
+    project_execution_value_is_safe "$EXECUTION_ERROR" 160 || return 1
   [ "$EXECUTION_PROVIDER" = ollama ] && runtime_model_is_safe "$EXECUTION_MODEL" || return 1
   case "$EXECUTION_ATTEMPT" in ''|*[!0-9]*|0) return 1;; esac
-  [ -n "$EXECUTION_STARTED" ] || return 1
-  if [ "$EXECUTION_STATUS" = running ]; then [ -z "$EXECUTION_COMPLETED" ]; else [ -n "$EXECUTION_COMPLETED" ]; fi
+  case "$EXECUTION_STARTED" in ????-??-??T??:??:??[+-]????) :;; *) return 1;; esac
+  if [ "$EXECUTION_STATUS" = running ]; then [ -z "$EXECUTION_COMPLETED" ] && [ -z "$EXECUTION_ERROR" ]
+  else
+    case "$EXECUTION_COMPLETED" in ????-??-??T??:??:??[+-]????) :;; *) return 1;; esac
+    if [ "$EXECUTION_STATUS" = succeeded ]; then [ -z "$EXECUTION_ERROR" ]; else [ -n "$EXECUTION_ERROR" ]; fi
+  fi
 }
 
 project_execution_publish_result() {
