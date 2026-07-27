@@ -14,7 +14,7 @@ for profile in generic web node python audio; do
   grep -Fq '## Profile guidance' "$target/.ccb/context/project.md" || fail "guidance missing: $profile"
   run "$CLI" init "$target" --profile "$profile"
   [ "$status" -eq 0 ] || fail "profile $profile is not idempotent"
-  for file in .ccb/project.conf .ccb/models.conf .ccb/context/project.md AGENTS.md; do printf '%s' "$output" | grep -F "SKIP $file" >/dev/null || fail "SKIP missing: $file"; done
+  for file in .ccb/project.conf .ccb/models.conf .ccb/skills.conf .ccb/agents.conf .ccb/context/project.md AGENTS.md; do printf '%s' "$output" | grep -F "SKIP $file" >/dev/null || fail "SKIP missing: $file"; done
 done
 run "$CLI" init "$WORK/unknown" --profile react --yes; [ "$status" -eq 2 ] || fail 'unknown profile accepted'
 printf '%s' "$output" | grep -F 'supported profiles: generic, web, node, python, audio' >/dev/null || fail 'supported profiles missing'

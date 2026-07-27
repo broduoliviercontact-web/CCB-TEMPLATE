@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.0
+
+### Added
+
+- Declarative `.ccb/agents.conf`, agent roles, and read-only agent inspection commands.
+
+### Security
+
+- Agent access is declarative only: no agent is launched and no filesystem sandbox is claimed.
+
 ## 1.6.1
 
 ### Added

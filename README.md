@@ -67,6 +67,16 @@ The upgrade never runs automatically and stops on customized managed files. See 
 
 ### Diagnostics
 
+### Declarative agents
+
+```sh
+./scripts/ccb.sh agents ./mon-projet
+./scripts/ccb.sh agent show developer ./mon-projet
+./scripts/ccb.sh agent validate ./mon-projet
+```
+
+Agent access is declarative only; it is not an operating-system sandbox. See [project agents](docs/project-agents.md).
+
 ```sh
 ./scripts/ccb.sh doctor
 ./scripts/ccb.sh doctor ./mon-projet --no-ollama

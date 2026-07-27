@@ -8,6 +8,7 @@ TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 . "$SCRIPT_DIR/model-lib.sh"
 . "$SCRIPT_DIR/project-profile-lib.sh"
 . "$SCRIPT_DIR/project-skills-lib.sh"
+. "$SCRIPT_DIR/project-agents-lib.sh"
 PROFILE_ROOT="$TEMPLATE_ROOT/profiles"
 ERRORS=0
 
@@ -94,10 +95,12 @@ require_template_executable scripts/ccb.sh
 require_template_executable scripts/project-init.sh
 require_template_executable scripts/project-config.sh
 require_template_executable scripts/project-skills.sh
+require_template_executable scripts/project-agents.sh
+if [ -s "$TEMPLATE_ROOT/scripts/project-agents-lib.sh" ] && sh -n "$TEMPLATE_ROOT/scripts/project-agents-lib.sh"; then ok 'template library: scripts/project-agents-lib.sh'; else error 'invalid agents library'; fi
 require_template_executable scripts/project-upgrade.sh
 require_template_executable scripts/doctor.sh
 
-for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
+for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
   require_template_executable "$project_test"
 done
 
@@ -111,7 +114,7 @@ else
   error "missing or unreadable template library: scripts/mascot-lib.sh"
 fi
 
-for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md CHANGELOG.md; do
+for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/project-agents.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md docs/v1.7.0.md CHANGELOG.md; do
   if [ -s "$TEMPLATE_ROOT/$template_file" ]; then
     ok "template file: $template_file"
   else
@@ -119,7 +122,7 @@ for template_file in VERSION profiles/README.md profiles/generic/profile.conf te
   fi
 done
 
-if [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.6.1 ]; then ok 'template version: 1.6.1'; else error 'template VERSION must be 1.6.1'; fi
+if [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.7.0 ]; then ok 'template version: 1.7.0'; else error 'template VERSION must be 1.7.0'; fi
 
 for project_profile in generic web node python audio; do
   if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$project_profile.conf" && [ "$PROJECT_PROFILE_ID" = "$project_profile" ]; then

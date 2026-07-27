@@ -8,6 +8,7 @@ PROJECT_INIT="$SCRIPT_DIR/project-init.sh"
 PROJECT_CONFIG="$SCRIPT_DIR/project-config.sh"
 PROJECT_SKILLS="$SCRIPT_DIR/project-skills.sh"
 PROJECT_UPGRADE="$SCRIPT_DIR/project-upgrade.sh"
+PROJECT_AGENTS="$SCRIPT_DIR/project-agents.sh"
 VALIDATE="$SCRIPT_DIR/validate-ccb.sh"
 DOCTOR="$SCRIPT_DIR/doctor.sh"
 MODEL_SETUP="$SCRIPT_DIR/model-setup.sh"
@@ -42,7 +43,9 @@ Commands:
   mascot moods ID|--all           List supported moods
   models [show|list|validate|recommendations|setup|reset]
   agent run|model|command|check ROLE [TARGET] [OPTIONS]
-  agents [TARGET]
+  agents [TARGET]                 List declarative project agents
+  agent show ROLE [TARGET]        Show one declarative agent
+  agent validate [TARGET]         Validate declarative agents
   providers
   provider check|models ollama
   help                            Show this help
@@ -52,8 +55,10 @@ EOF
 }
 
 agent_command() {
-  action=${1:-}; role=${2:-}; shift 2 2>/dev/null || :
-  case "$action" in run) exec "$AGENT_LAUNCHER" "$role" "$@";; model) exec "$MODEL_RESOLVE" "$role" "${1:-.}";; command) "$AGENT_LAUNCHER" "$role" "${1:-.}" --dry-run;; check) "$AGENT_LAUNCHER" "$role" "${1:-.}" --dry-run >/dev/null;; *) echo 'error: usage: agent run|model|command|check ROLE' >&2; return 2;; esac
+  action=${1:-}
+  case "$action" in validate) shift; exec "$PROJECT_AGENTS" validate "$@";; show) shift; exec "$PROJECT_AGENTS" show "$@";; esac
+  role=${2:-}; shift 2 2>/dev/null || :
+  case "$action" in run) exec "$AGENT_LAUNCHER" "$role" "$@";; model) exec "$MODEL_RESOLVE" "$role" "${1:-.}";; command) "$AGENT_LAUNCHER" "$role" "${1:-.}" --dry-run;; check) "$AGENT_LAUNCHER" "$role" "${1:-.}" --dry-run >/dev/null;; *) echo 'error: usage: agent run|model|command|check ROLE | agent show ROLE [TARGET] | agent validate [TARGET]' >&2; return 2;; esac
 }
 
 provider_command() {
@@ -285,9 +290,7 @@ case "${1:-}" in
     ;;
   models) shift; models_command "$@"; exit $? ;;
   agent) shift; agent_command "$@"; exit $? ;;
-  agents)
-    target=${2:-.}; printf '%-12s %-30s %s\n' Agent Model Ready
-    for role in manager graph graphiste developer reviewer; do model=$($MODEL_RESOLVE "$role" "$target" 2>/dev/null || printf missing); printf '%-12s %-30s %s\n' "$role" "$model" "$( [ "$model" = missing ] && printf no || printf yes )"; done ;;
+  agents) shift; exec "$PROJECT_AGENTS" list "$@" ;;
   providers)
     if "$SCRIPT_DIR/provider-router.sh" available ollama . >/dev/null 2>&1; then echo 'Provider   Status   Details'; echo 'Ollama     READY    CLI available'; else echo 'Provider   Status   Details'; echo 'Ollama     MISSING  Install Ollama and ensure it is in PATH'; fi ;;
   provider) shift; provider_command "$@"; exit $? ;;

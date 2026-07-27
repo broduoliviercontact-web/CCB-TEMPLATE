@@ -8,9 +8,9 @@ Use `./scripts/ccb.sh init TARGET` to create the smallest local CCB project cont
 ./scripts/ccb.sh init ./my-project --dry-run
 ```
 
-The managed files are exactly `.ccb/project.conf`, `.ccb/models.conf`, `.ccb/skills.conf`, `.ccb/context/project.md`, and `AGENTS.md`. Ponytail defaults to enabled `full` mode and can be set with `--ponytail-mode off|lite|full|ultra`; no plugin is installed automatically.
+The managed files are exactly `.ccb/project.conf`, `.ccb/models.conf`, `.ccb/skills.conf`, `.ccb/agents.conf`, `.ccb/context/project.md`, and `AGENTS.md`. Ponytail defaults to enabled `full` mode and can be set with `--ponytail-mode off|lite|full|ultra`; no plugin is installed automatically.
 
-Before writing, the command prints a complete plan for all managed files: `CREATE` for an absent path, `SKIP` for an identical regular file, and `CONFLICT` for different content, a symbolic link, a non-regular file, or an incompatible parent. A conflict exits with status 1 and prevents every write. A second identical invocation therefore reports four `SKIP` entries. A V1.6.0-B project has different managed-file contents, so it deliberately conflicts rather than being silently migrated.
+Before writing, the command prints a complete plan for all managed files: `CREATE` for an absent path, `SKIP` for an identical regular file, and `CONFLICT` for different content, a symbolic link, a non-regular file, or an incompatible parent. A conflict exits with status 1 and prevents every write. A second identical invocation therefore reports six `SKIP` entries. A V1.6.0-B project has different managed-file contents, so it deliberately conflicts rather than being silently migrated.
 
 `--dry-run` performs the same analysis but creates no target, directory, or managed file. It exits 0 without a conflict and 1 with one. Invalid arguments, unsafe paths, unsupported profiles, and a required non-interactive confirmation exit 2.
 
@@ -30,3 +30,6 @@ Use `--model` to replace all profile defaults, then role-specific options to tak
 ```
 
 `config` safely parses and prints project and model data; it makes no network request and never invokes Ollama.
+## Declarative agents
+
+In CCB 1.7.0, bootstrap manages six deterministic files: `project.conf`, `models.conf`, `skills.conf`, `agents.conf`, `context/project.md`, and `AGENTS.md`. `agents.conf` declares roles and intended access only; see [project agents](project-agents.md).

@@ -25,5 +25,7 @@ A valid bootstrap project at template version `1.6.0` receives a `WARN` that
 skills are not configured and an explicit `ccb upgrade TARGET --yes` recommendation.
 Doctor remains read-only: it does not start an upgrade.
 
+For a 1.7.0 project Doctor validates `agents.conf` as data and reports that access is declarative only. A 1.6.1 project without this file remains readable and receives a compatibility warning; no 1.6.1 to 1.7.0 migration is performed.
+
 Individual file writes from bootstrap are atomic, but a multi-file bootstrap
 cannot be a perfect shell transaction if a late rename fails.

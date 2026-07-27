@@ -22,10 +22,12 @@ assert_contains "$help_output" 'init TARGET [OPTIONS]' 'help documents project b
 assert_contains "$help_output" 'config TARGET' 'help documents bootstrap config'
 assert_contains "$help_output" 'skills TARGET' 'help documents skills'
 assert_contains "$help_output" 'upgrade TARGET [OPTIONS]' 'help documents project upgrade'
+assert_contains "$help_output" 'agents [TARGET]' 'help documents declarative agents'
+assert_contains "$help_output" 'agent show ROLE' 'help documents agent show'
 assert_contains "$help_output" 'doctor [TARGET]' 'help documents doctor'
 version_output=$("$CLI" version)
-[ "$version_output" = 1.6.1 ] || {
-  echo "assertion failed: version is $version_output (expected: 1.6.1)" >&2
+[ "$version_output" = 1.7.0 ] || {
+  echo "assertion failed: version is $version_output (expected: 1.7.0)" >&2
   exit 1
 }
 init_help=$("$CLI" init --help 2>&1)
