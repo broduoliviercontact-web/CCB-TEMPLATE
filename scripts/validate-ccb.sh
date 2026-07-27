@@ -97,12 +97,14 @@ require_template_executable scripts/project-config.sh
 require_template_executable scripts/project-skills.sh
 require_template_executable scripts/project-agents.sh
 require_template_executable scripts/project-workflows.sh
+require_template_executable scripts/project-runs.sh
+if [ -s "$TEMPLATE_ROOT/scripts/project-runs-lib.sh" ] && sh -n "$TEMPLATE_ROOT/scripts/project-runs-lib.sh"; then ok 'template library: scripts/project-runs-lib.sh'; else error 'invalid runs library'; fi
 if [ -s "$TEMPLATE_ROOT/scripts/project-workflows-lib.sh" ] && sh -n "$TEMPLATE_ROOT/scripts/project-workflows-lib.sh"; then ok 'template library: scripts/project-workflows-lib.sh'; else error 'invalid workflows library'; fi
 if [ -s "$TEMPLATE_ROOT/scripts/project-agents-lib.sh" ] && sh -n "$TEMPLATE_ROOT/scripts/project-agents-lib.sh"; then ok 'template library: scripts/project-agents-lib.sh'; else error 'invalid agents library'; fi
 require_template_executable scripts/project-upgrade.sh
 require_template_executable scripts/doctor.sh
 
-for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
+for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-runs.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
   require_template_executable "$project_test"
 done
 

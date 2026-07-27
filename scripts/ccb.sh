@@ -10,6 +10,7 @@ PROJECT_SKILLS="$SCRIPT_DIR/project-skills.sh"
 PROJECT_UPGRADE="$SCRIPT_DIR/project-upgrade.sh"
 PROJECT_AGENTS="$SCRIPT_DIR/project-agents.sh"
 PROJECT_WORKFLOWS="$SCRIPT_DIR/project-workflows.sh"
+PROJECT_RUNS="$SCRIPT_DIR/project-runs.sh"
 VALIDATE="$SCRIPT_DIR/validate-ccb.sh"
 DOCTOR="$SCRIPT_DIR/doctor.sh"
 MODEL_SETUP="$SCRIPT_DIR/model-setup.sh"
@@ -296,7 +297,7 @@ case "${1:-}" in
   agent) shift; agent_command "$@"; exit $? ;;
   agents) shift; exec "$PROJECT_AGENTS" list "$@" ;;
   workflows) shift; exec "$PROJECT_WORKFLOWS" list "$@" ;;
-  workflow) shift; exec "$PROJECT_WORKFLOWS" "$@" ;;
+  workflow) shift; case "${1:-}" in start|status|inspect|resume|complete-step) exec "$PROJECT_RUNS" "$@";; *) exec "$PROJECT_WORKFLOWS" "$@";; esac ;;
   providers)
     if "$SCRIPT_DIR/provider-router.sh" available ollama . >/dev/null 2>&1; then echo 'Provider   Status   Details'; echo 'Ollama     READY    CLI available'; else echo 'Provider   Status   Details'; echo 'Ollama     MISSING  Install Ollama and ensure it is in PATH'; fi ;;
   provider) shift; provider_command "$@"; exit $? ;;

@@ -87,6 +87,12 @@ Agent access is declarative only; it is not an operating-system sandbox. See [pr
 Workflows are plans only: V1.7.0-B does not execute agents. See [project workflows](docs/project-workflows.md).
 
 ```sh
+./scripts/ccb.sh workflow start feature ./mon-projet
+```
+
+This C1 foundation creates a local workflow snapshot only; it executes no agent. See [project runs](docs/project-runs.md).
+
+```sh
 ./scripts/ccb.sh doctor
 ./scripts/ccb.sh doctor ./mon-projet --no-ollama
 ./scripts/ccb.sh doctor ./mon-projet --strict
