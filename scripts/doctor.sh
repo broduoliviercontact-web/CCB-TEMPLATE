@@ -10,6 +10,7 @@ TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 . "$SCRIPT_DIR/project-skills-lib.sh"
 . "$SCRIPT_DIR/project-agents-lib.sh"
 . "$SCRIPT_DIR/project-workflows-lib.sh"
+. "$SCRIPT_DIR/project-runs-lib.sh"
 
 strict=0
 no_ollama=0
@@ -101,6 +102,64 @@ check_managed_file() {
   fi
 }
 
+doctor_check_workflow_runs() {
+  runs_dir="$target/.ccb/runs"
+  if [ ! -e "$runs_dir" ] && [ ! -L "$runs_dir" ]; then emit OK project.runs absent; return; fi
+  if [ ! -d "$runs_dir" ] || [ -L "$runs_dir" ]; then emit WARN project.runs unsafe; return; fi
+  emit OK project.runs present
+  residual=$(find "$runs_dir" \( -name '.ccb-transaction.*' -o -name '*.old' -o -name '*.new' -o -name '.ccb-publish.*' \) -print -quit)
+  [ -z "$residual" ] && emit OK project.runs.transactions clean || emit WARN project.runs.transactions residual
+  found=0
+  for run_dir in "$runs_dir"/*; do
+    [ -e "$run_dir" ] || [ -L "$run_dir" ] || continue
+    case "$(basename "$run_dir")" in .ccb-transaction.*) continue;; esac
+    found=1; run_name=$(basename "$run_dir")
+    if [ ! -d "$run_dir" ] || [ -L "$run_dir" ] || ! run_parse_conf "$run_dir/run.conf"; then emit WARN "project.run.$run_name" invalid-or-unsafe; continue; fi
+    run_status=$RUN_STATUS; run_current=$RUN_CURRENT; run_count=$RUN_COUNT; run_completed=$RUN_COMPLETED
+    state_ok=1
+    if [ "$run_status" = completed ]; then [ -n "$run_completed" ] || state_ok=0
+    else [ -z "$run_completed" ] || state_ok=0
+    fi
+    previous_dir=; previous_status=
+    i=1
+    while [ "$i" -le "$run_count" ]; do
+      step_matches=$(find "$run_dir" -maxdepth 1 -type d -name "$(printf '%02d' "$i")-*" -print)
+      if [ "$(printf '%s\n' "$step_matches" | sed '/^$/d' | wc -l | tr -d ' ')" != 1 ]; then state_ok=0; i=$((i + 1)); continue; fi
+      doctor_step_dir=$step_matches
+      if ! run_step_parse "$doctor_step_dir/step.conf"; then state_ok=0; i=$((i + 1)); continue; fi
+      step_status=$STEP_STATUS
+      case "$step_status" in
+        in-progress) [ -n "$STEP_STARTED" ] && [ -z "$STEP_COMPLETED" ] || state_ok=0;;
+        completed) [ -n "$STEP_STARTED" ] && [ -n "$STEP_COMPLETED" ] || state_ok=0;;
+        ready|pending) [ -z "$STEP_STARTED" ] && [ -z "$STEP_COMPLETED" ] || state_ok=0;;
+        blocked) [ -n "$STEP_STARTED" ] && [ -z "$STEP_COMPLETED" ] || state_ok=0;;
+        skipped) [ -n "$STEP_COMPLETED" ] || state_ok=0;;
+      esac
+      result_file="$doctor_step_dir/result.md"
+      if [ "$step_status" = completed ]; then project_run_validate_completed_result "$result_file" || state_ok=0
+      else
+        [ -f "$result_file" ] && [ ! -L "$result_file" ] && [ "$(grep -c '^Status: pending$' "$result_file" 2>/dev/null)" = 1 ] && [ "$(grep -c '^Status: ' "$result_file" 2>/dev/null)" = 1 ] || state_ok=0
+      fi
+      if [ "$i" -gt 1 ] && [ "$previous_status" = completed ] && [ "$step_status" != pending ]; then
+        transmission_scratch=$(mktemp "${TMPDIR:-/tmp}/ccb-doctor-transmission.XXXXXX") || { state_ok=0; transmission_scratch=; }
+        if [ -n "$transmission_scratch" ]; then
+          project_run_validate_transmission "$doctor_step_dir/input.md" "$(basename "$previous_dir")" "$previous_dir/result.md" "$transmission_scratch" || state_ok=0
+          rm -f "$transmission_scratch"
+        fi
+      fi
+      previous_dir=$doctor_step_dir; previous_status=$step_status
+      i=$((i + 1))
+    done
+    current_dir=$(find "$run_dir" -maxdepth 1 -type d -name "$(printf '%02d' "$run_current")-*" -print)
+    if [ -n "$current_dir" ] && run_step_parse "$current_dir/step.conf"; then
+      case "$run_status:$STEP_STATUS" in pending:ready|in-progress:in-progress|in-progress:ready|blocked:blocked|completed:completed|completed:skipped) :;; *) state_ok=0;; esac
+    else state_ok=0
+    fi
+    [ "$state_ok" -eq 1 ] && emit OK "project.run.$run_name" valid || emit WARN "project.run.$run_name" inconsistent
+  done
+  [ "$found" -eq 1 ] || emit OK project.runs empty
+}
+
 if [ -n "$target" ]; then
   legacy_project=0
   if [ ! -e "$target/.ccb/project.conf" ] && [ -f "$target/.ccb/AGENT_POLICY.md" ]; then legacy_project=1; fi
@@ -145,7 +204,7 @@ if [ -n "$target" ]; then
     elif [ "$template_version" = 1.6.0 ] || [ "$template_version" = 1.6.1 ]; then
       emit WARN project.agents_conf legacy-not-configured
     else emit FAIL project.agents_conf invalid; fi
-    if project_workflows_parse "$target/.ccb/workflows.conf"; then emit OK project.workflows_conf valid; emit OK project.workflow_execution disabled; elif [ "$template_version" = 1.7.0 ]; then emit WARN project.workflows_conf not-configured; else emit WARN project.workflows_conf legacy-not-configured; fi
+    if project_workflows_parse "$target/.ccb/workflows.conf"; then emit OK project.workflows_conf valid; emit OK project.workflow_execution disabled; doctor_check_workflow_runs; elif [ "$template_version" = 1.7.0 ]; then emit WARN project.workflows_conf not-configured; else emit WARN project.workflows_conf legacy-not-configured; fi
     grep -Fq '.ccb/context/project.md' "$target/AGENTS.md" 2>/dev/null && grep -Fq '.ccb/models.conf' "$target/AGENTS.md" 2>/dev/null && emit OK project.agents_guidance present || emit WARN project.agents_guidance incomplete
   fi
   if command -v git >/dev/null 2>&1; then

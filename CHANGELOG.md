@@ -7,10 +7,17 @@
 - Declarative `.ccb/agents.conf`, agent roles, and read-only agent inspection commands.
 - Declarative `.ccb/workflows.conf` and read-only workflow inspection and planning commands.
 - Local persistent workflow-run snapshots created on demand with `workflow start`.
+- Explicit `workflow resume` and transactional `workflow complete-step` progression, including `--latest` selection and literal context transfer.
+- Read-only workflow-run summaries in Config and state, transmission, and residue diagnostics in Doctor.
 
 ### Security
 
 - Agent access is declarative only: no agent is launched and no filesystem sandbox is claimed.
+- Step results are bounded, parsed as data, and never executed; multi-file publication uses confined backups and logical rollback.
+
+### Testing
+
+- Integration coverage includes state progression, anti-injection, all transaction fail points, byte-identical rollback, Config summaries, and strict Doctor diagnostics.
 
 ## 1.6.1
 

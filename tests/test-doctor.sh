@@ -18,6 +18,58 @@ project="$WORK/audio project"; "$CLI" init "$project" --profile audio --yes >/de
 before=$(cksum "$project/.ccb/models.conf")
 run "$CLI" doctor "$project" --no-ollama; [ "$status" -eq 0 ] || fail "valid project doctor failed: $output"; contains "$output" 'project.profile — audio' || fail 'profile result'; contains "$output" 'ollama — disabled' || fail 'ollama skip'; after=$(cksum "$project/.ccb/models.conf"); [ "$before" = "$after" ] || fail 'doctor modified project'
 run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail 'strict valid project failed'
+mkdir "$project/.ccb/runs"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail 'strict empty runs directory failed'
+rmdir "$project/.ccb/runs"
+
+run "$CLI" workflow start feature "$project"; [ "$status" -eq 0 ] || fail 'doctor run start'
+doctor_run_id=$(printf '%s\n' "$output" | sed -n 's/^Run ID: //p')
+doctor_run="$project/.ccb/runs/$doctor_run_id"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "pending run rejected: $output"
+run "$CLI" workflow resume --latest "$project"; [ "$status" -eq 0 ] || fail 'doctor run resume'
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "in-progress run rejected: $output"
+cp "$doctor_run/run.conf" "$WORK/in-progress-run.saved"; cp "$doctor_run/01-manager/step.conf" "$WORK/in-progress-step.saved"
+sed 's/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=blocked/' "$WORK/in-progress-run.saved" >"$doctor_run/run.conf"
+sed 's/CCB_STEP_STATUS=in-progress/CCB_STEP_STATUS=blocked/' "$WORK/in-progress-step.saved" >"$doctor_run/01-manager/step.conf"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "blocked run rejected: $output"
+cp "$WORK/in-progress-run.saved" "$doctor_run/run.conf"; cp "$WORK/in-progress-step.saved" "$doctor_run/01-manager/step.conf"
+cp "$doctor_run/01-manager/step.conf" "$WORK/step.saved"
+sed 's/^CCB_STEP_STARTED_AT=.*/CCB_STEP_STARTED_AT=/' "$WORK/step.saved" >"$doctor_run/01-manager/step.conf"
+run "$CLI" doctor "$project" --no-ollama; [ "$status" -eq 0 ] || fail 'normal doctor rejected timestamp warning'; contains "$output" "project.run.$doctor_run_id — inconsistent" || fail 'missing timestamp warning'
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict doctor accepted missing started_at'
+cp "$WORK/step.saved" "$doctor_run/01-manager/step.conf"
+printf '# Step Result\n\nStatus: pending\n\nLiteral doctor result.\n' >"$doctor_run/01-manager/result.md"
+run "$CLI" workflow complete-step --latest "$project"; [ "$status" -eq 0 ] || fail "doctor complete step 1: $output"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "between-step state rejected: $output"
+run "$CLI" workflow resume --latest "$project"; [ "$status" -eq 0 ] || fail 'doctor resume step 2'
+printf '# Step Result\n\nStatus: pending\n\nSecond doctor result.\n' >"$doctor_run/02-developer/result.md"
+run "$CLI" workflow complete-step --latest "$project"; [ "$status" -eq 0 ] || fail 'doctor complete step 2'
+run "$CLI" workflow resume --latest "$project"; [ "$status" -eq 0 ] || fail 'doctor resume step 3'
+printf '# Step Result\n\nStatus: pending\n\nFinal doctor result.\n' >"$doctor_run/03-reviewer/result.md"
+run "$CLI" workflow complete-step --latest "$project"; [ "$status" -eq 0 ] || fail 'doctor complete final step'
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "completed run rejected: $output"
+
+cp "$doctor_run/run.conf" "$WORK/run.saved"
+sed 's/^CCB_RUN_COMPLETED_AT=.*/CCB_RUN_COMPLETED_AT=/' "$WORK/run.saved" >"$doctor_run/run.conf"
+before=$(cksum "$doctor_run/run.conf")
+run "$CLI" doctor "$project" --no-ollama; [ "$status" -eq 0 ] || fail 'normal completed_at warning failed'
+after=$(cksum "$doctor_run/run.conf"); [ "$before" = "$after" ] || fail 'doctor modified corrupt run'
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted missing run completed_at'
+cp "$WORK/run.saved" "$doctor_run/run.conf"
+cp "$doctor_run/01-manager/result.md" "$WORK/result.saved"
+sed 's/^Status: completed$/Status: pending/' "$WORK/result.saved" >"$doctor_run/01-manager/result.md"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted pending completed result'
+cp "$WORK/result.saved" "$doctor_run/01-manager/result.md"
+cp "$doctor_run/02-developer/input.md" "$WORK/input.saved"
+sed 's|Source: ../01-manager/result.md|Source: ../03-reviewer/result.md|' "$WORK/input.saved" >"$doctor_run/02-developer/input.md"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted incorrect transmission source'
+cp "$WORK/input.saved" "$doctor_run/02-developer/input.md"
+mkdir "$doctor_run/.ccb-transaction.residual"
+printf 'residual\n' >"$doctor_run/.ccb-transaction.residual/run.conf.old"
+run "$CLI" doctor "$project" --no-ollama; [ "$status" -eq 0 ] || fail 'normal residual warning failed'; contains "$output" 'project.runs.transactions — residual' || fail 'transaction residual warning missing'
+[ -f "$doctor_run/.ccb-transaction.residual/run.conf.old" ] || fail 'doctor removed transaction residual'
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted transaction residual'
+rm -f "$doctor_run/.ccb-transaction.residual/run.conf.old"; rmdir "$doctor_run/.ccb-transaction.residual"
 
 legacy="$WORK/legacy project"; "$CLI" init "$legacy" --yes >/dev/null
 sed 's/CCB_TEMPLATE_VERSION=1.7.0/CCB_TEMPLATE_VERSION=1.6.0/' "$legacy/.ccb/project.conf" >"$legacy/.ccb/project.next" && mv "$legacy/.ccb/project.next" "$legacy/.ccb/project.conf"

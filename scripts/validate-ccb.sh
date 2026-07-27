@@ -136,7 +136,7 @@ for project_profile in generic web node python audio; do
   fi
 done
 
-for audited_script in scripts/doctor.sh scripts/project-init.sh scripts/project-upgrade.sh scripts/project-config.sh scripts/project-config-lib.sh scripts/project-profile-lib.sh; do
+for audited_script in scripts/doctor.sh scripts/project-init.sh scripts/project-upgrade.sh scripts/project-config.sh scripts/project-config-lib.sh scripts/project-profile-lib.sh scripts/project-runs.sh scripts/project-runs-lib.sh; do
   if awk '
     /^[[:space:]]*#/ { next }
     /(^|[[:space:];])eval([[:space:];]|$)|(^|[[:space:];])source[[:space:]]|(^|[[:space:];])(bash|sh)[[:space:]]+-c|curl[[:space:]]|wget[[:space:]]|sudo[[:space:]]|chmod[[:space:]]+777|mktemp[[:space:]]+-u|rm[[:space:]]+-rf/ { bad=1 }
@@ -171,6 +171,40 @@ validate_profiles() {
 }
 
 validate_profiles
+
+validate_workflow_progression() {
+  scenario_root=$(mktemp -d "${TMPDIR:-/tmp}/ccb-validator-runs.XXXXXX") || { error 'cannot create workflow validation directory'; return; }
+  scenario_project="$scenario_root/project"; scenario_witness="$scenario_root/witness"
+  if ! "$TEMPLATE_ROOT/scripts/ccb.sh" init "$scenario_project" --yes >/dev/null; then error 'workflow scenario init failed'; return; fi
+  managed_count=$(find "$scenario_project/.ccb" -type f | wc -l | tr -d ' ')
+  managed_count=$((managed_count + 1))
+  [ "$managed_count" -eq 7 ] && ok 'project init: seven managed files' || error 'project init must create seven managed files'
+  if ! "$TEMPLATE_ROOT/scripts/ccb.sh" workflow start feature "$scenario_project" >/dev/null; then error 'workflow scenario start failed'; return; fi
+  scenario_id=$(run_output=$("$TEMPLATE_ROOT/scripts/ccb.sh" workflow status --latest "$scenario_project") && printf '%s\n' "$run_output" | sed -n 's/^Run ID: //p')
+  scenario_run="$scenario_project/.ccb/runs/$scenario_id"
+  if ! "$TEMPLATE_ROOT/scripts/ccb.sh" workflow resume --latest "$scenario_project" >/dev/null; then error 'workflow scenario resume failed'; return; fi
+  printf '# Step Result\n\nStatus: pending\n\nLiteral $(touch "%s")\n' "$scenario_witness" >"$scenario_run/01-manager/result.md"
+  scenario_before=$(cksum "$scenario_run/run.conf" "$scenario_run/01-manager/step.conf" "$scenario_run/01-manager/result.md" "$scenario_run/02-developer/input.md" "$scenario_run/02-developer/step.conf")
+  if env CCB_TEST_FAIL_POINT=after-result "$TEMPLATE_ROOT/scripts/ccb.sh" workflow complete-step --latest "$scenario_project" >/dev/null 2>&1; then error 'workflow rollback fail point was ignored'
+  else
+    scenario_after=$(cksum "$scenario_run/run.conf" "$scenario_run/01-manager/step.conf" "$scenario_run/01-manager/result.md" "$scenario_run/02-developer/input.md" "$scenario_run/02-developer/step.conf")
+    [ "$scenario_before" = "$scenario_after" ] && ok 'workflow rollback: byte-identical' || error 'workflow rollback changed files'
+  fi
+  if "$TEMPLATE_ROOT/scripts/ccb.sh" workflow complete-step --latest "$scenario_project" >/dev/null &&
+    grep -Fq 'Literal $(touch "' "$scenario_run/02-developer/input.md" &&
+    [ ! -e "$scenario_witness" ]; then ok 'workflow context transfer: literal and non-executing'; else error 'workflow literal transfer failed'; fi
+  "$TEMPLATE_ROOT/scripts/ccb.sh" workflow status --latest "$scenario_project" >/dev/null && ok 'workflow status: valid' || error 'workflow status failed'
+  "$TEMPLATE_ROOT/scripts/ccb.sh" workflow inspect --latest "$scenario_project" >/dev/null && ok 'workflow inspect: valid' || error 'workflow inspect failed'
+  "$TEMPLATE_ROOT/scripts/ccb.sh" config "$scenario_project" | grep -Fq 'In-progress runs: 1' && ok 'workflow config: valid' || error 'workflow config failed'
+  "$TEMPLATE_ROOT/scripts/ccb.sh" doctor "$scenario_project" --no-ollama --strict >/dev/null && ok 'workflow doctor strict: valid' || error 'workflow doctor strict failed'
+  residue=$(find "$scenario_run" \( -name '.ccb-transaction.*' -o -name '*.old' -o -name '*.new' \) -print -quit)
+  [ -z "$residue" ] && ok 'workflow transaction residue: none' || error 'workflow transaction residue found'
+  find "$scenario_root" -depth -type f -exec rm -f {} \;
+  find "$scenario_root" -depth -type l -exec rm -f {} \;
+  find "$scenario_root" -depth -type d -exec rmdir {} \;
+}
+
+validate_workflow_progression
 
 for role in manager graph graphiste developer reviewer; do
   if grep -qi "$role" "$TARGET/.ccb/AGENT_POLICY.md"; then

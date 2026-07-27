@@ -7,6 +7,7 @@ SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/project-skills-lib.sh"
 . "$SCRIPT_DIR/project-agents-lib.sh"
 . "$SCRIPT_DIR/project-workflows-lib.sh"
+. "$SCRIPT_DIR/project-runs-lib.sh"
 
 usage() { echo 'usage: ccb.sh config TARGET' >&2; exit "${1:-2}"; }
 [ "$#" -eq 1 ] || usage 2
@@ -32,4 +33,6 @@ if project_workflows_parse "$target/.ccb/workflows.conf"; then workflows_output=
   Status: not configured
   Project template: 1.7.0
   Capability: declarative workflows unavailable'; fi
-printf 'Project: %s\nProfile: %s\nProvider: %s\nDefault model: %s\nPlanner model: %s\nCoder model: %s\nReviewer model: %s\n%s\n%s\n%s\n' "$PROJECT_NAME" "$PROJECT_PROFILE" "$PROJECT_MODEL_PROVIDER" "$PROJECT_MODEL_DEFAULT" "$PROJECT_MODEL_PLANNER" "$PROJECT_MODEL_CODER" "$PROJECT_MODEL_REVIEWER" "$skills_output" "$agents_output" "$workflows_output"
+project_run_summary "$target/.ccb/runs"
+runs_output=$(printf 'Workflow runs\n-------------\n\nRuns directory: %s\nTotal runs: %s\nValid runs: %s\nInvalid runs: %s\nPending runs: %s\nIn-progress runs: %s\nBlocked runs: %s\nCompleted runs: %s\nCancelled runs: %s\nLatest run: %s\nLatest status: %s\nExecution: disabled' "$RUNS_DIRECTORY" "$RUNS_TOTAL" "$RUNS_VALID" "$RUNS_INVALID" "$RUNS_PENDING" "$RUNS_IN_PROGRESS" "$RUNS_BLOCKED" "$RUNS_COMPLETED" "$RUNS_CANCELLED" "$RUNS_LATEST" "$RUNS_LATEST_STATUS")
+printf 'Project: %s\nProfile: %s\nProvider: %s\nDefault model: %s\nPlanner model: %s\nCoder model: %s\nReviewer model: %s\n%s\n%s\n%s\n%s\n' "$PROJECT_NAME" "$PROJECT_PROFILE" "$PROJECT_MODEL_PROVIDER" "$PROJECT_MODEL_DEFAULT" "$PROJECT_MODEL_PLANNER" "$PROJECT_MODEL_CODER" "$PROJECT_MODEL_REVIEWER" "$skills_output" "$agents_output" "$workflows_output" "$runs_output"

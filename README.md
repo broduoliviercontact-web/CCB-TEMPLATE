@@ -84,17 +84,25 @@ Agent access is declarative only; it is not an operating-system sandbox. See [pr
 ./scripts/ccb.sh workflow plan feature ./mon-projet
 ```
 
-Workflows are plans only: V1.7.0-B does not execute agents. See [project workflows](docs/project-workflows.md).
+Workflows remain local orchestration records: V1.7.0 does not execute agents. See [project workflows](docs/project-workflows.md).
 
 ```sh
 ./scripts/ccb.sh workflow start feature ./mon-projet
 ```
 
-This C1 foundation creates a local workflow snapshot only; it executes no agent. See [project runs](docs/project-runs.md).
+Resume a run and record an explicit step result before completing it:
+
+```sh
+./scripts/ccb.sh workflow resume --latest ./mon-projet
+./scripts/ccb.sh workflow complete-step --latest ./mon-projet
+```
+
+`complete-step` validates the pending result, publishes it as completed, and transfers it literally to the next input through a rollback-protected multi-file transaction. No Markdown or shell is executed. See [project runs](docs/project-runs.md).
 
 ```sh
 ./scripts/ccb.sh workflow status --latest ./mon-projet
 ./scripts/ccb.sh workflow inspect RUN_ID ./mon-projet
+./scripts/ccb.sh config ./mon-projet
 ```
 
 ```sh
