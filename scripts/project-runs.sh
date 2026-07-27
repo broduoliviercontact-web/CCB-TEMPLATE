@@ -9,13 +9,27 @@ SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/project-runs-lib.sh"
 . "$SCRIPT_DIR/runtime/runtime-lib.sh"
 . "$SCRIPT_DIR/project-execution-lib.sh"
+. "$SCRIPT_DIR/project-orchestration-lib.sh"
 
 usage() {
-  echo 'usage: ccb.sh workflow start|status|inspect|resume|execute-step|complete-step ...' >&2
+  echo 'usage: ccb.sh workflow start|status|inspect|resume|execute-step|complete-step|run ...' >&2
   exit "${1:-2}"
 }
-now() { date '+%Y-%m-%dT%H:%M:%S%z'; }
-stamp() { date '+%Y%m%d-%H%M%S'; }
+now() {
+  if [ "${CCB_TEST_MODE:-0}" = 1 ] && [ -n "${CCB_TEST_NOW:-}" ]; then
+    case "$CCB_TEST_NOW" in ????-??-??T??:??:??[+-]????) printf '%s\n' "$CCB_TEST_NOW"; return 0;; *) return 1;; esac
+  fi
+  date '+%Y-%m-%dT%H:%M:%S%z'
+}
+stamp() {
+  if [ -n "${CCB_TEST_RUN_TIMESTAMP:-}" ]; then
+    stamp_date=${CCB_TEST_RUN_TIMESTAMP%%-*}; stamp_time=${CCB_TEST_RUN_TIMESTAMP#*-}
+    case "$stamp_date$stamp_time" in *[!0-9]*) return 1;; esac
+    [ "${#stamp_date}" -eq 8 ] && [ "${#stamp_time}" -eq 6 ] || return 1
+    printf '%s\n' "$CCB_TEST_RUN_TIMESTAMP"; return 0
+  fi
+  date '+%Y%m%d-%H%M%S'
+}
 write_run() {
   file=$1
   temp=$(mktemp "$(dirname "$file")/.run.conf.tmp.XXXXXX") || return 1
@@ -61,6 +75,16 @@ load_execution_summary() {
   fi
 }
 
+load_orchestration_summary() {
+  ORCHESTRATION_STATUS=none; ORCHESTRATION_MODE=none; ORCHESTRATION_STARTED=; ORCHESTRATION_UPDATED=
+  ORCHESTRATION_COMPLETED=; ORCHESTRATION_CURRENT=0; ORCHESTRATION_STEPS_COMPLETED=0
+  ORCHESTRATION_STEP_COUNT=$RUN_COUNT; ORCHESTRATION_ACTIONS=0; ORCHESTRATION_ERROR=
+  orchestration_summary_file="$resolved_dir/orchestration.conf"
+  if [ -e "$orchestration_summary_file" ] || [ -L "$orchestration_summary_file" ]; then
+    project_orchestration_parse_conf "$orchestration_summary_file" || return 1
+  fi
+}
+
 complete_step_restore_all() {
   restored=0
   project_run_transaction_restore "$transaction_dir/current-step.conf.old" "$current_step_file" || restored=1
@@ -87,9 +111,11 @@ complete_step_abort() {
     if complete_step_restore_all && project_run_transaction_cleanup "$transaction_dir" "$resolved_dir"; then
       transaction_dir=
       echo 'error: workflow transaction failed and was rolled back' >&2
+      orchestration_finish_on_exit 2>/dev/null || :
       exit 1
     fi
     echo 'error: workflow transaction rollback failed' >&2
+    orchestration_finish_on_exit 2>/dev/null || :
     exit 1
   fi
   if [ -n "${transaction_dir:-}" ]; then
@@ -98,6 +124,7 @@ complete_step_abort() {
       exit 1
     }
   fi
+  orchestration_finish_on_exit 2>/dev/null || :
   exit 1
 }
 
@@ -106,7 +133,7 @@ complete_step_trap() {
 }
 
 execution_lock_cleanup() {
-  trap - EXIT HUP INT TERM
+  [ "${orchestration_internal:-0}" = 1 ] || trap - EXIT HUP INT TERM
   if [ "${execution_lock_created:-0}" = 1 ] && [ -n "${execution_lock_dir:-}" ] &&
     [ "$(dirname "$execution_lock_dir")" = "$resolved_dir" ] &&
     [ "$(basename "$execution_lock_dir")" = .ccb-execution-lock ] &&
@@ -117,6 +144,58 @@ execution_lock_cleanup() {
   execution_lock_created=0
 }
 
+automation_lock_refuse_manual() {
+  [ "${orchestration_internal:-0}" != 1 ] || return 0
+  lock="$resolved_dir/.ccb-orchestration-lock"
+  if [ -e "$lock" ] || [ -L "$lock" ]; then
+    echo 'error: workflow run is controlled by an active automation' >&2
+    return 1
+  fi
+}
+
+orchestration_remove_lock() {
+  [ "${orchestration_lock_created:-0}" = 1 ] || return 0
+  [ -d "$orchestration_lock_dir" ] && [ ! -L "$orchestration_lock_dir" ] || return 1
+  [ ! -e "$orchestration_lock_dir/metadata" ] || { [ -f "$orchestration_lock_dir/metadata" ] && [ ! -L "$orchestration_lock_dir/metadata" ] && rm -f "$orchestration_lock_dir/metadata"; }
+  rmdir "$orchestration_lock_dir" || return 1
+  orchestration_lock_created=0
+}
+
+orchestration_finish_on_exit() {
+  [ "${orchestration_active:-0}" = 1 ] || return 0
+  trap - EXIT HUP INT TERM
+  [ "${execution_lock_created:-0}" = 1 ] && execution_lock_cleanup 2>/dev/null || :
+  run_parse_conf "$resolved_dir/run.conf" 2>/dev/null || :
+  done_count=$(project_orchestration_count_completed "$resolved_dir" "${RUN_COUNT:-1}" 2>/dev/null || printf '0')
+  finished=$(now)
+  status=${orchestration_exit_status:-failed}; error=${orchestration_exit_error:-workflow-action-failed}
+  project_orchestration_write_conf "$resolved_dir/orchestration.conf" "$status" "$orchestration_started" "$finished" "$finished" "${RUN_CURRENT:-1}" "$done_count" "${RUN_COUNT:-1}" "${orchestration_actions:-0}" "$error" 2>/dev/null || :
+  orchestration_remove_lock 2>/dev/null || :
+  orchestration_active=0
+}
+
+orchestration_arm_traps() {
+  trap 'orchestration_finish_on_exit' EXIT
+  trap 'orchestration_exit_status=interrupted; orchestration_exit_error=signal; orchestration_finish_on_exit; exit 1' HUP INT TERM
+}
+
+workflow_resume_current() {
+  step_dir=$(current_step_directory); run_step_parse "$step_dir/step.conf" || return 1
+  case "$RUN_STATUS:$STEP_STATUS" in
+    in-progress:in-progress) echo '[OK] workflow run already in progress'; return 0;;
+    pending:ready|in-progress:ready|blocked:blocked) :;;
+    completed:*) echo 'error: workflow run is already completed' >&2; return 1;;
+    cancelled:*) echo 'error: cancelled workflow run cannot be resumed' >&2; return 1;;
+    *) echo 'error: run state cannot be resumed' >&2; return 1;;
+  esac
+  ts=$(now); STEP_STATUS=in-progress; [ -n "$STEP_STARTED" ] || STEP_STARTED=$ts
+  run_write_step_conf "$step_dir/step.conf" || return 1
+  RUN_STATUS=in-progress; RUN_UPDATED=$ts; write_run "$resolved_dir/run.conf" || return 1
+  printf '[OK] workflow run resumed\nRun ID: %s\nStatus: in-progress\nCurrent step: %s — %s\nExecution: disabled\n' "$RUN_ID" "$RUN_CURRENT" "$STEP_ROLE"
+}
+
+orchestration_internal=0
+dispatch() {
 command=${1:-}
 shift || :
 case "$command" in
@@ -128,7 +207,8 @@ case "$command" in
     runs="$target/.ccb/runs"
     [ ! -e "$runs" ] || { [ -d "$runs" ] && [ ! -L "$runs" ] || { echo 'error: unsafe runs directory' >&2; exit 1; }; }
     [ -d "$runs" ] || mkdir "$runs" || exit 1
-    base="$(stamp)-$name"; runid=$base; n=2
+    timestamp=$(stamp) || { echo 'error: invalid workflow timestamp' >&2; exit 2; }
+    base="$timestamp-$name"; runid=$base; n=2
     while [ -e "$runs/$runid" ] || [ -L "$runs/$runid" ]; do runid="$base-$n"; n=$((n + 1)); done
     tmp=$(mktemp -d "$runs/.${runid}.tmp.XXXXXX") || exit 1
     created=$(now); RUN_ID=$runid; RUN_WORKFLOW=$name; RUN_STATUS=pending; RUN_CURRENT=1
@@ -156,9 +236,10 @@ case "$command" in
   status|inspect)
     [ "$#" -le 2 ] || usage 2
     resolve_run_args "${1:-}" "${2:-.}" || { code=$?; [ "$code" -eq 2 ] && usage 2; echo 'error: invalid or missing workflow run' >&2; exit 1; }
+    load_orchestration_summary || { echo 'error: invalid orchestration metadata' >&2; exit 1; }
     if [ "$command" = status ]; then
       status_step_dir=$(current_step_directory); load_execution_summary "$status_step_dir" || { echo 'error: invalid execution metadata' >&2; exit 1; }
-      printf 'CCB Workflow Run\nRun ID: %s\nWorkflow: %s\nStatus: %s\nCurrent step: %s/%s\nCreated: %s\nUpdated: %s\nExecution status: %s\nExecution provider: %s\nExecution model: %s\nExecution attempt: %s\n\nSteps:\n' "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_COUNT" "$RUN_CREATED" "$RUN_UPDATED" "$EXECUTION_STATUS" "$EXECUTION_PROVIDER" "$EXECUTION_MODEL" "$EXECUTION_ATTEMPT"
+      printf 'CCB Workflow Run\nRun ID: %s\nWorkflow: %s\nStatus: %s\nCurrent step: %s/%s\nCreated: %s\nUpdated: %s\nExecution status: %s\nExecution provider: %s\nExecution model: %s\nExecution attempt: %s\nAutomation status: %s\nAutomation mode: %s\nAutomation steps: %s/%s\nAutomation actions: %s\nAutomation error: %s\n\nSteps:\n' "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_COUNT" "$RUN_CREATED" "$RUN_UPDATED" "$EXECUTION_STATUS" "$EXECUTION_PROVIDER" "$EXECUTION_MODEL" "$EXECUTION_ATTEMPT" "$ORCHESTRATION_STATUS" "$ORCHESTRATION_MODE" "$ORCHESTRATION_STEPS_COMPLETED" "$ORCHESTRATION_STEP_COUNT" "$ORCHESTRATION_ACTIONS" "$( [ -n "$ORCHESTRATION_ERROR" ] && printf present || printf none)"
     else
       printf 'Run ID: %s\nPath: .ccb/runs/%s\nWorkflow: %s\nStatus: %s\nCurrent step: %s\nCreated: %s\nUpdated: %s\n' "$RUN_ID" "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_CREATED" "$RUN_UPDATED"
     fi
@@ -177,93 +258,31 @@ case "$command" in
       fi
       i=$((i + 1))
     done
-    [ "$command" = status ] || printf '\nAutomatic workflow loop: disabled\n'
+    if [ "$command" = inspect ]; then
+      lock_status=absent; [ ! -e "$resolved_dir/.ccb-orchestration-lock" ] && [ ! -L "$resolved_dir/.ccb-orchestration-lock" ] || lock_status=present
+      printf '\nAutomation\n  Status: %s\n  Mode: %s\n  Started: %s\n  Updated: %s\n  Completed: %s\n  Steps completed: %s/%s\n  Actions: %s\n  Error: %s\n  Lock: %s\n' "$ORCHESTRATION_STATUS" "$ORCHESTRATION_MODE" "${ORCHESTRATION_STARTED:-none}" "${ORCHESTRATION_UPDATED:-none}" "${ORCHESTRATION_COMPLETED:-none}" "$ORCHESTRATION_STEPS_COMPLETED" "$ORCHESTRATION_STEP_COUNT" "$ORCHESTRATION_ACTIONS" "$( [ -n "$ORCHESTRATION_ERROR" ] && printf present || printf none)" "$lock_status"
+    fi
     ;;
   resume)
     [ "$#" -le 2 ] || usage 2
     resolve_run_args "${1:-}" "${2:-.}" || { code=$?; [ "$code" -eq 2 ] && usage 2; echo 'error: invalid workflow run' >&2; exit 1; }
-    step_dir=$(current_step_directory); run_step_parse "$step_dir/step.conf" || exit 1
-    case "$RUN_STATUS:$STEP_STATUS" in in-progress:in-progress) echo '[OK] workflow run already in progress'; exit 0;; pending:ready|in-progress:ready|blocked:blocked) :;; completed:*) echo 'error: workflow run is already completed' >&2; exit 1;; cancelled:*) echo 'error: cancelled workflow run cannot be resumed' >&2; exit 1;; *) echo 'error: run state cannot be resumed' >&2; exit 1;; esac
-    ts=$(now); STEP_STATUS=in-progress; [ -n "$STEP_STARTED" ] || STEP_STARTED=$ts
-    run_write_step_conf "$step_dir/step.conf" || exit 1; RUN_STATUS=in-progress; RUN_UPDATED=$ts; write_run "$resolved_dir/run.conf" || exit 1
-    printf '[OK] workflow run resumed\nRun ID: %s\nStatus: in-progress\nCurrent step: %s — %s\nExecution: disabled\n' "$RUN_ID" "$RUN_CURRENT" "$STEP_ROLE"
+    automation_lock_refuse_manual || exit 1
+    workflow_resume_current || exit 1
     ;;
   execute-step)
     [ "$#" -le 2 ] || usage 2
     resolve_run_args "${1:-}" "${2:-.}" || { code=$?; [ "$code" -eq 2 ] && usage 2; echo 'error: invalid workflow run' >&2; exit 1; }
-    case "$RUN_STATUS" in
-      pending) echo 'error: workflow run must be resumed before execution' >&2; exit 1;;
-      blocked) echo 'error: blocked workflow run cannot be executed' >&2; exit 1;;
-      completed) echo 'error: workflow run is already completed' >&2; exit 1;;
-      cancelled) echo 'error: cancelled workflow run cannot be executed' >&2; exit 1;;
-      in-progress) :;;
-      *) echo 'error: invalid workflow run' >&2; exit 1;;
-    esac
-    step_dir=$(current_step_directory); run_step_parse "$step_dir/step.conf" || { echo 'error: invalid current workflow step' >&2; exit 1; }
-    [ "$STEP_STATUS" = in-progress ] || { echo 'error: current workflow step is not in progress' >&2; exit 1; }
-    project_execution_state_is_coherent "$resolved_dir" || { echo 'error: invalid workflow run state' >&2; exit 1; }
-    [ "$STEP_PROVIDER" = ollama ] || { echo "error: unsupported execution provider in D1: $STEP_PROVIDER" >&2; exit 1; }
-    result_file="$step_dir/result.md"
-    project_execution_result_is_template "$result_file" || { echo 'error: current step already contains an explicit result' >&2; exit 1; }
-    context_file="$resolved_dir/context.md"; input_file="$step_dir/input.md"
-    [ -f "$context_file" ] && [ ! -L "$context_file" ] && [ -f "$input_file" ] && [ ! -L "$input_file" ] || { echo 'error: unsafe workflow execution snapshot' >&2; exit 1; }
-
-    execution_lock_dir="$resolved_dir/.ccb-execution-lock"; execution_lock_created=0
-    if ! mkdir "$execution_lock_dir" 2>/dev/null; then echo 'error: workflow run execution is already locked' >&2; exit 1; fi
-    execution_lock_created=1; chmod 700 "$execution_lock_dir" || { execution_lock_cleanup; exit 1; }
-    trap 'execution_lock_cleanup' EXIT
-    trap 'execution_lock_cleanup; exit 1' HUP INT TERM
-    started=$(now)
-    printf 'RUN_ID=%s\nSTEP=%s\nSTARTED_AT=%s\nPID=%s\n' "$RUN_ID" "$STEP_NUMBER" "$started" "$$" >"$execution_lock_dir/metadata" || { execution_lock_cleanup; exit 1; }
-    chmod 600 "$execution_lock_dir/metadata" || { execution_lock_cleanup; exit 1; }
-    prompt_file=$(mktemp "${TMPDIR:-/tmp}/ccb-workflow-prompt.XXXXXX") || { execution_lock_cleanup; exit 1; }
-    response_file=$(mktemp "${TMPDIR:-/tmp}/ccb-workflow-response.XXXXXX") || { rm -f "$prompt_file"; execution_lock_cleanup; exit 1; }
-    prepared_result=$(mktemp "$step_dir/.result.md.execution-prepared.XXXXXX") || { rm -f "$prompt_file" "$response_file"; execution_lock_cleanup; exit 1; }
-    attempt=1; execution_conf="$step_dir/execution.conf"
-    if [ -e "$execution_conf" ] || [ -L "$execution_conf" ]; then
-      project_execution_parse_conf "$execution_conf" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: invalid execution metadata' >&2; exit 1; }
-      attempt=$((EXECUTION_ATTEMPT + 1))
+    automation_lock_refuse_manual || exit 1
+    if [ "$orchestration_internal" != 1 ]; then
+      trap 'execution_lock_cleanup' EXIT
+      trap 'execution_lock_cleanup; exit 1' HUP INT TERM
     fi
-    project_execution_build_prompt "$prompt_file" "$context_file" "$input_file" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
-    project_execution_write_conf "$execution_conf" running ollama "$STEP_MODEL" "$attempt" "$started" '' '' || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
-    "$SCRIPT_DIR/provider-router.sh" generate-file ollama "$STEP_MODEL" "$prompt_file" "$response_file"
-    provider_status=$?
-    if [ "$provider_status" -ne 0 ]; then
-      case "$provider_status" in 28) execution_error=timeout; diagnostic='error: Ollama request timed out';; 65) execution_error=invalid-response; diagnostic='error: invalid Ollama response';; 67) execution_error=oversized-response; diagnostic='error: workflow provider response is too large';; 68) execution_error=unsafe-endpoint; diagnostic='error: unsupported Ollama endpoint in D1';; *) execution_error=request-failed; diagnostic='error: Ollama request failed';; esac
-      completed=$(now)
-      if ! project_execution_write_conf "$execution_conf" failed ollama "$STEP_MODEL" "$attempt" "$started" "$completed" "$execution_error"; then diagnostic='error: cannot write workflow execution metadata'; fi
-      rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup
-      echo "$diagnostic" >&2; exit 1
-    fi
-    response_size=$(wc -c <"$response_file" | tr -d ' ')
-    if [ "$response_size" -gt 262144 ]; then
-      completed=$(now)
-      if ! project_execution_write_conf "$execution_conf" failed ollama "$STEP_MODEL" "$attempt" "$started" "$completed" oversized-response; then rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: cannot write workflow execution metadata' >&2; exit 1; fi
-      rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup
-      echo 'error: workflow provider response is too large' >&2; exit 1
-    fi
-    response_body=$(tr -d '[:space:]' <"$response_file")
-    if [ -z "$response_body" ]; then
-      completed=$(now)
-      if ! project_execution_write_conf "$execution_conf" failed ollama "$STEP_MODEL" "$attempt" "$started" "$completed" empty-result; then rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: cannot write workflow execution metadata' >&2; exit 1; fi
-      rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup
-      echo 'error: workflow provider returned an empty result' >&2; exit 1
-    fi
-    { printf '# Step Result\n\nStatus: pending\n\n'; cat "$response_file"; } >"$prepared_result" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
-    if ! project_run_validate_pending_result "$prepared_result"; then
-      completed=$(now); project_execution_write_conf "$execution_conf" failed ollama "$STEP_MODEL" "$attempt" "$started" "$completed" invalid-response
-      rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: invalid Ollama response' >&2; exit 1
-    fi
-    project_execution_result_is_template "$result_file" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; echo 'error: current step already contains an explicit result' >&2; exit 1; }
-    project_execution_publish_result "$prepared_result" "$result_file" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
-    project_run_validate_pending_result "$result_file" || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
-    completed=$(now); project_execution_write_conf "$execution_conf" succeeded ollama "$STEP_MODEL" "$attempt" "$started" "$completed" '' || { rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup; exit 1; }
-    rm -f "$prompt_file" "$response_file" "$prepared_result"; execution_lock_cleanup
-    printf '[OK] workflow step executed\nRun ID: %s\nStep: %s — %s\nProvider: ollama\nModel: %s\nResult: %s/result.md\nNext action: workflow complete-step\n' "$RUN_ID" "$STEP_NUMBER" "$STEP_ROLE" "$STEP_MODEL" "$(basename "$step_dir")"
+    project_execution_run_current || exit 1
     ;;
   complete-step)
     [ "$#" -le 2 ] || usage 2
     resolve_run_args "${1:-}" "${2:-.}" || { code=$?; [ "$code" -eq 2 ] && usage 2; echo 'error: invalid workflow run' >&2; exit 1; }
+    automation_lock_refuse_manual || exit 1
     [ "$RUN_STATUS" = in-progress ] || { echo 'error: workflow run is not in progress' >&2; exit 1; }
     step_dir=$(current_step_directory); run_step_parse "$step_dir/step.conf" || exit 1
     [ "$STEP_STATUS" = in-progress ] || { echo 'error: current step is not in progress' >&2; exit 1; }
@@ -364,5 +383,103 @@ case "$command" in
       printf '[OK] workflow run completed\nRun ID: %s\nWorkflow: %s\nSteps completed: %s/%s\n' "$RUN_ID" "$RUN_WORKFLOW" "$RUN_COUNT" "$RUN_COUNT"
     fi
     ;;
+  run)
+    if [ "${1:-}" = --help ] || [ "${1:-}" = -h ]; then
+      [ "$#" -eq 1 ] || usage 2
+      echo 'usage: ccb.sh workflow run RUN_ID [TARGET] | ccb.sh workflow run --latest [TARGET]'
+      return 0
+    fi
+    [ "$#" -le 2 ] || usage 2
+    requested=${1:-}; target=${2:-.}
+    resolve_run_args "$requested" "$target" || { code=$?; [ "$code" -eq 2 ] && usage 2; echo 'error: invalid or missing workflow run' >&2; exit 1; }
+    orchestration_lock_dir="$resolved_dir/.ccb-orchestration-lock"
+    if [ -e "$orchestration_lock_dir" ] || [ -L "$orchestration_lock_dir" ]; then
+      if [ -d "$orchestration_lock_dir" ] && [ ! -L "$orchestration_lock_dir" ]; then echo 'error: workflow run automation is already locked' >&2
+      else echo 'error: workflow run is controlled by an active automation' >&2; fi
+      exit 1
+    fi
+    case "$RUN_STATUS" in
+      completed)
+        existing_orchestration=none
+        if [ -e "$resolved_dir/orchestration.conf" ] || [ -L "$resolved_dir/orchestration.conf" ]; then
+          project_orchestration_parse_conf "$resolved_dir/orchestration.conf" || { echo 'error: invalid orchestration metadata' >&2; exit 1; }
+          existing_orchestration=$ORCHESTRATION_STATUS
+        fi
+        case "$existing_orchestration" in interrupted|failed|running) :;; *) echo '[OK] workflow run already completed'; exit 0;; esac
+        ;;
+      blocked) echo 'error: blocked workflow run cannot be automated' >&2; exit 1;;
+      cancelled) echo 'error: cancelled workflow run cannot be automated' >&2; exit 1;;
+      pending|in-progress) :;; *) echo 'error: invalid workflow run' >&2; exit 1;;
+    esac
+    orchestration_lock_created=0
+    if ! mkdir "$orchestration_lock_dir" 2>/dev/null; then echo 'error: workflow run automation is already locked' >&2; exit 1; fi
+    orchestration_lock_created=1
+    chmod 700 "$orchestration_lock_dir" || { orchestration_remove_lock; exit 1; }
+    orchestration_active=1; orchestration_internal=1; orchestration_actions=0
+    orchestration_started=$(now); orchestration_exit_status=failed; orchestration_exit_error=workflow-action-failed
+    printf 'RUN_ID=%s\nSTARTED_AT=%s\nPID=%s\n' "$RUN_ID" "$orchestration_started" "$$" >"$orchestration_lock_dir/metadata" || { orchestration_finish_on_exit; exit 1; }
+    chmod 600 "$orchestration_lock_dir/metadata" || { orchestration_finish_on_exit; exit 1; }
+    project_orchestration_fail_point_is_valid || { echo 'error: invalid workflow orchestration test hook' >&2; orchestration_finish_on_exit; exit 1; }
+    done_count=$(project_orchestration_count_completed "$resolved_dir" "$RUN_COUNT") || { orchestration_finish_on_exit; exit 1; }
+    project_orchestration_write_conf "$resolved_dir/orchestration.conf" running "$orchestration_started" "$orchestration_started" '' "$RUN_CURRENT" "$done_count" "$RUN_COUNT" 0 '' || { orchestration_finish_on_exit; exit 1; }
+    orchestration_arm_traps
+    printf 'Workflow automation\n===================\n\nRun ID: %s\nWorkflow: %s\nMode: sequential\nSteps: %s\nStarting step: %s\nExecution provider: local Ollama\nAutomatic retries: disabled\n\n' "$RUN_ID" "$RUN_WORKFLOW" "$RUN_COUNT" "$RUN_CURRENT"
+    safe_limit=$((RUN_COUNT * 3 + 3))
+    while [ "$orchestration_actions" -lt "$safe_limit" ]; do
+      run_validate_directory "$resolved_dir" || { orchestration_exit_error=invalid-run; echo 'error: invalid workflow run' >&2; exit 1; }
+      case "$RUN_STATUS" in
+        completed)
+          project_orchestration_test_interrupt before-success || exit 1
+          done_count=$(project_orchestration_count_completed "$resolved_dir" "$RUN_COUNT") || exit 1
+          finished=$(now)
+          project_orchestration_write_conf "$resolved_dir/orchestration.conf" succeeded "$orchestration_started" "$finished" "$finished" "$RUN_COUNT" "$done_count" "$RUN_COUNT" "$orchestration_actions" '' || exit 1
+          orchestration_active=0; trap - EXIT HUP INT TERM; orchestration_remove_lock || exit 1
+          printf '[OK] workflow automation completed\nRun ID: %s\nStatus: completed\nProgress: %s/%s\nSteps executed: %s\nActions: %s\nExecution mode: sequential\nAutomatic retries: disabled\n' "$RUN_ID" "$done_count" "$RUN_COUNT" "$done_count" "$orchestration_actions"
+          return 0;;
+        blocked) orchestration_exit_error=blocked-run; echo 'error: blocked workflow run cannot be automated' >&2; exit 1;;
+        cancelled) orchestration_exit_error=cancelled-run; echo 'error: cancelled workflow run cannot be automated' >&2; exit 1;;
+      esac
+      step_dir=$(current_step_directory); run_step_parse "$step_dir/step.conf" || { orchestration_exit_error=invalid-step; exit 1; }
+      action=
+      if [ "$STEP_STATUS" = ready ]; then action=resume
+      elif [ "$STEP_STATUS" = in-progress ]; then
+        result_file="$step_dir/result.md"; execution_file="$step_dir/execution.conf"
+        if project_execution_result_is_template "$result_file"; then
+          if [ -e "$execution_file" ] || [ -L "$execution_file" ]; then
+            project_execution_parse_conf "$execution_file" || { orchestration_exit_error=invalid-execution; echo 'error: invalid execution metadata' >&2; exit 1; }
+            case "$EXECUTION_STATUS" in
+              failed) orchestration_exit_error=previous-execution-failed; echo 'error: workflow step execution previously failed; automatic retry is disabled' >&2; exit 1;;
+              running) orchestration_exit_error=execution-running; echo 'error: workflow step execution is already running' >&2; exit 1;;
+              succeeded) orchestration_exit_error=invalid-result; echo 'error: successful execution has no explicit result' >&2; exit 1;;
+            esac
+          fi
+          action=execute-step
+        elif project_run_validate_pending_result "$result_file"; then action=complete-step
+        else orchestration_exit_error=invalid-result; echo 'error: invalid current workflow result' >&2; exit 1
+        fi
+      else orchestration_exit_error=invalid-state; echo 'error: workflow automation found an incoherent step state' >&2; exit 1
+      fi
+      orchestration_actions=$((orchestration_actions + 1))
+      [ "$orchestration_actions" -le "$safe_limit" ] || { orchestration_exit_error=action-limit; echo 'error: workflow automation exceeded its safe action limit' >&2; exit 1; }
+      printf '[%s/%s] %s %s\n' "$RUN_CURRENT" "$RUN_COUNT" "$action" "$STEP_ROLE"
+      dispatch "$action" "$RUN_ID" "$resolved_target"
+      orchestration_arm_traps
+      case "$action" in
+        resume) project_orchestration_test_interrupt after-resume || exit 1;;
+        execute-step) project_orchestration_test_interrupt after-execute || exit 1;;
+        complete-step) project_orchestration_test_interrupt after-complete || exit 1; project_orchestration_test_interrupt before-next-step || exit 1;;
+      esac
+      run_validate_directory "$resolved_dir" || { orchestration_exit_error=invalid-run; exit 1; }
+      done_count=$(project_orchestration_count_completed "$resolved_dir" "$RUN_COUNT") || exit 1
+      updated=$(now)
+      project_orchestration_write_conf "$resolved_dir/orchestration.conf" running "$orchestration_started" "$updated" '' "$RUN_CURRENT" "$done_count" "$RUN_COUNT" "$orchestration_actions" '' || exit 1
+    done
+    orchestration_exit_error=action-limit
+    echo 'error: workflow automation exceeded its safe action limit' >&2
+    exit 1
+    ;;
   *) usage 2;;
 esac
+}
+
+dispatch "$@"

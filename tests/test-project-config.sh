@@ -13,6 +13,8 @@ printf '%s' "$output" | grep -F 'Provider: ollama' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Coder model:' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Runs directory: absent' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Total runs: 0' >/dev/null || exit 1
+printf '%s' "$output" | grep -F 'Automation support: sequential' >/dev/null || exit 1
+printf '%s' "$output" | grep -F 'Runs automated successfully: 0' >/dev/null || exit 1
 [ ! -e "$target/.ccb/runs" ] || exit 1
 mkdir "$target/.ccb/runs"
 output=$("$CLI" config "$target") || exit 1
@@ -35,16 +37,16 @@ if printf '%s' "$output" | grep -F 'MARKDOWN_SECRET_MUST_NOT_APPEAR' >/dev/null;
 output=$("$CLI" config "$target") || exit 1
 printf '%s' "$output" | grep -F 'In-progress runs: 1' >/dev/null || exit 1
 
-cp -R "$run_dir" "$target/.ccb/runs/20260727-120000-feature-2"
-sed "s/CCB_RUN_ID=$run_id/CCB_RUN_ID=20260727-120000-feature-2/; s/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=blocked/" "$run_dir/run.conf" >"$target/.ccb/runs/20260727-120000-feature-2/run.conf"
-sed 's/CCB_STEP_STATUS=in-progress/CCB_STEP_STATUS=blocked/' "$run_dir/01-manager/step.conf" >"$target/.ccb/runs/20260727-120000-feature-2/01-manager/step.conf"
-cp -R "$run_dir" "$target/.ccb/runs/20260727-120000-feature-10"
-sed "s/CCB_RUN_ID=$run_id/CCB_RUN_ID=20260727-120000-feature-10/; s/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=cancelled/" "$run_dir/run.conf" >"$target/.ccb/runs/20260727-120000-feature-10/run.conf"
+cp -R "$run_dir" "$target/.ccb/runs/20260727-235959-feature-2"
+sed "s/CCB_RUN_ID=$run_id/CCB_RUN_ID=20260727-235959-feature-2/; s/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=blocked/" "$run_dir/run.conf" >"$target/.ccb/runs/20260727-235959-feature-2/run.conf"
+sed 's/CCB_STEP_STATUS=in-progress/CCB_STEP_STATUS=blocked/' "$run_dir/01-manager/step.conf" >"$target/.ccb/runs/20260727-235959-feature-2/01-manager/step.conf"
+cp -R "$run_dir" "$target/.ccb/runs/20260727-235959-feature-10"
+sed "s/CCB_RUN_ID=$run_id/CCB_RUN_ID=20260727-235959-feature-10/; s/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=cancelled/" "$run_dir/run.conf" >"$target/.ccb/runs/20260727-235959-feature-10/run.conf"
 cp -R "$run_dir" "$target/.ccb/runs/20260727-110000-feature"
 sed "s/CCB_RUN_ID=$run_id/CCB_RUN_ID=20260727-110000-feature/; s/CCB_RUN_STATUS=in-progress/CCB_RUN_STATUS=completed/" "$run_dir/run.conf" >"$target/.ccb/runs/20260727-110000-feature/run.conf"
 mkdir "$target/.ccb/runs/invalid-run"
 printf 'CCB_EXECUTION_VERSION=1\nCCB_EXECUTION_STATUS=succeeded\nCCB_EXECUTION_PROVIDER=ollama\nCCB_EXECUTION_MODEL=qwen3:8b\nCCB_EXECUTION_ATTEMPT=1\nCCB_EXECUTION_STARTED_AT=2026-07-27T10:00:00+0200\nCCB_EXECUTION_COMPLETED_AT=2026-07-27T10:01:00+0200\nCCB_EXECUTION_ERROR=\n' >"$run_dir/01-manager/execution.conf"
-printf 'CCB_EXECUTION_VERSION=1\nCCB_EXECUTION_STATUS=failed\nCCB_EXECUTION_PROVIDER=ollama\nCCB_EXECUTION_MODEL=qwen3:8b\nCCB_EXECUTION_ATTEMPT=1\nCCB_EXECUTION_STARTED_AT=2026-07-27T10:00:00+0200\nCCB_EXECUTION_COMPLETED_AT=2026-07-27T10:01:00+0200\nCCB_EXECUTION_ERROR=request-failed\n' >"$target/.ccb/runs/20260727-120000-feature-2/01-manager/execution.conf"
+printf 'CCB_EXECUTION_VERSION=1\nCCB_EXECUTION_STATUS=failed\nCCB_EXECUTION_PROVIDER=ollama\nCCB_EXECUTION_MODEL=qwen3:8b\nCCB_EXECUTION_ATTEMPT=1\nCCB_EXECUTION_STARTED_AT=2026-07-27T10:00:00+0200\nCCB_EXECUTION_COMPLETED_AT=2026-07-27T10:01:00+0200\nCCB_EXECUTION_ERROR=request-failed\n' >"$target/.ccb/runs/20260727-235959-feature-2/01-manager/execution.conf"
 output=$("$CLI" config "$target") || exit 1
 printf '%s' "$output" | grep -F 'Total runs: 5' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Valid runs: 4' >/dev/null || exit 1
@@ -52,7 +54,7 @@ printf '%s' "$output" | grep -F 'Invalid runs: 1' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Blocked runs: 1' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Cancelled runs: 1' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Completed runs: 1' >/dev/null || exit 1
-printf '%s' "$output" | grep -F 'Latest run: 20260727-120000-feature-10' >/dev/null || exit 1
+printf '%s' "$output" | grep -F 'Latest run: 20260727-235959-feature-10' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Latest status: cancelled' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Runs with succeeded execution: 1' >/dev/null || exit 1
 printf '%s' "$output" | grep -F 'Runs with failed execution: 1' >/dev/null || exit 1

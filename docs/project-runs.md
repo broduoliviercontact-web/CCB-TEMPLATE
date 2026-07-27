@@ -1,4 +1,4 @@
-# Persistent workflow runs — C3
+# Persistent workflow runs — D2
 
 `ccb workflow start NAME TARGET` materializes a local workflow snapshot in `.ccb/runs/`. `workflow status` and `workflow inspect` are read-only; every run-oriented command accepts an explicit run ID, while inspection, resume, and completion also accept `--latest`.
 
@@ -16,6 +16,10 @@ There is no C2-to-C3 migration. Progression commands do not launch a provider, a
 
 After `workflow resume`, `workflow execute-step RUN_ID TARGET` (or `--latest`) may execute exactly the current step through Ollama at `http://127.0.0.1:11434` or `http://localhost:11434`. All other endpoints are rejected. Connection and total timeouts are 5 and 120 seconds, redirects and proxies are disabled, and no retry is attempted. The command reads only the run's `context.md`, current `input.md`, and current `step.conf` snapshot. The bounded prompt is at most 1 MiB; the opaque response is at most 256 KiB and is atomically wrapped as a pending `result.md`. `execution.conf` records a bounded status without storing the prompt or HTTP response.
 
-A per-run directory lock prevents concurrent execution. Doctor reports residual locks but never removes them. Provider failures leave run and step state unchanged and keep the prior result. There are no automatic retries, completion, workflow loops, project traversal, remote providers, shell execution, Git operations, or project writes. Test-provider hooks work only when `CCB_TEST_MODE=1`.
+`workflow run RUN_ID TARGET` and `workflow run --latest TARGET` automate the existing `resume`, `execute-step`, and `complete-step` operations in strict sequence. The run directory is reloaded and validated before every decision. A successful execution is never repeated: an explicit pending result goes directly to completion, while a failed `execution.conf` stops with automatic retry disabled. The action limit is `step_count * 3 + 3`.
+
+`orchestration.conf` is an atomically written, strictly parsed checkpoint containing only bounded metadata. `.ccb-orchestration-lock` excludes another automation and the three manual mutators, while status, inspect, config, and Doctor remain read-only. Each action keeps its existing atomicity; D2 is not one global transaction. A failure preserves completed steps and resumes from disk on a later invocation. Test-only fail points require `CCB_TEST_MODE=1`.
+
+A per-run execution lock prevents concurrent provider calls. Doctor reports residual locks but never removes them. Provider failures leave run and step state unchanged and keep the prior result. The single-step command performs no automatic retry or completion; D2 supplies the separate bounded sequential loop. There is no project traversal, remote provider, shell execution, Git operation, or project write. Test-provider hooks work only when `CCB_TEST_MODE=1`.
 
 `workflow status` reports the current execution status, provider, snapshot model, and attempt. `workflow inspect` reports bounded execution metadata and result size, but never prints the prompt, context, input, result body, raw HTTP response, or secrets. Config reports how many runs contain succeeded or failed executions without contacting Ollama.

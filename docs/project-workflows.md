@@ -6,4 +6,6 @@ Workflows resolve roles from `agents.conf` and models from `models.conf`; they d
 
 Run state and literal context transfer are documented in [project runs](project-runs.md). There is no automatic C2-to-C3 migration.
 
-`workflow execute-step` is the only D1 execution entry point. It requires an explicitly resumed step and supports only a loopback Ollama endpoint; `complete-step` remains a separate manual action.
+`workflow execute-step` is the D1 single-step entry point. It requires an explicitly resumed step and supports only a loopback Ollama endpoint; `complete-step` remains the manual publication action.
+
+D2 adds `workflow run`, a bounded sequential loop over those same internal operations. It supports an explicit run ID or `--latest`, stops at the first error, performs no retry, and resumes from persisted checkpoints without double execution. There is no parallelism, remote provider, background process, Git operation, source-project mutation, or interpretation of model output.

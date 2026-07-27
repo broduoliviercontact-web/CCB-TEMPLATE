@@ -2,6 +2,9 @@
 
 ## 1.7.0
 
+- Add bounded sequential `workflow run` automation with persistent checkpoints, safe interruption recovery, a distinct orchestration lock, and no automatic retries.
+- Expose automation metadata safely through Status, Inspect, Config, and Doctor while keeping model content opaque.
+
 ### Added
 
 - Declarative `.ccb/agents.conf`, agent roles, and read-only agent inspection commands.

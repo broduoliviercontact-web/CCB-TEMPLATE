@@ -49,7 +49,7 @@ Commands:
   workflows [TARGET]              List declarative project workflows
   workflow show|plan NAME [TARGET]
   workflow validate [TARGET]
-  workflow start|status|inspect|resume|execute-step|complete-step ...
+  workflow start|status|inspect|resume|execute-step|complete-step|run ...
   agent show ROLE [TARGET]        Show one declarative agent
   agent validate [TARGET]         Validate declarative agents
   providers
@@ -298,7 +298,7 @@ case "${1:-}" in
   agent) shift; agent_command "$@"; exit $? ;;
   agents) shift; exec "$PROJECT_AGENTS" list "$@" ;;
   workflows) shift; exec "$PROJECT_WORKFLOWS" list "$@" ;;
-  workflow) shift; case "${1:-}" in start|status|inspect|resume|execute-step|complete-step) exec "$PROJECT_RUNS" "$@";; *) exec "$PROJECT_WORKFLOWS" "$@";; esac ;;
+  workflow) shift; case "${1:-}" in start|status|inspect|resume|execute-step|complete-step|run) exec "$PROJECT_RUNS" "$@";; *) exec "$PROJECT_WORKFLOWS" "$@";; esac ;;
   providers)
     if "$SCRIPT_DIR/provider-router.sh" available ollama . >/dev/null 2>&1; then echo 'Provider   Status   Details'; echo 'Ollama     READY    CLI available'; else echo 'Provider   Status   Details'; echo 'Ollama     MISSING  Install Ollama and ensure it is in PATH'; fi ;;
   provider) shift; provider_command "$@"; exit $? ;;

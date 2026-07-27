@@ -163,6 +163,7 @@ project_run_summary() {
   RUNS_DIRECTORY=absent; RUNS_TOTAL=0; RUNS_VALID=0; RUNS_INVALID=0
   RUNS_PENDING=0; RUNS_IN_PROGRESS=0; RUNS_BLOCKED=0; RUNS_COMPLETED=0; RUNS_CANCELLED=0
   RUNS_EXECUTION_SUCCEEDED=0; RUNS_EXECUTION_FAILED=0
+  RUNS_AUTOMATION_SUCCEEDED=0; RUNS_AUTOMATION_FAILED=0; RUNS_AUTOMATION_INTERRUPTED=0; RUNS_AUTOMATION_RUNNING=0
   RUNS_LATEST=none; RUNS_LATEST_STATUS=none; latest_key=
   [ ! -e "$runs_dir" ] && [ ! -L "$runs_dir" ] && return 0
   RUNS_DIRECTORY=present
@@ -191,6 +192,17 @@ project_run_summary() {
       done
       RUNS_EXECUTION_SUCCEEDED=$((RUNS_EXECUTION_SUCCEEDED + candidate_succeeded))
       RUNS_EXECUTION_FAILED=$((RUNS_EXECUTION_FAILED + candidate_failed))
+      orchestration_candidate="$candidate/orchestration.conf"
+      if [ -e "$orchestration_candidate" ] || [ -L "$orchestration_candidate" ]; then
+        if project_orchestration_parse_conf "$orchestration_candidate"; then
+          case "$ORCHESTRATION_STATUS" in
+            succeeded) RUNS_AUTOMATION_SUCCEEDED=$((RUNS_AUTOMATION_SUCCEEDED + 1));;
+            failed) RUNS_AUTOMATION_FAILED=$((RUNS_AUTOMATION_FAILED + 1));;
+            interrupted) RUNS_AUTOMATION_INTERRUPTED=$((RUNS_AUTOMATION_INTERRUPTED + 1));;
+            running) RUNS_AUTOMATION_RUNNING=$((RUNS_AUTOMATION_RUNNING + 1));;
+          esac
+        fi
+      fi
       candidate_key=$(printf '%s\n' "$candidate_id" | awk -F- '{suffix=1; if (NF>3) suffix=$NF; printf "%s%s%06d",$1,$2,suffix}')
       if [ -z "$latest_key" ] || [ "$candidate_key" \> "$latest_key" ]; then
         latest_key=$candidate_key; RUNS_LATEST=$candidate_id; RUNS_LATEST_STATUS=$RUN_STATUS

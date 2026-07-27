@@ -84,7 +84,7 @@ Agent access is declarative only; it is not an operating-system sandbox. See [pr
 ./scripts/ccb.sh workflow plan feature ./mon-projet
 ```
 
-Workflows remain local orchestration records: V1.7.0 does not execute agents. See [project workflows](docs/project-workflows.md).
+Workflows are persistent local orchestration records. V1.7.0 can execute their fixed snapshots sequentially through loopback-only Ollama; responses remain inert Markdown data. See [project workflows](docs/project-workflows.md).
 
 ```sh
 ./scripts/ccb.sh workflow start feature ./mon-projet
@@ -95,6 +95,7 @@ Resume a run and record an explicit step result before completing it:
 ```sh
 ./scripts/ccb.sh workflow resume --latest ./mon-projet
 ./scripts/ccb.sh workflow execute-step --latest ./mon-projet
+./scripts/ccb.sh workflow run --latest ./mon-projet
 ./scripts/ccb.sh workflow complete-step --latest ./mon-projet
 ```
 

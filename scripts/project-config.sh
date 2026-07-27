@@ -10,6 +10,7 @@ SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/project-runs-lib.sh"
 . "$SCRIPT_DIR/runtime/runtime-lib.sh"
 . "$SCRIPT_DIR/project-execution-lib.sh"
+. "$SCRIPT_DIR/project-orchestration-lib.sh"
 
 usage() { echo 'usage: ccb.sh config TARGET' >&2; exit "${1:-2}"; }
 [ "$#" -eq 1 ] || usage 2
@@ -36,5 +37,5 @@ if project_workflows_parse "$target/.ccb/workflows.conf"; then workflows_output=
   Project template: 1.7.0
   Capability: declarative workflows unavailable'; fi
 project_run_summary "$target/.ccb/runs"
-runs_output=$(printf 'Workflow runs\n-------------\n\nRuns directory: %s\nTotal runs: %s\nValid runs: %s\nInvalid runs: %s\nPending runs: %s\nIn-progress runs: %s\nBlocked runs: %s\nCompleted runs: %s\nCancelled runs: %s\nLatest run: %s\nLatest status: %s\n\nWorkflow execution\n------------------\n\nExecution support: local Ollama\nAutomatic workflow loop: disabled\nRemote providers: disabled\nConcurrent run execution: locked\nRuns with succeeded execution: %s\nRuns with failed execution: %s' "$RUNS_DIRECTORY" "$RUNS_TOTAL" "$RUNS_VALID" "$RUNS_INVALID" "$RUNS_PENDING" "$RUNS_IN_PROGRESS" "$RUNS_BLOCKED" "$RUNS_COMPLETED" "$RUNS_CANCELLED" "$RUNS_LATEST" "$RUNS_LATEST_STATUS" "$RUNS_EXECUTION_SUCCEEDED" "$RUNS_EXECUTION_FAILED")
+runs_output=$(printf 'Workflow runs\n-------------\n\nRuns directory: %s\nTotal runs: %s\nValid runs: %s\nInvalid runs: %s\nPending runs: %s\nIn-progress runs: %s\nBlocked runs: %s\nCompleted runs: %s\nCancelled runs: %s\nLatest run: %s\nLatest status: %s\n\nWorkflow execution\n------------------\n\nExecution support: local Ollama\nAutomatic workflow loop: sequential\nRemote providers: disabled\nConcurrent run execution: locked\nRuns with succeeded execution: %s\nRuns with failed execution: %s\n\nWorkflow automation\n-------------------\n\nAutomation support: sequential\nParallel execution: disabled\nAutomatic retries: disabled\nRemote providers: disabled\nRuns automated successfully: %s\nRuns with failed automation: %s\nRuns with interrupted automation: %s\nRuns currently automated: %s' "$RUNS_DIRECTORY" "$RUNS_TOTAL" "$RUNS_VALID" "$RUNS_INVALID" "$RUNS_PENDING" "$RUNS_IN_PROGRESS" "$RUNS_BLOCKED" "$RUNS_COMPLETED" "$RUNS_CANCELLED" "$RUNS_LATEST" "$RUNS_LATEST_STATUS" "$RUNS_EXECUTION_SUCCEEDED" "$RUNS_EXECUTION_FAILED" "$RUNS_AUTOMATION_SUCCEEDED" "$RUNS_AUTOMATION_FAILED" "$RUNS_AUTOMATION_INTERRUPTED" "$RUNS_AUTOMATION_RUNNING")
 printf 'Project: %s\nProfile: %s\nProvider: %s\nDefault model: %s\nPlanner model: %s\nCoder model: %s\nReviewer model: %s\n%s\n%s\n%s\n%s\n' "$PROJECT_NAME" "$PROJECT_PROFILE" "$PROJECT_MODEL_PROVIDER" "$PROJECT_MODEL_DEFAULT" "$PROJECT_MODEL_PLANNER" "$PROJECT_MODEL_CODER" "$PROJECT_MODEL_REVIEWER" "$skills_output" "$agents_output" "$workflows_output" "$runs_output"

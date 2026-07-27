@@ -13,6 +13,7 @@ TEMPLATE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
 . "$SCRIPT_DIR/project-runs-lib.sh"
 . "$SCRIPT_DIR/runtime/runtime-lib.sh"
 . "$SCRIPT_DIR/project-execution-lib.sh"
+. "$SCRIPT_DIR/project-orchestration-lib.sh"
 
 strict=0
 no_ollama=0
@@ -66,14 +67,14 @@ for tool in sh sed grep awk mktemp mv chmod mkdir rm basename dirname; do
 done
 
 if [ -f "$TEMPLATE_ROOT/VERSION" ] && [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.7.0 ]; then emit OK template.version 1.7.0; else emit FAIL template.version 'expected 1.7.0'; fi
-for script in scripts/ccb.sh scripts/project-init.sh scripts/project-config.sh scripts/project-agents.sh scripts/project-workflows.sh scripts/project-runs.sh scripts/project-execution-lib.sh scripts/provider-router.sh scripts/runtime/provider-ollama.sh scripts/project-upgrade.sh scripts/validate-ccb.sh; do
+for script in scripts/ccb.sh scripts/project-init.sh scripts/project-config.sh scripts/project-agents.sh scripts/project-workflows.sh scripts/project-runs.sh scripts/project-execution-lib.sh scripts/project-orchestration-lib.sh scripts/provider-router.sh scripts/runtime/provider-ollama.sh scripts/project-upgrade.sh scripts/validate-ccb.sh; do
   if [ -x "$TEMPLATE_ROOT/$script" ]; then emit OK "template.$script" executable; else emit FAIL "template.$script" missing-or-not-executable; fi
   if [ -f "$TEMPLATE_ROOT/$script" ] && sh -n "$TEMPLATE_ROOT/$script" >/dev/null 2>&1; then emit OK "syntax.$script" valid; else emit FAIL "syntax.$script" invalid; fi
 done
 for profile in generic web node python audio; do
   if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$profile.conf" && [ "$PROJECT_PROFILE_ID" = "$profile" ]; then emit OK "template.profile.$profile" valid; else emit FAIL "template.profile.$profile" invalid; fi
 done
-for file in docs/project-bootstrap.md docs/project-skills.md docs/project-runs.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md tests/test-doctor.sh tests/test-project-execution.sh tests/test-project-upgrade.sh .github/workflows/validate.yml; do
+for file in docs/project-bootstrap.md docs/project-skills.md docs/project-runs.md docs/project-execution.md docs/project-orchestration.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md tests/test-doctor.sh tests/test-project-execution.sh tests/test-project-orchestration.sh tests/test-project-upgrade.sh .github/workflows/validate.yml; do
   [ -s "$TEMPLATE_ROOT/$file" ] && emit OK "template.$file" present || emit FAIL "template.$file" missing
 done
 if command -v git >/dev/null 2>&1; then
@@ -122,6 +123,24 @@ doctor_check_workflow_runs() {
     if [ ! -d "$run_dir" ] || [ -L "$run_dir" ] || ! run_parse_conf "$run_dir/run.conf"; then emit WARN "project.run.$run_name" invalid-or-unsafe; continue; fi
     run_status=$RUN_STATUS; run_current=$RUN_CURRENT; run_count=$RUN_COUNT; run_completed=$RUN_COMPLETED
     state_ok=1
+    automation_file="$run_dir/orchestration.conf"; automation_lock="$run_dir/.ccb-orchestration-lock"
+    automation_status=none
+    orchestration_residual=$(find "$run_dir" -maxdepth 2 \( -name '.orchestration.conf.tmp.*' -o -name '.ccb-orchestration-*' \) ! -name '.ccb-orchestration-lock' -print -quit)
+    [ -z "$orchestration_residual" ] || state_ok=0
+    if [ -e "$automation_file" ] || [ -L "$automation_file" ]; then
+      if project_orchestration_parse_conf "$automation_file"; then
+        automation_status=$ORCHESTRATION_STATUS
+        automation_done=$(project_orchestration_count_completed "$run_dir" "$run_count" 2>/dev/null) || state_ok=0
+        [ "$ORCHESTRATION_STEP_COUNT" = "$run_count" ] && [ "$ORCHESTRATION_CURRENT" = "$run_current" ] && [ "$ORCHESTRATION_STEPS_COMPLETED" = "${automation_done:-0}" ] || state_ok=0
+        [ "$ORCHESTRATION_ACTIONS" -le $((run_count * 3 + 3)) ] || state_ok=0
+        if [ "$automation_status" = succeeded ]; then [ "$run_status" = completed ] || state_ok=0; fi
+      else state_ok=0
+      fi
+    fi
+    if [ -e "$automation_lock" ] || [ -L "$automation_lock" ]; then
+      [ -d "$automation_lock" ] && [ ! -L "$automation_lock" ] && [ "$automation_status" = running ] || state_ok=0
+    elif [ "$automation_status" = running ]; then state_ok=0
+    fi
     if [ "$run_status" = completed ]; then [ -n "$run_completed" ] || state_ok=0
     else [ -z "$run_completed" ] || state_ok=0
     fi

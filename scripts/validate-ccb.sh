@@ -99,13 +99,14 @@ require_template_executable scripts/project-agents.sh
 require_template_executable scripts/project-workflows.sh
 require_template_executable scripts/project-runs.sh
 require_template_executable scripts/project-execution-lib.sh
+require_template_executable scripts/project-orchestration-lib.sh
 if [ -s "$TEMPLATE_ROOT/scripts/project-runs-lib.sh" ] && sh -n "$TEMPLATE_ROOT/scripts/project-runs-lib.sh"; then ok 'template library: scripts/project-runs-lib.sh'; else error 'invalid runs library'; fi
 if [ -s "$TEMPLATE_ROOT/scripts/project-workflows-lib.sh" ] && sh -n "$TEMPLATE_ROOT/scripts/project-workflows-lib.sh"; then ok 'template library: scripts/project-workflows-lib.sh'; else error 'invalid workflows library'; fi
 if [ -s "$TEMPLATE_ROOT/scripts/project-agents-lib.sh" ] && sh -n "$TEMPLATE_ROOT/scripts/project-agents-lib.sh"; then ok 'template library: scripts/project-agents-lib.sh'; else error 'invalid agents library'; fi
 require_template_executable scripts/project-upgrade.sh
 require_template_executable scripts/doctor.sh
 
-for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-runs.sh tests/test-project-execution.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
+for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-runs.sh tests/test-project-execution.sh tests/test-project-orchestration.sh tests/test-project-upgrade.sh tests/test-doctor.sh; do
   require_template_executable "$project_test"
 done
 
@@ -119,7 +120,7 @@ else
   error "missing or unreadable template library: scripts/mascot-lib.sh"
 fi
 
-for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/project-agents.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md docs/v1.7.0.md CHANGELOG.md; do
+for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-orchestration.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/project-agents.md docs/project-runs.md docs/project-workflows.md docs/project-execution.md docs/project-orchestration.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md docs/v1.7.0.md CHANGELOG.md; do
   if [ -s "$TEMPLATE_ROOT/$template_file" ]; then
     ok "template file: $template_file"
   else
@@ -137,7 +138,7 @@ for project_profile in generic web node python audio; do
   fi
 done
 
-for audited_script in scripts/doctor.sh scripts/project-init.sh scripts/project-upgrade.sh scripts/project-config.sh scripts/project-config-lib.sh scripts/project-profile-lib.sh scripts/project-runs.sh scripts/project-runs-lib.sh scripts/project-execution-lib.sh scripts/provider-router.sh; do
+for audited_script in scripts/doctor.sh scripts/project-init.sh scripts/project-upgrade.sh scripts/project-config.sh scripts/project-config-lib.sh scripts/project-profile-lib.sh scripts/project-runs.sh scripts/project-runs-lib.sh scripts/project-execution-lib.sh scripts/project-orchestration-lib.sh scripts/provider-router.sh; do
   if awk '
     /^[[:space:]]*#/ { next }
     /(^|[[:space:];])eval([[:space:];]|$)|(^|[[:space:];])source[[:space:]]|(^|[[:space:];])(bash|sh)[[:space:]]+-c|curl[[:space:]]|wget[[:space:]]|sudo[[:space:]]|chmod[[:space:]]+777|mktemp[[:space:]]+-u|rm[[:space:]]+-rf/ { bad=1 }
@@ -218,6 +219,13 @@ validate_workflow_progression() {
   "$TEMPLATE_ROOT/scripts/ccb.sh" workflow status --latest "$scenario_project" >/dev/null && ok 'workflow status: valid' || error 'workflow status failed'
   "$TEMPLATE_ROOT/scripts/ccb.sh" workflow inspect --latest "$scenario_project" >/dev/null && ok 'workflow inspect: valid' || error 'workflow inspect failed'
   "$TEMPLATE_ROOT/scripts/ccb.sh" config "$scenario_project" | grep -Fq 'In-progress runs: 1' && ok 'workflow config: valid' || error 'workflow config failed'
+  if env CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$scenario_response" "$TEMPLATE_ROOT/scripts/ccb.sh" workflow run --latest "$scenario_project" >/dev/null &&
+    grep -Fqx 'CCB_RUN_STATUS=completed' "$scenario_run/run.conf" &&
+    grep -Fqx 'CCB_ORCHESTRATION_STATUS=succeeded' "$scenario_run/orchestration.conf" &&
+    [ ! -e "$scenario_run/.ccb-orchestration-lock" ] && [ ! -e "$scenario_witness" ]; then
+    ok 'workflow automation: sequential, checkpointed, and non-executing'
+  else error 'workflow automation failed'; fi
+  "$TEMPLATE_ROOT/scripts/ccb.sh" config "$scenario_project" | grep -Fq 'Runs automated successfully: 1' && ok 'workflow config: automation count' || error 'workflow automation config count failed'
   "$TEMPLATE_ROOT/scripts/ccb.sh" doctor "$scenario_project" --no-ollama --strict >/dev/null && ok 'workflow doctor strict: valid' || error 'workflow doctor strict failed'
   residue=$(find "$scenario_run" \( -name '.ccb-transaction.*' -o -name '*.old' -o -name '*.new' \) -print -quit)
   [ -z "$residue" ] && ok 'workflow transaction residue: none' || error 'workflow transaction residue found'

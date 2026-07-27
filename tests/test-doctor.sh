@@ -72,6 +72,22 @@ printf '# Step Result\n\nStatus: pending\n\nFinal doctor result.\n' >"$doctor_ru
 run "$CLI" workflow complete-step --latest "$project"; [ "$status" -eq 0 ] || fail 'doctor complete final step'
 run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "completed run rejected: $output"
 
+printf 'CCB_ORCHESTRATION_VERSION=1\nCCB_ORCHESTRATION_STATUS=succeeded\nCCB_ORCHESTRATION_MODE=sequential\nCCB_ORCHESTRATION_STARTED_AT=2026-07-27T10:00:00+0200\nCCB_ORCHESTRATION_UPDATED_AT=2026-07-27T10:03:00+0200\nCCB_ORCHESTRATION_COMPLETED_AT=2026-07-27T10:03:00+0200\nCCB_ORCHESTRATION_CURRENT_STEP=3\nCCB_ORCHESTRATION_STEPS_COMPLETED=3\nCCB_ORCHESTRATION_STEP_COUNT=3\nCCB_ORCHESTRATION_ACTIONS=9\nCCB_ORCHESTRATION_ERROR=\n' >"$doctor_run/orchestration.conf"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 0 ] || fail "valid orchestration rejected: $output"
+cp "$doctor_run/orchestration.conf" "$WORK/orchestration.saved"
+printf 'CCB_ORCHESTRATION_STATUS=succeeded\n' >>"$doctor_run/orchestration.conf"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted duplicate orchestration key'
+cp "$WORK/orchestration.saved" "$doctor_run/orchestration.conf"
+rm -f "$doctor_run/orchestration.conf"; ln -s "$WORK/orchestration.saved" "$doctor_run/orchestration.conf"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted orchestration symlink'
+rm -f "$doctor_run/orchestration.conf"; cp "$WORK/orchestration.saved" "$doctor_run/orchestration.conf"
+mkdir "$doctor_run/.ccb-orchestration-lock"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted residual orchestration lock'
+[ -d "$doctor_run/.ccb-orchestration-lock" ] || fail 'doctor removed orchestration lock'; rmdir "$doctor_run/.ccb-orchestration-lock"
+printf 'residual\n' >"$doctor_run/.orchestration.conf.tmp.residual"
+run "$CLI" doctor "$project" --no-ollama --strict; [ "$status" -eq 1 ] || fail 'strict accepted orchestration temporary residue'
+[ -f "$doctor_run/.orchestration.conf.tmp.residual" ] || fail 'doctor removed orchestration temporary'; rm -f "$doctor_run/.orchestration.conf.tmp.residual"
+
 cp "$doctor_run/run.conf" "$WORK/run.saved"
 sed 's/^CCB_RUN_COMPLETED_AT=.*/CCB_RUN_COMPLETED_AT=/' "$WORK/run.saved" >"$doctor_run/run.conf"
 before=$(cksum "$doctor_run/run.conf")
