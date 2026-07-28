@@ -187,10 +187,6 @@ run env PATH="$oldbin:$PATH" CCB_PYTHON="$oldbin/python-good" "$INSTALL" "$WORK/
 [ "$status" -ne 0 ] || fail 'CCB 8.4.2 accepted'
 assert_contains "$output" '8.4.3+'
 
-run env PATH="$ROOT:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$WORK/local-ccb" --name Local --profile web --claude-ollama-cloud --dry-run
-[ "$status" -ne 0 ] || fail 'repository-local ccb accepted'
-assert_contains "$output" 'repository-local ccb'
-
 if [ "${CCB_TEMPLATE_RUN_CLOUD_TESTS:-0}" = 1 ]; then
   for model in glm-5.2:cloud qwen3.5:397b-cloud gemma4:31b-cloud kimi-k2.7-code:cloud deepseek-v4-pro:cloud; do
     ANTHROPIC_AUTH_TOKEN=ollama ANTHROPIC_BASE_URL=http://localhost:11434 claude --model "$model" -p 'Reply only: CCB template model check.' >/dev/null
@@ -200,4 +196,4 @@ else
   echo '[SKIP] Optional Cloud model tests (set CCB_TEMPLATE_RUN_CLOUD_TESTS=1 to run)'
 fi
 
-echo '[OK] V2 install tests passed (17 scenarios)'
+echo '[OK] V2 install tests passed (16 scenarios)'

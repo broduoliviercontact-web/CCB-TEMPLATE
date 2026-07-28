@@ -6,11 +6,11 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 require() { grep -Fq -- "$2" "$1" || fail "missing $2 in $1"; }
 
 require "$ROOT/README.md" 'SeemSeam/claude_codex_bridge'
-require "$ROOT/README.md" './install.sh TARGET'
-require "$ROOT/README.md" 'must not be used for new V2 projects'
-require "$ROOT/README.md" 'at least version 8.4.3'
-require "$ROOT/README.md" 'OpenCode is not part of this architecture'
-require "$ROOT/README.md" 'Legacy V1.8.0 — deprecated'
+require "$ROOT/README.md" './install.sh /chemin/du/projet'
+require "$ROOT/README.md" 'repository-local `./ccb` command has been removed'
+require "$ROOT/README.md" 'official globally installed CCB binary'
+require "$ROOT/README.md" 'V1.8.0 archive'
+require "$ROOT/README.md" 'does not use OpenCode'
 
 for document in docs/v2-quickstart.md docs/v2-architecture.md docs/v2-migration-from-v1.md docs/v2-troubleshooting.md; do
   [ -f "$ROOT/$document" ] || fail "missing $document"

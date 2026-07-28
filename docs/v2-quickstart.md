@@ -2,7 +2,8 @@
 
 CCB-TEMPLATE prepares a project for the official
 [Claude Code Bridge](https://github.com/SeemSeam/claude_codex_bridge). It does not run a second
-orchestrator and does not use OpenCode.
+orchestrator and does not use OpenCode. Every `ccb` command below is the official globally
+installed binary; this V2 branch has no local `./ccb` wrapper.
 
 ## 1. Install prerequisites
 

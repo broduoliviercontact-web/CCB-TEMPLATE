@@ -4,7 +4,7 @@
 
 Lot 1 added a parallel bootstrap for the official
 [Claude Code Bridge](https://github.com/SeemSeam/claude_codex_bridge). It does not start CCB,
-Claude Code, tmux or a model. The legacy V1 CLI remains temporarily untouched.
+Claude Code, tmux or a model.
 
 `install.sh` checks the official global CCB version, local prerequisites and the five selected
 Ollama Cloud models. It then creates the official `.ccb/ccb.config`, shared memory, role
@@ -16,7 +16,14 @@ loopback endpoint. It never writes a bearer token or another user credential.
 
 The official configuration is validated against CCB 8.4.3.
 
-## Lot 2 — in progress
+## Lot 2 — completed
 
-Lot 2 documents the official architecture and adds a separate V2 CI validation path while the V1
-runtime remains temporarily available.
+Lot 2 documents the official architecture and validates the V2 bootstrap in CI without Cloud
+tests.
+
+## Lot 3A — completed
+
+Lot 3A removed the local `./ccb` wrapper, all V1 runtime scripts, direct Ollama execution,
+home-grown workflow snapshots, V1 model and project presets, their dedicated tests and their CI
+steps. The V2 branch now exposes only `install.sh`, `scripts/v2/` and the official global `ccb`
+workflow. V1.8.0 remains preserved by the `v1.8.0` tag.

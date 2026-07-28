@@ -8,6 +8,9 @@ agents. Claude Code performs each agent turn. Ollama provides the local Anthropi
 endpoint and executes the selected Cloud models. The template does not call Ollama directly,
 interpret model replies or persist its own workflow results. OpenCode is not used.
 
+There is no local `./ccb` command or V1 workflow runtime in this branch. Every `ccb` invocation
+is the official global binary.
+
 ## Agent topology
 
 | Agent | Model | Responsibility |

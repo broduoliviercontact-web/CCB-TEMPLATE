@@ -9,8 +9,9 @@ system Python; do not use `--break-system-packages`.
 
 ## CCB is older than 8.4.3 or resolves the wrong binary
 
-Run `ccb --version` and inspect `command -v ccb`. Install or update the official global CCB. A
-repository-local `./ccb` is the deprecated V1 wrapper and must not be used for V2 projects.
+Run `ccb --version` and inspect `command -v ccb`. Install or update the official global CCB.
+There is no repository-local `./ccb` on the V2 branch; the legacy wrapper is available only in
+the `v1.8.0` tag.
 
 ## Ollama or a Cloud model is unavailable
 

@@ -5,13 +5,13 @@ provider router and direct Ollama execution duplicated responsibilities that bel
 official CCB. V2 corrects that boundary by generating configuration and letting the official
 global `ccb` manage Claude Code panes.
 
-During this migration, V1 files remain on the branch for compatibility. Do not use `./ccb` for a
-new V2 project: it is the deprecated local V1 engine, not the official binary. It will be removed
-before the V2 release.
+The V1 files have been removed from the V2 branch. `./ccb` no longer exists here: `ccb` always
+means the official global binary. The complete V1.8.0 engine remains available from the
+`v1.8.0` tag for historical reference and existing V1 projects.
 
 The migration keeps the useful role boundaries, policy, shared and private memories, text-only
-skills and profiles. Planned removals include the local wrapper, V1 CLI, provider router, direct
-Ollama runtime, model presets, workflow snapshots and their tests.
+skills and profiles. The removed surface includes the local wrapper, V1 CLI, provider router,
+direct Ollama runtime, model presets, workflow snapshots and their tests.
 
 ## Migrate an existing V1 project
 
