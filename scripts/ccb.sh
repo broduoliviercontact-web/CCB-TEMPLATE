@@ -11,6 +11,7 @@ PROJECT_UPGRADE="$SCRIPT_DIR/project-upgrade.sh"
 PROJECT_AGENTS="$SCRIPT_DIR/project-agents.sh"
 PROJECT_WORKFLOWS="$SCRIPT_DIR/project-workflows.sh"
 PROJECT_RUNS="$SCRIPT_DIR/project-runs.sh"
+QUICKSTART="$SCRIPT_DIR/quickstart.sh"
 VALIDATE="$SCRIPT_DIR/validate-ccb.sh"
 DOCTOR="$SCRIPT_DIR/doctor.sh"
 MODEL_SETUP="$SCRIPT_DIR/model-setup.sh"
@@ -36,6 +37,7 @@ Commands:
   skills TARGET [OPTIONS]         Show declarative project skill guidance
   upgrade TARGET [OPTIONS]        Safely migrate a 1.6.0 bootstrap project
   setup [TARGET] [OPTIONS]        Guided setup; use --yes for non-interactive install
+  quickstart TARGET [OPTIONS]    Zero-friction project bootstrap and optional workflow run
   profiles                        List local profiles
   profile show ID                 Show one profile
   status [TARGET]                 Show concise project status
@@ -321,6 +323,7 @@ case "${1:-}" in
   skills) shift; exec "$PROJECT_SKILLS" "$@" ;;
   upgrade) shift; exec "$PROJECT_UPGRADE" "$@" ;;
   setup|wizard) setup_command "$@"; exit $? ;;
+  quickstart) shift; exec "$QUICKSTART" "$@" ;;
   status) shift; [ "$#" -le 1 ] || { usage >&2; exit 2; }; status "${1:-.}" ;;
   *) echo "error: unknown command: $1" >&2; usage >&2; exit 2 ;;
 esac

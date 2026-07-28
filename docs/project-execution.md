@@ -2,7 +2,7 @@
 
 CCB executes a resumed workflow step only through local Ollama. Prompts are assembled from the immutable run snapshot, bounded to 1 MiB, and never persisted in metadata. Responses are bounded to 256 KiB, treated as opaque data, and published atomically to `result.md`; no Markdown, HTML, command substitution, backtick, or code fence is executed.
 
-Before publishing `result.md`, V1.7.1 guarantees one line boundary after the opaque provider
+Before publishing `result.md`, V1.8.0 guarantees one line boundary after the opaque provider
 response when it is missing. A response that already ends in a newline is left unchanged. This
 keeps CCB's `END PREVIOUS RESULT` delimiter on its own line during `complete-step`, without
 interpreting or rewriting the useful response body.

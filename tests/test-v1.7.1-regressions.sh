@@ -76,7 +76,7 @@ pass
 
 legacy="$WORK/legacy models"
 "$CLI" init "$legacy" --model legacy-default:latest --planner-model legacy-planner:latest --coder-model legacy-coder:latest --reviewer-model legacy-reviewer:latest --yes >/dev/null || fail 'legacy project init'
-sed 's/CCB_TEMPLATE_VERSION=1.7.1/CCB_TEMPLATE_VERSION=1.7.0/' "$legacy/.ccb/project.conf" >"$legacy/.ccb/project.next" || fail 'prepare V1.7.0 project metadata'
+sed 's/CCB_TEMPLATE_VERSION=1.8.0/CCB_TEMPLATE_VERSION=1.7.0/' "$legacy/.ccb/project.conf" >"$legacy/.ccb/project.next" || fail 'prepare V1.7.0 project metadata'
 mv "$legacy/.ccb/project.next" "$legacy/.ccb/project.conf" || fail 'publish V1.7.0 project metadata'
 legacy_validate=$("$CLI" models validate "$legacy") || fail 'legacy models validate'
 contains "$legacy_validate" '(legacy format)' 'legacy format was not reported'

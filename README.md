@@ -3,31 +3,27 @@
 [![Validate CCB Template](https://github.com/broduoliviercontact-web/CCB-TEMPLATE/actions/workflows/validate.yml/badge.svg)](https://github.com/broduoliviercontact-web/CCB-TEMPLATE/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Une base réutilisable pour orchestrer cinq agents spécialisés autour d’un projet Git : rôles
-séparés, mémoires persistantes, règles de sécurité et validations reproductibles.
-
-![Guide étape par étape pour utiliser la template CCB](docs/assets/ccb-template-step-by-step-guide.png)
-
-La V1.2 ajoute une CCB Control Room interactive et des profils de projet. Le fonctionnement en
-commandes classiques reste entièrement disponible.
+CCB Template turns a fresh clone into a validated local project with one command:
 
 ```sh
-./scripts/ccb.sh
-./scripts/ccb.sh doctor
-./scripts/ccb.sh profiles
-./scripts/ccb.sh install /chemin/vers/mon-projet --profile audio-midi
+git clone https://github.com/broduoliviercontact-web/CCB-TEMPLATE.git
+cd CCB-TEMPLATE
+
+./ccb quickstart "$HOME/topchef" \
+  --name "TopChef" \
+  --profile web \
+  --cloud \
+  --run feature \
+  --yes
 ```
 
-First installation? Launch the guided setup wizard. It checks your project, suggests a profile,
-previews the changes, installs CCB and runs validation automatically.
+CCB V1.8.0 checks prerequisites and Ollama, creates the project, configures role-based models,
+runs validation and Doctor strict, verifies the workflow snapshot, and optionally executes the
+selected workflow. It never installs Ollama, downloads local multi-gigabyte models, exposes
+secrets, modifies Git, or interprets model output.
 
-Première installation ? Lancez l’assistant guidé : il vérifie le projet, propose un profil,
-prévisualise les changements, installe CCB puis lance la validation.
-
-CCB keeps non-secret Ollama model assignments in `.ccb/models.conf`. V1.7.1 accepts both the
-historical default/planner/coder format and the role-based format produced by `models setup`.
-Inspect local models with `./scripts/ccb.sh models list` and recommendations with
-`./scripts/ccb.sh models recommendations`.
+For a guided explanation, see [the quickstart guide](docs/quickstart.md). Existing commands
+remain available through `./ccb` and `./scripts/ccb.sh`.
 
 ### Minimal project bootstrap
 
@@ -86,7 +82,7 @@ Agent access is declarative only; it is not an operating-system sandbox. See [pr
 ./scripts/ccb.sh workflow plan feature ./mon-projet
 ```
 
-Workflows are persistent local orchestration records. V1.7.1 resolves each snapshot from its
+Workflows are persistent local orchestration records. V1.8.0 resolves each snapshot from its
 configured agent role and executes fixed snapshots sequentially through loopback-only Ollama.
 Responses remain inert Markdown data, and CCB normalizes the final line boundary before adding
 its own transmission markers. See [project workflows](docs/project-workflows.md).
