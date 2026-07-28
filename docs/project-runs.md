@@ -16,7 +16,7 @@ Completion prepares every affected file first, keeps backups inside a private `.
 
 `ccb config TARGET` reports D3 reliability and observability counts without reading Markdown. Doctor validates run state, timestamps, results, transmission, retry archives, cancellation, orchestration, symlinks, locks, and transaction residue; `--strict` turns warnings into failure. Neither command repairs state or contacts a provider.
 
-There is no migration for existing runs without retry archives or orchestration metadata. Progression and observability commands do not launch a provider, access the network, invoke Git, or execute stored content; D1 execution is the narrowly scoped local exception described below. V1.7.1 continues to accept V1.7.0 run metadata.
+There is no migration for existing runs without retry archives or orchestration metadata. Progression and observability commands do not launch a provider, access the network, invoke Git, or execute stored content; D1 execution is the narrowly scoped local exception described below. V1.8.0 continues to accept V1.7.0 and V1.7.1 run metadata.
 
 ## D1 local execution
 

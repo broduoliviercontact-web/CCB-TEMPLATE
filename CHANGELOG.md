@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.8.0
+
+### Added
+
+- Add the executable `./ccb` wrapper and a transactional zero-friction `quickstart` command.
+- Add the stable `coding-cloud` preset and explicit cloud/local preflight reporting.
+- Add quickstart, cloud setup, troubleshooting, and acceptance-test documentation.
+
+### Safety and compatibility
+
+- Keep legacy and role-based model configuration formats compatible through the existing parser.
+- Preserve local-only Ollama access, no automatic model downloads, no Git changes, and no secret output.
+- Keep V1.7.0 and V1.7.1 project metadata and run records valid without migration.
+
 ## 1.7.1
 
 ### Fixed

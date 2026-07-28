@@ -34,8 +34,8 @@ workflow_run_help=$("$CLI" workflow run --help)
 assert_contains "$workflow_run_help" 'workflow run RUN_ID' 'workflow run help is available'
 assert_contains "$help_output" 'doctor [TARGET]' 'help documents doctor'
 version_output=$("$CLI" version)
-[ "$version_output" = 1.7.1 ] || {
-  echo "assertion failed: version is $version_output (expected: 1.7.1)" >&2
+[ "$version_output" = 1.8.0 ] || {
+  echo "assertion failed: version is $version_output (expected: 1.8.0)" >&2
   exit 1
 }
 init_help=$("$CLI" init --help 2>&1)

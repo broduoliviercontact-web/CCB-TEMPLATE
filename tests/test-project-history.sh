@@ -161,7 +161,7 @@ sed 's/CCB_ATTEMPT_COMPLETED_AT=2026-07-29T10:02:00+0200/CCB_ATTEMPT_COMPLETED_A
 
 new_pending old-d2
 run "$CLI" workflow history "$run_id" "$project"; [ "$status" -eq 0 ] || fail 'old D2 run rejected'; pass
-[ "$(cat "$ROOT/VERSION")" = 1.7.1 ] || fail 'version changed'; pass
+[ "$(cat "$ROOT/VERSION")" = 1.8.0 ] || fail 'version changed'; pass
 managed=$(find "$project/.ccb" -type f ! -path '*/runs/*' | wc -l | tr -d ' '); managed=$((managed + 1)); [ "$managed" -eq 7 ] || fail 'init file count'; pass
 
 printf 'project history tests passed: %s/%s\n' "$tests" "$tests"

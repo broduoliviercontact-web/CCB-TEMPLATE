@@ -33,7 +33,7 @@ stamp() {
 write_run() {
   file=$1
   temp=$(mktemp "$(dirname "$file")/.run.conf.tmp.XXXXXX") || return 1
-  printf 'CCB_RUN_VERSION=1\nCCB_RUN_ID=%s\nCCB_RUN_WORKFLOW=%s\nCCB_RUN_STATUS=%s\nCCB_RUN_CURRENT_STEP=%s\nCCB_RUN_STEP_COUNT=%s\nCCB_RUN_CREATED_AT=%s\nCCB_RUN_UPDATED_AT=%s\nCCB_RUN_COMPLETED_AT=%s\nCCB_RUN_SOURCE_TEMPLATE_VERSION=1.7.1\nCCB_RUN_SOURCE_WORKFLOWS_VERSION=1\nCCB_RUN_SOURCE_AGENTS_VERSION=1\nCCB_RUN_SOURCE_MODELS_VERSION=1\n' \
+  printf 'CCB_RUN_VERSION=1\nCCB_RUN_ID=%s\nCCB_RUN_WORKFLOW=%s\nCCB_RUN_STATUS=%s\nCCB_RUN_CURRENT_STEP=%s\nCCB_RUN_STEP_COUNT=%s\nCCB_RUN_CREATED_AT=%s\nCCB_RUN_UPDATED_AT=%s\nCCB_RUN_COMPLETED_AT=%s\nCCB_RUN_SOURCE_TEMPLATE_VERSION=1.8.0\nCCB_RUN_SOURCE_WORKFLOWS_VERSION=1\nCCB_RUN_SOURCE_AGENTS_VERSION=1\nCCB_RUN_SOURCE_MODELS_VERSION=1\n' \
     "$RUN_ID" "$RUN_WORKFLOW" "$RUN_STATUS" "$RUN_CURRENT" "$RUN_COUNT" \
     "$RUN_CREATED" "$RUN_UPDATED" "$RUN_COMPLETED" >"$temp" &&
     chmod 644 "$temp" && mv "$temp" "$file"
@@ -232,7 +232,7 @@ workflow_resume_current() {
   ts=$(now); STEP_STATUS=in-progress; [ -n "$STEP_STARTED" ] || STEP_STARTED=$ts
   run_write_step_conf "$step_dir/step.conf" || return 1
   RUN_STATUS=in-progress; RUN_UPDATED=$ts; write_run "$resolved_dir/run.conf" || return 1
-  printf '[OK] workflow run resumed\nRun ID: %s\nStatus: in-progress\nCurrent step: %s — %s\nExecution: disabled\n' "$RUN_ID" "$RUN_CURRENT" "$STEP_ROLE"
+  printf '[OK] workflow run resumed\nRun ID: %s\nStatus: in-progress\nCurrent step: %s — %s\nAgent execution started: no\nStep state: in-progress\n' "$RUN_ID" "$RUN_CURRENT" "$STEP_ROLE"
 }
 
 workflow_retry_current() {
@@ -568,7 +568,7 @@ case "$command" in
       chmod 644 "$step_dir"/*; IFS=,
     done
     IFS=$old_ifs; mv "$tmp" "$runs/$runid" || exit 1
-    printf '[OK] workflow run created\nRun ID: %s\nWorkflow: %s\nStatus: pending\nSteps: %s\nCurrent step: 1\nPath: .ccb/runs/%s\nExecution: disabled\n' "$runid" "$name" "$RUN_COUNT" "$runid"
+    printf '[OK] workflow run created\nRun ID: %s\nWorkflow: %s\nStatus: pending\nSteps: %s\nCurrent step: 1\nPath: .ccb/runs/%s\nExecution started: no\nRun created only: yes\nNext action: workflow run %s %s\n' "$runid" "$name" "$RUN_COUNT" "$runid" "$runid" "$target"
     ;;
   status|inspect)
     [ "$#" -le 2 ] || usage 2
@@ -733,7 +733,7 @@ case "$command" in
     project_run_transaction_cleanup "$transaction_dir" "$resolved_dir" || complete_step_abort
     transaction_dir=; trap - EXIT HUP INT TERM
     if [ "$has_next_step" = 1 ]; then
-      printf '[OK] step completed\nRun ID: %s\nCompleted: %s\nNext: %s\nContext transferred: yes\nExecution: disabled\n' "$RUN_ID" "$current_step_name" "$next_name"
+      printf '[OK] step completed\nRun ID: %s\nCompleted: %s\nNext: %s\nContext transferred: yes\nAgent execution started: no\n' "$RUN_ID" "$current_step_name" "$next_name"
     else
       printf '[OK] workflow run completed\nRun ID: %s\nWorkflow: %s\nSteps completed: %s/%s\n' "$RUN_ID" "$RUN_WORKFLOW" "$RUN_COUNT" "$RUN_COUNT"
     fi

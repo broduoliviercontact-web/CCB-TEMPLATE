@@ -14,7 +14,7 @@ The six presets are suggestions only; a model not detected locally remains valid
 `ollama pull` or `ollama signin`, and never writes API keys. Replacements are atomically written
 and the old configuration is retained as a timestamped backup.
 
-V1.7.1 uses one strict parser for validation, Config, Doctor, model display, model resolution,
+V1.8.0 uses one strict parser for validation, Config, Doctor, model display, model resolution,
 and workflow snapshots. It accepts both configuration schemas:
 
 - the role schema written by `models setup`, with separate manager, graph, graphiste, developer,

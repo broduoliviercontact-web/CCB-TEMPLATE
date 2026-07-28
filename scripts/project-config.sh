@@ -32,7 +32,7 @@ else
   template_version=$(awk -F= '$1=="CCB_TEMPLATE_VERSION" {print $2}' "$target/.ccb/project.conf")
   case "$template_version" in 1.6.0|1.6.1) agents_output=$(printf 'Agents:\n  Status: not configured\n  Project template: %s\n  Upgrade required for V1.7.0 agents' "$template_version");; *) echo 'error: invalid or missing agents.conf' >&2; exit 1;; esac
 fi
-if project_workflows_parse "$target/.ccb/workflows.conf"; then workflows_output=$(printf 'Workflows:\n  Schema: %s\n  Names: %s\n  Default: %s\n  Execution: disabled\n  Enforcement: declarative only' "$PROJECT_WORKFLOWS_VERSION" "$PROJECT_WORKFLOW_NAMES" "$PROJECT_WORKFLOW_DEFAULT"); else workflows_output='Workflows:
+if project_workflows_parse "$target/.ccb/workflows.conf"; then workflows_output=$(printf 'Workflows:\n  Schema: %s\n  Names: %s\n  Default: %s\n  Execution: available via workflow run\n  Enforcement: declarative only' "$PROJECT_WORKFLOWS_VERSION" "$PROJECT_WORKFLOW_NAMES" "$PROJECT_WORKFLOW_DEFAULT"); else workflows_output='Workflows:
   Status: not configured
   Project template: 1.7.0
   Capability: declarative workflows unavailable'; fi

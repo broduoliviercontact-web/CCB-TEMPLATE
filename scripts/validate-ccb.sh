@@ -92,6 +92,8 @@ done
 
 require_template_executable scripts/doctor.sh
 require_template_executable scripts/ccb.sh
+require_template_executable ccb
+require_template_executable scripts/quickstart.sh
 require_template_executable scripts/project-init.sh
 require_template_executable scripts/project-config.sh
 require_template_executable scripts/project-skills.sh
@@ -106,7 +108,7 @@ if [ -s "$TEMPLATE_ROOT/scripts/project-agents-lib.sh" ] && sh -n "$TEMPLATE_ROO
 require_template_executable scripts/project-upgrade.sh
 require_template_executable scripts/doctor.sh
 
-for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-runs.sh tests/test-project-execution.sh tests/test-project-orchestration.sh tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-v1.7.1-regressions.sh; do
+for project_test in tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-workflows.sh tests/test-project-runs.sh tests/test-project-execution.sh tests/test-project-orchestration.sh tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-v1.7.1-regressions.sh tests/test-v1.8.0-quickstart.sh; do
   require_template_executable "$project_test"
 done
 
@@ -120,7 +122,7 @@ else
   error "missing or unreadable template library: scripts/mascot-lib.sh"
 fi
 
-for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-orchestration.sh tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh tests/test-v1.7.1-regressions.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/project-agents.md docs/project-runs.md docs/project-workflows.md docs/project-execution.md docs/project-orchestration.md docs/project-reliability.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/v1.6.0.md docs/v1.6.1.md docs/v1.7.0.md CHANGELOG.md; do
+for template_file in VERSION profiles/README.md profiles/generic/profile.conf tests/test-profiles.sh tests/test-cli.sh tests/test-project-init.sh tests/test-project-profiles.sh tests/test-project-models.sh tests/test-project-config.sh tests/test-project-skills.sh tests/test-skills-command.sh tests/test-project-agents.sh tests/test-project-orchestration.sh tests/test-project-retry.sh tests/test-project-cancel.sh tests/test-project-history.sh tests/test-project-upgrade.sh tests/test-doctor.sh tests/test-setup-wizard.sh tests/test-models.sh tests/test-v1.7.1-regressions.sh tests/test-v1.8.0-quickstart.sh docs/models.md docs/project-bootstrap.md docs/project-skills.md docs/project-agents.md docs/project-runs.md docs/project-workflows.md docs/project-execution.md docs/project-orchestration.md docs/project-reliability.md docs/project-upgrade.md docs/ponytail.md docs/doctor.md docs/quickstart.md docs/cloud-setup.md docs/troubleshooting.md docs/v1.6.0.md docs/v1.6.1.md docs/v1.7.0.md CHANGELOG.md; do
   if [ -s "$TEMPLATE_ROOT/$template_file" ]; then
     ok "template file: $template_file"
   else
@@ -128,7 +130,7 @@ for template_file in VERSION profiles/README.md profiles/generic/profile.conf te
   fi
 done
 
-if [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.7.1 ]; then ok 'template version: 1.7.1'; else error 'template VERSION must be 1.7.1'; fi
+if [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.8.0 ]; then ok 'template version: 1.8.0'; else error 'template VERSION must be 1.8.0'; fi
 
 for project_profile in generic web node python audio; do
   if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$project_profile.conf" && [ "$PROJECT_PROFILE_ID" = "$project_profile" ]; then

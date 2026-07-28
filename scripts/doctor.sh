@@ -1,5 +1,5 @@
 #!/bin/sh
-# Read-only diagnostics for the CCB template and V1.6.0 bootstrap projects.
+# Read-only diagnostics for the CCB template and compatible bootstrap projects.
 set -u
 
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
@@ -66,7 +66,7 @@ for tool in sh sed grep awk mktemp mv chmod mkdir rm basename dirname; do
   if command -v "$tool" >/dev/null 2>&1; then emit OK "shell.$tool" available; else emit FAIL "shell.$tool" missing; fi
 done
 
-if [ -f "$TEMPLATE_ROOT/VERSION" ] && [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.7.1 ]; then emit OK template.version 1.7.1; else emit FAIL template.version 'expected 1.7.1'; fi
+if [ -f "$TEMPLATE_ROOT/VERSION" ] && [ "$(cat "$TEMPLATE_ROOT/VERSION")" = 1.8.0 ]; then emit OK template.version 1.8.0; else emit FAIL template.version 'expected 1.8.0'; fi
 for script in scripts/ccb.sh scripts/project-init.sh scripts/project-config.sh scripts/project-agents.sh scripts/project-workflows.sh scripts/project-runs.sh scripts/project-execution-lib.sh scripts/project-orchestration-lib.sh scripts/provider-router.sh scripts/runtime/provider-ollama.sh scripts/project-upgrade.sh scripts/validate-ccb.sh; do
   if [ -x "$TEMPLATE_ROOT/$script" ]; then emit OK "template.$script" executable; else emit FAIL "template.$script" missing-or-not-executable; fi
   if [ -f "$TEMPLATE_ROOT/$script" ] && sh -n "$TEMPLATE_ROOT/$script" >/dev/null 2>&1; then emit OK "syntax.$script" valid; else emit FAIL "syntax.$script" invalid; fi
@@ -228,7 +228,7 @@ if [ -n "$target" ]; then
     template_version=$(awk -F= '$1=="CCB_TEMPLATE_VERSION" {print $2}' "$target/.ccb/project.conf")
     if project_profile_parse "$TEMPLATE_ROOT/project-profiles/$profile.conf" && [ "$PROJECT_PROFILE_ID" = "$profile" ]; then emit OK project.profile "$profile"; else emit FAIL project.profile unsupported; fi
     [ "$project_version" = 1 ] && emit OK project.version 1 || emit FAIL project.version unsupported
-    if [ "$template_version" = "$(cat "$TEMPLATE_ROOT/VERSION")" ]; then emit OK project.template_version "$template_version"; elif [ "$template_version" = 1.7.0 ]; then emit OK project.template_version legacy-compatible; elif [ "$template_version" = 1.6.0 ] || [ "$template_version" = 1.6.1 ]; then emit WARN project.template_version upgrade-available; else emit FAIL project.template_version incompatible; fi
+    if [ "$template_version" = "$(cat "$TEMPLATE_ROOT/VERSION")" ]; then emit OK project.template_version "$template_version"; elif [ "$template_version" = 1.7.0 ] || [ "$template_version" = 1.7.1 ]; then emit OK project.template_version legacy-compatible; elif [ "$template_version" = 1.6.0 ] || [ "$template_version" = 1.6.1 ]; then emit WARN project.template_version upgrade-available; else emit FAIL project.template_version incompatible; fi
     grep -Fq "Project: $PROJECT_NAME" "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.context_name present || emit WARN project.context_name missing
     grep -Fq "Profile: $profile" "$target/.ccb/context/project.md" 2>/dev/null && emit OK project.context_profile present || emit WARN project.context_profile missing
     else emit FAIL project.project_conf invalid; fi
@@ -255,7 +255,7 @@ if [ -n "$target" ]; then
     elif [ "$template_version" = 1.6.0 ] || [ "$template_version" = 1.6.1 ]; then
       emit WARN project.agents_conf legacy-not-configured
     else emit FAIL project.agents_conf invalid; fi
-    if project_workflows_parse "$target/.ccb/workflows.conf"; then emit OK project.workflows_conf valid; emit OK project.workflow_execution disabled; doctor_check_workflow_runs; elif [ "$template_version" = 1.7.0 ]; then emit WARN project.workflows_conf not-configured; else emit WARN project.workflows_conf legacy-not-configured; fi
+    if project_workflows_parse "$target/.ccb/workflows.conf"; then emit OK project.workflows_conf valid; emit OK project.workflow_execution available; doctor_check_workflow_runs; elif [ "$template_version" = 1.7.0 ] || [ "$template_version" = 1.7.1 ]; then emit WARN project.workflows_conf not-configured; else emit WARN project.workflows_conf legacy-not-configured; fi
     grep -Fq '.ccb/context/project.md' "$target/AGENTS.md" 2>/dev/null && grep -Fq '.ccb/models.conf' "$target/AGENTS.md" 2>/dev/null && emit OK project.agents_guidance present || emit WARN project.agents_guidance incomplete
   fi
   if command -v git >/dev/null 2>&1; then

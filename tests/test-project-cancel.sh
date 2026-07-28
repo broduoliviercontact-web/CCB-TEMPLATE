@@ -16,7 +16,7 @@ new_pending() {
   label=$1; sequence=$((sequence + 1)); project="$WORK/$label-$sequence"
   "$CLI" init "$project" --yes >/dev/null || fail "init $label"
   stamp=$(printf '20260728-%06d' "$sequence")
-  start=$(CCB_TEST_RUN_TIMESTAMP="$stamp" "$CLI" workflow start feature "$project") || fail "start $label"
+  start=$(CCB_TEST_MODE=1 CCB_TEST_NOW=2026-07-28T09:00:00+0200 CCB_TEST_RUN_TIMESTAMP="$stamp" "$CLI" workflow start feature "$project") || fail "start $label"
   run_id=$(printf '%s\n' "$start" | sed -n 's/^Run ID: //p')
   run_dir="$project/.ccb/runs/$run_id"; step_dir="$run_dir/01-manager"
 }
@@ -143,7 +143,7 @@ printf 'CCB_EXECUTION_VERSION=1\n' >"$step_dir/execution.conf"
 run "$CLI" workflow cancel "$run_id" "$project"; [ "$status" -eq 1 ] || fail 'corrupt execution history cancelled'; pass
 
 new_pending orchestration
-run env CCB_TEST_MODE=1 CCB_TEST_ORCHESTRATION_FAIL_POINT=after-resume "$CLI" workflow run "$run_id" "$project"
+run env CCB_TEST_MODE=1 CCB_TEST_NOW=2026-07-28T11:00:00+0200 CCB_TEST_ORCHESTRATION_FAIL_POINT=after-resume "$CLI" workflow run "$run_id" "$project"
 [ "$status" -eq 1 ] || fail 'orchestration history preparation'; orchestration_file="$run_dir/orchestration.conf"
 before_started=$(sed -n 's/^CCB_ORCHESTRATION_STARTED_AT=//p' "$orchestration_file"); before_actions=$(sed -n 's/^CCB_ORCHESTRATION_ACTIONS=//p' "$orchestration_file")
 run env CCB_TEST_MODE=1 CCB_TEST_NOW=2026-07-28T12:00:00+0200 "$CLI" workflow cancel "$run_id" "$project"
@@ -153,13 +153,13 @@ grep -Fqx 'CCB_ORCHESTRATION_STATUS=interrupted' "$orchestration_file" && grep -
 grep -Fqx 'CCB_ORCHESTRATION_COMPLETED_AT=2026-07-28T12:00:00+0200' "$orchestration_file" || fail 'orchestration completion missing'; pass
 
 new_pending running-orchestration
-run env CCB_TEST_MODE=1 CCB_TEST_ORCHESTRATION_FAIL_POINT=after-resume "$CLI" workflow run "$run_id" "$project"; [ "$status" -eq 1 ] || fail 'running metadata preparation'
+run env CCB_TEST_MODE=1 CCB_TEST_NOW=2026-07-28T11:00:00+0200 CCB_TEST_ORCHESTRATION_FAIL_POINT=after-resume "$CLI" workflow run "$run_id" "$project"; [ "$status" -eq 1 ] || fail 'running metadata preparation'
 sed 's/CCB_ORCHESTRATION_STATUS=interrupted/CCB_ORCHESTRATION_STATUS=running/; s/^CCB_ORCHESTRATION_COMPLETED_AT=.*/CCB_ORCHESTRATION_COMPLETED_AT=/' "$run_dir/orchestration.conf" >"$WORK/orchestration.running"; cp "$WORK/orchestration.running" "$run_dir/orchestration.conf"
 run "$CLI" workflow cancel "$run_id" "$project"; [ "$status" -eq 1 ] || fail 'running orchestration cancelled'; contains "$output" 'controlled by an active automation' 'running orchestration diagnostic'
 
 for point in before-publish after-current-step after-orchestration before-run after-run; do
   new_pending "rollback-$point"
-  run env CCB_TEST_MODE=1 CCB_TEST_ORCHESTRATION_FAIL_POINT=after-resume "$CLI" workflow run "$run_id" "$project"
+  run env CCB_TEST_MODE=1 CCB_TEST_NOW=2026-07-28T11:00:00+0200 CCB_TEST_ORCHESTRATION_FAIL_POINT=after-resume "$CLI" workflow run "$run_id" "$project"
   [ "$status" -eq 1 ] || fail "$point orchestration setup"
   orchestration_file="$run_dir/orchestration.conf"; before=$(snapshot_cancelled_files)
   run env CCB_TEST_MODE=1 CCB_TEST_CANCEL_FAIL_POINT="$point" "$CLI" workflow cancel "$run_id" "$project"
@@ -173,7 +173,7 @@ done
 
 new_pending old-d2
 run "$CLI" workflow status "$run_id" "$project"; [ "$status" -eq 0 ] || fail 'D2 run invalid'; pass
-[ "$(cat "$ROOT/VERSION")" = 1.7.1 ] || fail 'version changed'; pass
+[ "$(cat "$ROOT/VERSION")" = 1.8.0 ] || fail 'version changed'; pass
 managed=$(find "$project/.ccb" -type f ! -path '*/runs/*' | wc -l | tr -d ' '); managed=$((managed + 1)); [ "$managed" -eq 7 ] || fail 'init file count'; pass
 
 printf 'project cancel tests passed: %s/%s\n' "$tests" "$tests"

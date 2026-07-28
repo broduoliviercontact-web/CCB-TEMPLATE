@@ -18,6 +18,8 @@ jobs:
           sh -n scripts/doctor.sh
           sh -n tests/test-doctor.sh
           sh -n scripts/ccb.sh
+          sh -n ccb
+          sh -n scripts/quickstart.sh
           sh -n scripts/project-init.sh
           sh -n scripts/project-config.sh
           sh -n scripts/project-agents-lib.sh
@@ -36,6 +38,7 @@ jobs:
           sh -n scripts/model-resolve.sh
           sh -n tests/test-models.sh
           sh -n tests/test-v1.7.1-regressions.sh
+          sh -n tests/test-v1.8.0-quickstart.sh
           sh -n scripts/provider-router.sh
           sh -n scripts/runtime/provider-ollama.sh
           sh -n tests/test-provider-routing.sh
@@ -83,6 +86,7 @@ jobs:
           ./tests/test-doctor.sh
           ./tests/test-models.sh
           ./tests/test-v1.7.1-regressions.sh
+          ./tests/test-v1.8.0-quickstart.sh
           ./tests/test-provider-routing.sh
           ./tests/test-setup-wizard.sh
           ./scripts/ccb.sh doctor --no-ollama --strict
