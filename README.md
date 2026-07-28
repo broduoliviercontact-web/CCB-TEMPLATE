@@ -3,11 +3,12 @@
 [![Validate CCB Template](https://github.com/broduoliviercontact-web/CCB-TEMPLATE/actions/workflows/validate.yml/badge.svg)](https://github.com/broduoliviercontact-web/CCB-TEMPLATE/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## V2 — Official CCB bootstrap
+## CCB-TEMPLATE 2.0.0
 
 CCB-TEMPLATE configures the official [SeemSeam/claude_codex_bridge](https://github.com/SeemSeam/claude_codex_bridge).
 It is a bootstrap template: it verifies prerequisites, generates the official project configuration
 and installs reusable text assets. It is not an orchestration engine and does not use OpenCode.
+It requires official CCB 8.4.3 or later.
 
 ```sh
 ./install.sh /chemin/du/projet \

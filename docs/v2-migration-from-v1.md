@@ -16,12 +16,13 @@ runtime, model presets, workflow snapshots, profiles, skills, prompts, manuals a
 ## Migrate an existing V1 project
 
 1. Stop work and back up the complete existing `.ccb` directory outside the project.
-2. Preserve any V1 runs, histories and custom memories; V2 does not delete them automatically.
-3. Review which project constraints belong in the V2 shared and role memories.
-4. Install V2 into a clean target path with `install.sh`; it refuses to overwrite an existing
+2. Do not run V2 directly over a V1 project without inspection.
+3. Generate V2 in a separate temporary target; it refuses to overwrite an existing
    `.ccb/ccb.config`.
-5. Compare the generated `.ccb/ccb.config`, then validate it with `ccb config validate`.
-6. Start the official workspace with `ccb` only after validation succeeds.
+4. Compare the generated policy and memories with the V1 project.
+5. Copy only useful, reviewed context manually into the V2 memories.
+6. Preserve old runs and histories outside the new `.ccb` directory.
+7. Validate the generated configuration with `ccb config validate` before starting CCB.
 
 There is no automatic conversion of old runs, no automatic deletion and no automatic push or
 deployment.

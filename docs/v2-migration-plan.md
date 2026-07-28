@@ -34,6 +34,7 @@ Lot 3B removes remaining V1-only manuals, prompts, profiles, skills, examples an
 analysis artifacts. It adds a no-network clean-tree test so the V2 branch remains limited to the
 official bootstrap and assets it actually installs.
 
-## Lot 3C — next
+## Lot 3C — completed
 
-Lot 3C will prepare the official V2 release metadata. It does not begin in this lot.
+Lot 3C prepares the 2.0.0 release metadata, release checks and clean-clone validation. The branch
+is ready for review, push and a pull request, but none of those actions is automatic.

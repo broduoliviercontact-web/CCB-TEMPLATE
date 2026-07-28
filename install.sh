@@ -7,6 +7,20 @@ ROOT=$(CDPATH= cd "$(dirname "$0")" && pwd)
 . "$ROOT/scripts/v2/render-config.sh"
 . "$ROOT/scripts/v2/install-assets.sh"
 
+v2_template_version() {
+  version_file=$ROOT/VERSION
+  [ -f "$version_file" ] && [ ! -L "$version_file" ] || v2_die 'VERSION is missing or unsafe'
+  [ "$(sed -n '$=' "$version_file")" = 1 ] || v2_die 'VERSION must contain exactly one version'
+  version=$(sed -n '1p' "$version_file")
+  printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || v2_die 'VERSION must use MAJOR.MINOR.PATCH'
+  printf '%s\n' "$version"
+}
+
+if [ "${1:-}" = --version ]; then
+  printf 'CCB-TEMPLATE %s\n' "$(v2_template_version)"
+  exit 0
+fi
+
 usage() {
   cat <<'EOF'
 usage: ./install.sh TARGET --name NAME --profile web --claude-ollama-cloud [--yes|--dry-run]

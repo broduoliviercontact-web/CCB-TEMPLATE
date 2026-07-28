@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.0.0 — 2026-07-28
+
+### Breaking changes
+
+- Remove the local V1 CCB engine and root `./ccb` wrapper.
+- Remove home-grown workflows, runs and direct Ollama calls.
+- Every `ccb` command now denotes the official global CCB binary.
+- V1 projects are not migrated automatically.
+
+### Added
+
+- Bootstrap for the official CCB and generated `.ccb/ccb.config`.
+- Five Claude Code agents connected to Ollama Cloud.
+- Dependency preflight, dry-run, and atomic policy and memory installation.
+- V2 documentation, clean-tree checks, release checks, and CI coverage.
+
+### Removed
+
+- V1 Control Room, provider router, agent launcher, model presets and project profiles.
+- V1 scripts, tests, manuals, caches and duplicate runtime assets.
+
+### Migration
+
+- Back up the former `.ccb` directory before changing a V1 project.
+- Follow `docs/v2-migration-from-v1.md` and copy useful information manually.
+- Use the `v1.8.0` tag to access the former engine.
+
 ## 1.8.0
 
 ### Added
