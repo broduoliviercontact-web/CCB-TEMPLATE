@@ -27,3 +27,13 @@ Lot 3A removed the local `./ccb` wrapper, all V1 runtime scripts, direct Ollama 
 home-grown workflow snapshots, V1 model and project presets, their dedicated tests and their CI
 steps. The V2 branch now exposes only `install.sh`, `scripts/v2/` and the official global `ccb`
 workflow. V1.8.0 remains preserved by the `v1.8.0` tag.
+
+## Lot 3B — completed
+
+Lot 3B removes remaining V1-only manuals, prompts, profiles, skills, examples and generated
+analysis artifacts. It adds a no-network clean-tree test so the V2 branch remains limited to the
+official bootstrap and assets it actually installs.
+
+## Lot 3C — next
+
+Lot 3C will prepare the official V2 release metadata. It does not begin in this lot.

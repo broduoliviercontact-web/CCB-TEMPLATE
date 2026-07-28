@@ -24,6 +24,10 @@ done
 
 require "$ROOT/.github/workflows/validate.yml" './tests/test-v2-install.sh'
 require "$ROOT/.github/workflows/validate.yml" './tests/test-v2-docs.sh'
+require "$ROOT/.github/workflows/validate.yml" './tests/test-v2-clean-tree.sh'
+require "$ROOT/README.md" 'V1 profiles, skills, prompts and manuals were removed'
+require "$ROOT/README.md" 'standard built-in asset preset'
+require "$ROOT/docs/v2-quickstart.md" 'standard built-in asset preset'
 
 if rg -n '^\s*ccb\s*$|\$\s*ccb\s*$' "$ROOT/tests/test-v2-install.sh" "$ROOT/tests/test-v2-docs.sh" >/dev/null; then
   fail 'a V2 test launches ccb without a subcommand'
@@ -31,4 +35,4 @@ fi
 require "$ROOT/docs/v2-architecture.md" 'does not call Ollama directly'
 require "$ROOT/docs/v2-architecture.md" 'not a workflow engine'
 
-echo '[OK] V2 documentation tests passed (14 checks)'
+echo '[OK] V2 documentation tests passed (18 checks)'

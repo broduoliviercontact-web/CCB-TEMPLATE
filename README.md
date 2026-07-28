@@ -26,6 +26,9 @@ repository-local `./ccb` command has been removed, as have the V1 provider route
 runtime and home-grown workflows. The installer never pushes or deploys automatically, never
 interprets model responses and never starts CCB or a Cloud model by itself.
 
+`--profile web` selects the standard built-in asset preset. It is the only preset supported by
+V2.0.0 and does not load a `profiles/` directory.
+
 The generated official configuration uses five Claude Code agents through Ollama's
 Anthropic-compatible local endpoint:
 
@@ -50,8 +53,8 @@ They remain intact in the immutable `v1.8.0` tag for historical reference and ex
 git show v1.8.0:README.md
 ```
 
-The text-only [profiles](profiles/README.md), [skills](skills/README.md), policies and memories
-remain available as reusable project guidance; they do not activate an executable V1 runtime.
+The V1 profiles, skills, prompts and manuals were removed with the runtime; consult the tag when
+maintaining an existing V1 project. V2 installs only the policy and memories under `assets/`.
 
 ## License
 

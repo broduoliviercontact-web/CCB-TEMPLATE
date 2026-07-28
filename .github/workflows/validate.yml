@@ -20,7 +20,9 @@ jobs:
           sh -n scripts/v2/install-assets.sh
           sh -n tests/test-v2-install.sh
           sh -n tests/test-v2-docs.sh
+          sh -n tests/test-v2-clean-tree.sh
       - name: Run V2 tests
         run: |
           ./tests/test-v2-install.sh
           ./tests/test-v2-docs.sh
+          ./tests/test-v2-clean-tree.sh

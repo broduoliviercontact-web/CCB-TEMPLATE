@@ -71,12 +71,20 @@ ENV="PATH=$BIN:$PATH CCB_PYTHON=$BIN/python-good"
 
 help=$($INSTALL --help)
 assert_contains "$help" '--claude-ollama-cloud'
+assert_contains "$help" 'web is the only preset currently supported'
+if rg -n 'profiles/' "$ROOT/install.sh" "$ROOT/scripts/v2"; then fail 'V2 bootstrap reads a removed profiles directory'; fi
 
 dry="$WORK/dry"
 run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$dry" --name Dry --profile web --claude-ollama-cloud --dry-run
 [ "$status" -eq 0 ] || fail "dry-run failed: $output"
 [ ! -e "$dry" ] || fail 'dry-run wrote the target'
 assert_contains "$output" 'DRY RUN — no files were modified.'
+
+invalid_profile="$WORK/invalid-profile"
+run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$invalid_profile" --name InvalidProfile --profile python --claude-ollama-cloud --dry-run
+[ "$status" -ne 0 ] || fail 'unsupported profile succeeded'
+assert_contains "$output" '--profile supports only the built-in web preset'
+[ ! -e "$invalid_profile" ] || fail 'unsupported profile wrote the target'
 
 run sh -c "printf '' | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$INSTALL' '$WORK/non-tty' --name NonTTY --profile web --claude-ollama-cloud"
 [ "$status" -ne 0 ] || fail 'non-TTY install without --yes succeeded'
@@ -196,4 +204,4 @@ else
   echo '[SKIP] Optional Cloud model tests (set CCB_TEMPLATE_RUN_CLOUD_TESTS=1 to run)'
 fi
 
-echo '[OK] V2 install tests passed (16 scenarios)'
+echo '[OK] V2 install tests passed (17 scenarios)'

@@ -16,7 +16,7 @@ using Ollama Cloud through its Anthropic-compatible local endpoint.
 
 Options:
   --name NAME              Project name written to shared memory
-  --profile web             Required V2 profile (the only profile available in Lot 1)
+  --profile web             Required built-in V2 preset (web is the only preset currently supported)
   --claude-ollama-cloud     Enable the required Claude Code + Ollama Cloud layout
   --yes                    Confirm a non-interactive installation
   --dry-run                Show the plan without writing files
@@ -41,7 +41,7 @@ done
 
 [ -n "$target" ] || { usage >&2; exit 2; }
 [ -n "$name" ] || v2_die '--name is required'
-[ "$profile" = web ] || v2_die 'Lot 1 supports only --profile web'
+[ "$profile" = web ] || v2_die '--profile supports only the built-in web preset'
 [ "$cloud" -eq 1 ] || v2_die '--claude-ollama-cloud is required'
 
 if [ "$dry_run" -eq 0 ] && [ "$yes" -ne 1 ]; then

@@ -17,15 +17,4 @@
 .ccb/agents/*/history.json
 .ccb/agents/*/history.jsonl
 
-# Graph artifacts are local unless explicitly exported elsewhere.
-graphify-out/
-!graphify-out/
-graphify-out/*
-!graphify-out/.gitkeep
-
-# Graphiste artifacts are local unless explicitly exported elsewhere.
-graphiste-out/
-!graphiste-out/
-graphiste-out/*
-!graphiste-out/.gitkeep
 # END CCB TEMPLATE

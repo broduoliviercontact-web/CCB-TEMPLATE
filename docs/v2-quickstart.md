@@ -43,6 +43,9 @@ claude --model kimi-k2.7-code:cloud -p 'Reply only: connection check.'
 
 ## 3. Preview and install
 
+`--profile web` selects the standard built-in asset preset. It is the only preset supported by
+V2.0.0; external or specialized profile directories are not installed.
+
 Preview without writing files:
 
 ```sh

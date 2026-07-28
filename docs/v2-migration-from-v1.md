@@ -9,9 +9,9 @@ The V1 files have been removed from the V2 branch. `./ccb` no longer exists here
 means the official global binary. The complete V1.8.0 engine remains available from the
 `v1.8.0` tag for historical reference and existing V1 projects.
 
-The migration keeps the useful role boundaries, policy, shared and private memories, text-only
-skills and profiles. The removed surface includes the local wrapper, V1 CLI, provider router,
-direct Ollama runtime, model presets, workflow snapshots and their tests.
+The migration keeps the useful role boundaries, policy and shared and private memories as V2
+assets. The removed surface includes the local wrapper, V1 CLI, provider router, direct Ollama
+runtime, model presets, workflow snapshots, profiles, skills, prompts, manuals and their tests.
 
 ## Migrate an existing V1 project
 
