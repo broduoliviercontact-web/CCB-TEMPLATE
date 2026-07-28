@@ -3,7 +3,43 @@
 [![Validate CCB Template](https://github.com/broduoliviercontact-web/CCB-TEMPLATE/actions/workflows/validate.yml/badge.svg)](https://github.com/broduoliviercontact-web/CCB-TEMPLATE/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-CCB Template turns a fresh clone into a validated local project with one command:
+## V2 — Official CCB bootstrap
+
+CCB-TEMPLATE configures the official [SeemSeam/claude_codex_bridge](https://github.com/SeemSeam/claude_codex_bridge).
+It is not another orchestrator: the global official `ccb` binary owns the panes and collaboration;
+Claude Code owns agent turns; Ollama supplies the Anthropic-compatible local endpoint and Cloud models.
+OpenCode is not part of this architecture.
+
+The V2 bootstrap command is:
+
+```sh
+./install.sh TARGET \
+  --name "Nom du projet" \
+  --profile web \
+  --claude-ollama-cloud \
+  --yes
+```
+
+Then start the official CCB from the target project:
+
+```sh
+cd TARGET
+ccb config validate
+ccb
+```
+
+The real `ccb` binary must be global and at least version 8.4.3. The bootstrap verifies tmux,
+Python 3.10+ with its required modules, Claude Code, Ollama and the selected Ollama Cloud models.
+It never pushes or deploys automatically. See [V2 quickstart](docs/v2-quickstart.md),
+[architecture](docs/v2-architecture.md), [migration](docs/v2-migration-from-v1.md) and
+[troubleshooting](docs/v2-troubleshooting.md).
+
+## Legacy V1.8.0 — deprecated
+
+The sections below are retained only during the migration. The local `./ccb` command belongs to
+the V1 engine and must not be used for new V2 projects. It will be removed before the V2 release.
+
+CCB Template V1.8.0 turns a fresh clone into a validated local project with one command:
 
 ```sh
 git clone https://github.com/broduoliviercontact-web/CCB-TEMPLATE.git
@@ -22,8 +58,8 @@ runs validation and Doctor strict, verifies the workflow snapshot, and optionall
 selected workflow. It never installs Ollama, downloads local multi-gigabyte models, exposes
 secrets, modifies Git, or interprets model output.
 
-For a guided explanation, see [the quickstart guide](docs/quickstart.md). Existing commands
-remain available through `./ccb` and `./scripts/ccb.sh`.
+For a guided V1 explanation, see [the legacy quickstart guide](docs/quickstart.md). Existing V1
+commands remain available temporarily through `./ccb` and `./scripts/ccb.sh`.
 
 ### Minimal project bootstrap
 
