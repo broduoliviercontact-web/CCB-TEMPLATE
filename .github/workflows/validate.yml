@@ -1,4 +1,4 @@
-name: Validate CCB Template
+name: Validate CCB Template V2
 
 on:
   push:
@@ -11,113 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate shell syntax
+      - name: Validate V2 shell syntax
         run: |
-          sh -n scripts/install-project.sh
-          sh -n scripts/validate-ccb.sh
-          sh -n scripts/doctor.sh
-          sh -n tests/test-doctor.sh
-          sh -n scripts/ccb.sh
-          sh -n ccb
-          sh -n scripts/quickstart.sh
-          sh -n scripts/project-init.sh
-          sh -n scripts/project-config.sh
-          sh -n scripts/project-agents-lib.sh
-          sh -n scripts/project-agents.sh
-          sh -n scripts/project-workflows-lib.sh
-          sh -n scripts/project-workflows.sh
-          sh -n scripts/project-runs-lib.sh
-          sh -n scripts/project-runs.sh
-          sh -n scripts/project-execution-lib.sh
-          sh -n scripts/project-orchestration-lib.sh
-          sh -n scripts/project-upgrade.sh
-          sh -n scripts/project-skills.sh
-          sh -n scripts/mascot-lib.sh
-          sh -n scripts/model-lib.sh
-          sh -n scripts/model-setup.sh
-          sh -n scripts/model-resolve.sh
-          sh -n tests/test-models.sh
-          sh -n tests/test-v1.7.1-regressions.sh
-          sh -n tests/test-v1.8.0-quickstart.sh
-          sh -n scripts/provider-router.sh
-          sh -n scripts/runtime/provider-ollama.sh
-          sh -n tests/test-provider-routing.sh
-          sh -n tests/test-install.sh
-          sh -n tests/test-profiles.sh
-          sh -n tests/test-cli.sh
-          sh -n tests/test-project-init.sh
-          sh -n tests/test-project-agents.sh
-          sh -n tests/test-project-workflows.sh
-          sh -n tests/test-project-runs.sh
-          sh -n tests/test-project-execution.sh
-          sh -n tests/test-project-orchestration.sh
-          sh -n tests/test-project-retry.sh
-          sh -n tests/test-project-cancel.sh
-          sh -n tests/test-project-history.sh
-          sh -n tests/test-project-upgrade.sh
-          sh -n tests/test-project-profiles.sh
-          sh -n tests/test-project-models.sh
-          sh -n tests/test-project-config.sh
-          sh -n tests/test-project-skills.sh
-          sh -n tests/test-skills-command.sh
-          sh -n tests/test-setup-wizard.sh
-      - name: Validate template
-        run: ./scripts/validate-ccb.sh
-      - name: Run installation integration tests
+          sh -n install.sh
+          sh -n scripts/v2/common.sh
+          sh -n scripts/v2/preflight.sh
+          sh -n scripts/v2/render-config.sh
+          sh -n scripts/v2/install-assets.sh
+          sh -n tests/test-v2-install.sh
+          sh -n tests/test-v2-docs.sh
+          sh -n tests/test-v2-clean-tree.sh
+          sh -n tests/test-v2-release.sh
+      - name: Run V2 tests
         run: |
-          ./tests/test-install.sh
-          ./tests/test-profiles.sh
-          ./tests/test-cli.sh
-          ./tests/test-project-init.sh
-          ./tests/test-project-agents.sh
-          ./tests/test-project-workflows.sh
-          ./tests/test-project-runs.sh
-          ./tests/test-project-execution.sh
-          ./tests/test-project-orchestration.sh
-          ./tests/test-project-retry.sh
-          ./tests/test-project-cancel.sh
-          ./tests/test-project-history.sh
-          ./tests/test-project-upgrade.sh
-          ./tests/test-project-profiles.sh
-          ./tests/test-project-models.sh
-          ./tests/test-project-skills.sh
-          ./tests/test-project-config.sh
-          ./tests/test-skills-command.sh
-          ./tests/test-doctor.sh
-          ./tests/test-models.sh
-          ./tests/test-v1.7.1-regressions.sh
-          ./tests/test-v1.8.0-quickstart.sh
-          ./tests/test-provider-routing.sh
-          ./tests/test-setup-wizard.sh
-          ./scripts/ccb.sh doctor --no-ollama --strict
-      - name: Run D3 no-network workflow scenario
-        run: |
-          scenario_root=$(mktemp -d)
-          trap 'find "$scenario_root" -depth -type f -exec rm -f {} \;; find "$scenario_root" -depth -type d -exec rmdir {} \;' EXIT
-          project="$scenario_root/project"
-          response="$scenario_root/response"
-          witness="$scenario_root/witness"
-          ./scripts/ccb.sh init "$project" --yes >/dev/null
-          ./scripts/ccb.sh workflow start feature "$project" >/dev/null
-          run_id=$(./scripts/ccb.sh workflow status --latest "$project" | sed -n 's/^Run ID: //p')
-          ./scripts/ccb.sh workflow resume "$run_id" "$project" >/dev/null
-          if CCB_TEST_MODE=1 CCB_TEST_PROVIDER_ERROR=unavailable ./scripts/ccb.sh workflow execute-step "$run_id" "$project" >/dev/null 2>&1; then exit 1; fi
-          ./scripts/ccb.sh workflow retry-step "$run_id" "$project" >/dev/null
-          printf 'Literal $(touch "%s")\n<script>alert(1)</script>\n' "$witness" >"$response"
-          CCB_TEST_MODE=1 CCB_TEST_PROVIDER_RESPONSE_FILE="$response" ./scripts/ccb.sh workflow execute-step "$run_id" "$project" >/dev/null
-          ./scripts/ccb.sh workflow complete-step "$run_id" "$project" >/dev/null
-          history=$(./scripts/ccb.sh workflow history "$run_id" "$project")
-          test -f "$project/.ccb/runs/$run_id/01-manager/attempts/001.conf"
-          grep -Fqx 'CCB_EXECUTION_ATTEMPT=2' "$project/.ccb/runs/$run_id/01-manager/execution.conf"
-          if printf '%s\n' "$history" | grep -Fq 'Literal $(touch'; then exit 1; fi
-          test ! -e "$witness"
-          ./scripts/ccb.sh workflow start feature "$project" >/dev/null
-          cancel_id=$(./scripts/ccb.sh workflow status --latest "$project" | sed -n 's/^Run ID: //p')
-          ./scripts/ccb.sh workflow cancel "$cancel_id" "$project" >/dev/null
-          if ./scripts/ccb.sh workflow resume "$cancel_id" "$project" >/dev/null 2>&1; then exit 1; fi
-          ./scripts/ccb.sh workflow status "$cancel_id" "$project" >/dev/null
-          ./scripts/ccb.sh workflow inspect "$cancel_id" "$project" >/dev/null
-          ./scripts/ccb.sh config "$project" >/dev/null
-          ./scripts/ccb.sh doctor "$project" --no-ollama --strict >/dev/null
-          residue=$(find "$project/.ccb/runs" \( -name '.ccb-transaction.*' -o -name '.ccb-retry-transaction.*' -o -name '*.old' -o -name '*.new' -o -name '.ccb-backup*' -o -name '.ccb-execution-lock' -o -name '.ccb-orchestration-lock' \) -print -quit)
-          test -z "$residue"
+          ./tests/test-v2-install.sh
+          ./tests/test-v2-docs.sh
+          ./tests/test-v2-clean-tree.sh
+          ./tests/test-v2-release.sh

@@ -3,327 +3,60 @@
 [![Validate CCB Template](https://github.com/broduoliviercontact-web/CCB-TEMPLATE/actions/workflows/validate.yml/badge.svg)](https://github.com/broduoliviercontact-web/CCB-TEMPLATE/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-CCB Template turns a fresh clone into a validated local project with one command:
+## CCB-TEMPLATE 2.0.0
+
+CCB-TEMPLATE configures the official [SeemSeam/claude_codex_bridge](https://github.com/SeemSeam/claude_codex_bridge).
+It is a bootstrap template: it verifies prerequisites, generates the official project configuration
+and installs reusable text assets. It is not an orchestration engine and does not use OpenCode.
+It requires official CCB 8.4.3 or later.
 
 ```sh
-git clone https://github.com/broduoliviercontact-web/CCB-TEMPLATE.git
-cd CCB-TEMPLATE
-
-./ccb quickstart "$HOME/topchef" \
-  --name "TopChef" \
+./install.sh /chemin/du/projet \
+  --name "Nom du projet" \
   --profile web \
-  --cloud \
-  --run feature \
+  --claude-ollama-cloud \
   --yes
+
+cd /chemin/du/projet
+ccb config validate
+ccb
 ```
 
-CCB V1.8.0 checks prerequisites and Ollama, creates the project, configures role-based models,
-runs validation and Doctor strict, verifies the workflow snapshot, and optionally executes the
-selected workflow. It never installs Ollama, downloads local multi-gigabyte models, exposes
-secrets, modifies Git, or interprets model output.
+Every `ccb` command in this branch denotes the official globally installed CCB binary. The
+repository-local `./ccb` command has been removed, as have the V1 provider router, direct Ollama
+runtime and home-grown workflows. The installer never pushes or deploys automatically, never
+interprets model responses and never starts CCB or a Cloud model by itself.
 
-For a guided explanation, see [the quickstart guide](docs/quickstart.md). Existing commands
-remain available through `./ccb` and `./scripts/ccb.sh`.
+`--profile web` selects the standard built-in asset preset. It is the only preset supported by
+V2.0.0 and does not load a `profiles/` directory.
 
-### Minimal project bootstrap
+The generated official configuration uses five Claude Code agents through Ollama's
+Anthropic-compatible local endpoint:
 
-Create the minimal local CCB contract without installing runtimes or touching Git:
-
-```sh
-./scripts/ccb.sh init ./mon-projet --yes
-./scripts/ccb.sh init ./mon-projet
-./scripts/ccb.sh init ./mon-projet --dry-run
-```
-
-The first invocation creates five managed files. An identical second invocation reports `SKIP`
-for each one instead of failing. See [the bootstrap guide](docs/project-bootstrap.md) for the
-conflict and safety rules.
-
-Profiles and declarative Ollama model routing are available during bootstrap:
-
-```sh
-./scripts/ccb.sh init ./mon-site --profile web --yes
-./scripts/ccb.sh init ./outil-node --profile node --model qwen3:8b --coder-model qwen2.5-coder:7b --yes
-./scripts/ccb.sh init "./studio midi" --profile audio --dry-run
-./scripts/ccb.sh config ./mon-site
-./scripts/ccb.sh skills ./mon-site --agent codex
-```
-
-Supported bootstrap profiles are `generic`, `web`, `node`, `python`, and `audio`. No model is
-downloaded or contacted during initialization.
-
-### Safe upgrade from 1.6.0
-
-Bootstrap projects created with CCB 1.6.0 can be migrated explicitly; inspect the complete plan first:
-
-```sh
-./scripts/ccb.sh upgrade ./mon-projet --dry-run
-./scripts/ccb.sh upgrade ./mon-projet --yes
-```
-
-The upgrade never runs automatically and stops on customized managed files. See [the upgrade guide](docs/project-upgrade.md).
-
-### Diagnostics
-
-### Declarative agents
-
-```sh
-./scripts/ccb.sh agents ./mon-projet
-./scripts/ccb.sh agent show developer ./mon-projet
-./scripts/ccb.sh agent validate ./mon-projet
-```
-
-Agent access is declarative only; it is not an operating-system sandbox. See [project agents](docs/project-agents.md).
-
-### Declarative workflows
-
-```sh
-./scripts/ccb.sh workflows ./mon-projet
-./scripts/ccb.sh workflow plan feature ./mon-projet
-```
-
-Workflows are persistent local orchestration records. V1.8.0 resolves each snapshot from its
-configured agent role and executes fixed snapshots sequentially through loopback-only Ollama.
-Responses remain inert Markdown data, and CCB normalizes the final line boundary before adding
-its own transmission markers. See [project workflows](docs/project-workflows.md).
-
-```sh
-./scripts/ccb.sh workflow start feature ./mon-projet
-```
-
-Resume a run and record an explicit step result before completing it:
-
-```sh
-./scripts/ccb.sh workflow resume --latest ./mon-projet
-./scripts/ccb.sh workflow execute-step --latest ./mon-projet
-./scripts/ccb.sh workflow retry-step --latest ./mon-projet
-./scripts/ccb.sh workflow run --latest ./mon-projet
-./scripts/ccb.sh workflow complete-step --latest ./mon-projet
-./scripts/ccb.sh workflow history --latest ./mon-projet
-./scripts/ccb.sh workflow cancel RUN_ID ./mon-projet
-```
-
-`execute-step` can generate one pending result through the local Ollama API after an explicit resume. It uses only the persistent run snapshot, never executes model output, and does not progress the workflow. Failed executions are retried manually with `retry-step`, up to three attempts; CCB never retries automatically. `cancel` preserves all history and makes the run terminal. `history` reconstructs a deterministic, read-only timeline from bounded metadata. See [project runs](docs/project-runs.md) and [workflow reliability](docs/project-reliability.md).
-
-Status, Inspect, Config, and Doctor expose only bounded execution metadata. They never print prompts, snapshot Markdown, result bodies, or raw provider responses.
-
-```sh
-./scripts/ccb.sh workflow status --latest ./mon-projet
-./scripts/ccb.sh workflow inspect RUN_ID ./mon-projet
-./scripts/ccb.sh workflow history RUN_ID ./mon-projet
-./scripts/ccb.sh config ./mon-projet
-```
-
-```sh
-./scripts/ccb.sh doctor
-./scripts/ccb.sh doctor ./mon-projet --no-ollama
-./scripts/ccb.sh doctor ./mon-projet --strict
-```
-
-Recommended flow: clone or install CCB, run `ccb init`, inspect with `ccb config`, then run
-`ccb doctor`. A 1.6.0 project receives a read-only upgrade recommendation; Doctor never migrates it.
-See [doctor](docs/doctor.md) and the [V1.6.0 overview](docs/v1.6.0.md).
-
-## Sommaire
-
-- [Démarrage rapide](#démarrage-rapide)
-- [Les cinq agents](#les-cinq-agents)
-- [Utilisation recommandée](#utilisation-recommandée)
-- [Skills partagés](#skills-partagés)
-- [Politique TEXT ONLY](#politique-text-only)
-- [Validation](#validation)
-- [Control Room et profils](#control-room-et-profils)
-- [Arborescence](#arborescence)
-- [Documentation](#documentation)
-
-## Démarrage rapide
-
-### Cas A — utiliser le dépôt comme template GitHub
-
-1. Ouvrez ce dépôt sur GitHub.
-2. Si GitHub affiche **Use this template** (après activation manuelle de *Template repository*),
-   créez votre nouveau dépôt depuis ce modèle.
-3. Clonez le nouveau projet.
-4. Créez au moins un commit initial si nécessaire, puis exécutez le diagnostic et le validateur :
-
-   ```sh
-   ./scripts/doctor.sh
-   ./scripts/validate-ccb.sh
-   ```
-
-### Cas B — installer CCB dans un dépôt existant
-
-Le projet cible doit être un dépôt Git avec au moins un commit ; un arbre de travail propre est
-fortement recommandé.
-
-```sh
-git clone https://github.com/broduoliviercontact-web/CCB-TEMPLATE.git
-cd CCB-TEMPLATE
-
-./scripts/install-project.sh /chemin/vers/mon-projet
-./scripts/doctor.sh /chemin/vers/mon-projet
-./scripts/validate-ccb.sh /chemin/vers/mon-projet
-```
-
-Pour mettre à jour la politique commune tout en préservant les mémoires locales :
-
-```sh
-./scripts/install-project.sh /chemin/vers/mon-projet --update
-```
-
-`--update` sauvegarde la politique précédente dans `.ccb/backups/`, met à jour la politique
-commune et ne doit pas écraser les fichiers `memory.md`. Les scripts ne démarrent ni CCB ni les
-agents automatiquement.
-
-## Les cinq agents
-
-| Agent | Responsabilité | Modification du code |
-| --- | --- | --- |
-| Manager | Planifie, délègue et consolide les résultats. | Non |
-| Graph | Analyse l’architecture technique et les dépendances. | Non |
-| Graphiste | Analyse l’UX/UI, l’accessibilité et la direction visuelle depuis des sources textuelles. | Non |
-| Developer | Implémente les changements dans un worktree isolé. | Oui |
-| Reviewer | Vérifie les changements et produit un verdict. | Non |
-
-Graph concerne l’architecture technique. Graphiste concerne le design, l’UX/UI et
-l’accessibilité. Le Developer reste le seul agent autorisé à modifier le code applicatif.
-
-```text
-Manager
-├── Graph, si une analyse technique est nécessaire
-├── Graphiste, si une analyse UX/UI est nécessaire
-└── Developer
-    └── Reviewer
-        └── Manager
-```
-
-Graph et Graphiste peuvent intervenir séparément ou en parallèle.
-
-## Utilisation recommandée
-
-1. L’utilisateur donne l’objectif au Manager.
-2. Le Manager clarifie le périmètre et les critères d’acceptation.
-3. Graph et/ou Graphiste analysent sans modifier le code.
-4. Le Developer travaille dans un worktree isolé, exécute les tests et produit un handoff.
-5. Le Reviewer contrôle sans corriger directement.
-6. Le Manager décide de la suite.
-
-Aucun push ou déploiement n’est effectué sans autorisation explicite.
-
-## Skills partagés
-
-| Skill | Utilité |
+| Agent | Model |
 | --- | --- |
-| `ccb-handoff` | Standardise les transmissions entre agents. |
-| `project-memory` | Maintient des mémoires courtes et durables. |
-| `safe-git-boundaries` | Définit les limites Git et les droits des rôles. |
-| `text-only-policy` | Garantit une collaboration sans Vision. |
+| manager | `glm-5.2:cloud` |
+| graph | `qwen3.5:397b-cloud` |
+| graphiste | `gemma4:31b-cloud` |
+| developer | `kimi-k2.7-code:cloud` |
+| reviewer | `deepseek-v4-pro:cloud` |
 
-[Consulter le catalogue des skills](skills/README.md). Les skills sont des références de
-travail : ils ne donnent pas automatiquement de permissions et
-[`.ccb/AGENT_POLICY.md`](.ccb/AGENT_POLICY.md) reste prioritaire.
+See the [V2 quickstart](docs/v2-quickstart.md), [architecture](docs/v2-architecture.md),
+[migration guide](docs/v2-migration-from-v1.md), [migration plan](docs/v2-migration-plan.md) and
+[troubleshooting](docs/v2-troubleshooting.md).
 
-## Politique TEXT ONLY
+## V1.8.0 archive
 
-**Interdit :** analyse de captures d’écran, PNG/JPG/WEBP, Vision, PDF interprétés visuellement
-et transmission d’images entre agents.
-
-**Autorisé :** HTML, CSS, SVG textuel, DOM, ARIA, tokens de design, logs, tests, diffs Git et
-sorties textuelles Playwright ou Puppeteer.
-
-[Lire la politique complète](skills/shared/text-only-policy/SKILL.md). Une analyse visuelle
-indispensable exige une autorisation humaine explicite.
-
-## Validation
+The V1 engine and all of its former commands are unavailable on `refactor/official-ccb-v2`.
+They remain intact in the immutable `v1.8.0` tag for historical reference and existing V1 projects:
 
 ```sh
-sh -n scripts/install-project.sh
-sh -n scripts/validate-ccb.sh
-sh -n scripts/doctor.sh
-sh -n tests/test-install.sh
-
-./scripts/doctor.sh
-./scripts/validate-ccb.sh
-./tests/test-install.sh
+git show v1.8.0:README.md
 ```
 
-- `[OK]` : validation réussie ;
-- `[WARN]` : point à examiner ;
-- `[ERROR]` : correction obligatoire.
+The V1 profiles, skills, prompts and manuals were removed with the runtime; consult the tag when
+maintaining an existing V1 project. V2 installs only the policy and memories under `assets/`.
 
-La GitHub Action **Validate CCB Template** exécute également ces vérifications lors des pushes
-et pull requests vers `main`.
+## License
 
-`scripts/doctor.sh` est un diagnostic sans écriture : il vérifie l'environnement local, Git et
-la structure CCB, puis propose les corrections éventuelles. Ajouter `--verbose` affiche aussi
-le rapport détaillé du validateur : `./scripts/doctor.sh /chemin/vers/mon-projet --verbose`.
-
-## Control Room et profils
-
-`./scripts/ccb.sh` ouvre une interface terminal rétro, optionnelle et sans dépendance. Elle
-délègue les commandes fiables existantes ; les usages non interactifs restent disponibles dans
-[la documentation CLI](docs/cli.md). Les sept profils locaux, dont `generic` par défaut, sont
-décrits dans [la documentation des profils](docs/profiles.md).
-
-## Animated mascots
-
-Chaque session interactive choisit localement une mascotte originale et la conserve jusqu’à la
-sortie. Forcez-la avec `CCB_MASCOT=radio-bot ./scripts/ccb.sh` ou `./scripts/ccb.sh --mascot radio-bot`.
-Désactivez le mouvement avec `CCB_NO_ANIMATION=1` ou `--no-animation`; `--ascii` garde un rendu ASCII.
-IDs : `terminal-bot`, `radio-bot`, `synth-bot`, `server-bot`, `space-bot`.
-
-### Mascot moods
-
-Les moods sont `neutral`, `working`, `happy`, `worried`, `error` et `goodbye`. Forcez le mood
-initial avec `./scripts/ccb.sh --mood happy` ou `CCB_MASCOT_MOOD=worried ./scripts/ccb.sh`.
-
-## Arborescence
-
-```text
-.ccb/
-├── AGENT_POLICY.md
-├── ccb_memory.md
-└── agents/
-    ├── manager/
-    ├── graph/
-    ├── graphiste/
-    └── reviewer/
-
-skills/
-└── shared/
-
-graphify-out/
-graphiste-out/
-scripts/
-tests/
-docs/
-```
-
-- `graphify-out/` : sorties autorisées de l’agent Graph ;
-- `graphiste-out/` : sorties autorisées de l’agent Graphiste ;
-- `.ccb/` : politique et mémoires persistantes ;
-- `skills/shared/` : contrats de travail communs.
-
-## Utilisation avec Claude Code et Codex
-
-CCB peut piloter Claude Code comme interface de fournisseur. Codex peut utiliser ce dépôt comme
-contrat de workflow : il lit les politiques et mémoires, laisse le manager orchestrer et réserve
-les modifications produit au developer. Aucune clé, session, état provider ou runtime CCB ne
-doit être versionné.
-
-## Documentation
-
-- [Démarrer avec la template](docs/getting-started.md)
-- [Architecture](docs/architecture.md)
-- [Rôles](docs/roles.md)
-- [Workflow](docs/workflow.md)
-- [Politique des agents](.ccb/AGENT_POLICY.md)
-- [Catalogue des skills](skills/README.md)
-
-## Activer le dépôt comme GitHub Template
-
-Sur GitHub, activez manuellement : **Settings → General → Template repository**.
-
-## Licence
-
-Ce template est distribué sous licence [MIT](LICENSE).
+This template is distributed under the [MIT License](LICENSE).
