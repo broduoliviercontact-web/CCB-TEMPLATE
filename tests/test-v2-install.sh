@@ -3,7 +3,14 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd)
 INSTALL="$ROOT/install.sh"
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/ccb-v2-install.XXXXXX")
+TMP_BASE=${TMPDIR:-/tmp}
+TMP_BASE=${TMP_BASE%/}
+[ -n "$TMP_BASE" ] || TMP_BASE=/
+if [ "$TMP_BASE" = / ]; then
+  WORK=$(mktemp -d '/ccb-v2-install.XXXXXX')
+else
+  WORK=$(mktemp -d "$TMP_BASE/ccb-v2-install.XXXXXX")
+fi
 trap 'rm -rf "$WORK"' EXIT HUP INT TERM
 BIN="$WORK/bin"
 mkdir -p "$BIN"
