@@ -10,7 +10,7 @@ entry_window = "main"
 
 [windows]
 main = "manager:claude"
-design = "graph:claude, graphiste:claude"
+design = "graph:claude"
 build = "developer:claude"
 review = "reviewer:claude"
 
@@ -38,18 +38,6 @@ inherit_auth = false
 ANTHROPIC_AUTH_TOKEN = "ollama"
 ANTHROPIC_BASE_URL = "http://localhost:11434"
 
-[agents.graphiste]
-model = "gemma4:31b-cloud"
-description = "Fournit des recommandations UX/UI textuelles sans modifier le projet."
-
-[agents.graphiste.provider_profile]
-inherit_api = false
-inherit_auth = false
-
-[agents.graphiste.env]
-ANTHROPIC_AUTH_TOKEN = "ollama"
-ANTHROPIC_BASE_URL = "http://localhost:11434"
-
 [agents.developer]
 model = "kimi-k2.7-code:cloud"
 description = "Implémente les changements autorisés et exécute les validations pertinentes."
@@ -63,7 +51,7 @@ ANTHROPIC_AUTH_TOKEN = "ollama"
 ANTHROPIC_BASE_URL = "http://localhost:11434"
 
 [agents.reviewer]
-model = "deepseek-v4-pro:cloud"
+model = "kimi-k2.6:cloud"
 description = "Relit en lecture seule les risques, régressions et validations."
 
 [agents.reviewer.provider_profile]

@@ -71,10 +71,10 @@ v2_preflight() {
   v2_info "Claude Code: $(command -v claude)"
   command -v ollama >/dev/null 2>&1 || v2_die 'Ollama is required; install Ollama and start its local server'
   models=$(ollama list 2>/dev/null) || v2_die 'Ollama server is not reachable; start Ollama and retry'
-  for model in glm-5.2:cloud qwen3.5:397b-cloud gemma4:31b-cloud kimi-k2.7-code:cloud deepseek-v4-pro:cloud; do
+  for model in glm-5.2:cloud qwen3.5:397b-cloud kimi-k2.7-code:cloud kimi-k2.6:cloud; do
     printf '%s\n' "$models" | awk 'NR > 1 { print $1 }' | grep -Fqx "$model" || v2_die "Ollama Cloud model is unavailable: $model"
   done
-  v2_info 'Ollama server and five required Cloud models: available'
+  v2_info 'Ollama server and four required Cloud models: available'
 
   if [ "$token_optimization" -eq 1 ]; then
     command -v rtk >/dev/null 2>&1 || v2_die "$(printf '%s\n%s\n%s\n%s' \

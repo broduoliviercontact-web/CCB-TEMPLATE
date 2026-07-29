@@ -21,7 +21,7 @@ for document in docs/v2-quickstart.md docs/v2-architecture.md docs/v2-migration-
   if grep -Fq 'qwen3-coder:480b-cloud' "$ROOT/$document"; then fail "$document mentions retired model"; fi
 done
 
-for model in glm-5.2:cloud qwen3.5:397b-cloud gemma4:31b-cloud kimi-k2.7-code:cloud deepseek-v4-pro:cloud; do
+for model in glm-5.2:cloud qwen3.5:397b-cloud kimi-k2.7-code:cloud kimi-k2.6:cloud; do
   require "$ROOT/docs/v2-architecture.md" "$model"
 done
 

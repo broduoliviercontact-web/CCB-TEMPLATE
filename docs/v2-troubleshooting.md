@@ -16,8 +16,8 @@ the `v1.8.0` tag.
 ## Ollama or a Cloud model is unavailable
 
 Start Ollama and run `ollama list`. The required models are `glm-5.2:cloud`,
-`qwen3.5:397b-cloud`, `gemma4:31b-cloud`, `kimi-k2.7-code:cloud` and
-`deepseek-v4-pro:cloud`. A model-retired HTTP 410 response means that the requested model must
+`qwen3.5:397b-cloud`, `kimi-k2.7-code:cloud` and
+`kimi-k2.6:cloud`. A model-retired HTTP 410 response means that the requested model must
 be replaced; do not restore the removed V1 coding fallback.
 
 ## Claude Code, tmux or configuration issues

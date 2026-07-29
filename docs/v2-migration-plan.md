@@ -6,7 +6,7 @@ Lot 1 added a parallel bootstrap for the official
 [Claude Code Bridge](https://github.com/SeemSeam/claude_codex_bridge). It does not start CCB,
 Claude Code, tmux or a model.
 
-`install.sh` checks the official global CCB version, local prerequisites and the five selected
+`install.sh` checks the official global CCB version, local prerequisites and the four selected
 Ollama Cloud models. It then creates the official `.ccb/ccb.config`, shared memory, role
 memories and policy through atomic writes. Existing memories are preserved and an existing
 `ccb.config` is a conflict.

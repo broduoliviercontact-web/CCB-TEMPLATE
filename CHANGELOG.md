@@ -7,6 +7,12 @@
 - Optional `--token-optimization` project bootstrap for RTK guidance and a pinned Tilth MCP
   server, with safe `.mcp.json` merging and preservation of existing Claude project rules.
 
+### Fixed
+
+- Align the generated CCB topology with the four permanent roles supported by the current CCB
+  governance: manager, graph, developer and reviewer.
+- Keep CCB runtime state and Graphify outputs out of the repository worktree.
+
 ## 2.0.0 — 2026-07-28
 
 ### Breaking changes

@@ -1,5 +1,6 @@
 # BEGIN CCB TEMPLATE
 # CCB runtime and recoverable state
+/.ccb/
 .ccb/backups/
 .ccb/ccbd/
 .ccb/workspaces/
@@ -16,5 +17,12 @@
 .ccb/agents/*/histories/
 .ccb/agents/*/history.json
 .ccb/agents/*/history.jsonl
+.ccb/agents/*/agent.json
+.ccb/agents/*/events.jsonl
+.ccb/agents/*/runtime.json
+.ccb/project.identity.json
+.ccb/project.identity.lock
+.ccb/state/
+graphify-out/
 
 # END CCB TEMPLATE

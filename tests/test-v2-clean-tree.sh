@@ -9,7 +9,7 @@ require_absent() { [ ! -e "$ROOT/$1" ] || fail "legacy or generated path exists:
 for path in \
   ccb scripts/ccb.sh scripts/provider-router.sh scripts/agent-launcher.sh \
   scripts/runtime scripts/project-workflows.sh scripts/project-runs.sh \
-  model-presets project-profiles .ccb/runs graphify-out graphiste-out \
+  model-presets project-profiles .ccb/runs graphify-out graphiste-out assets/agents/graphiste \
   agent-runtime profiles skills examples; do
   require_absent "$path"
 done
@@ -19,7 +19,7 @@ for path in \
   scripts/v2/common.sh scripts/v2/preflight.sh scripts/v2/render-config.sh scripts/v2/install-assets.sh \
   assets/AGENT_POLICY.md assets/ccb_memory.md assets/token-optimization.md \
   assets/agents/manager/memory.md assets/agents/graph/memory.md \
-  assets/agents/graphiste/memory.md assets/agents/developer/memory.md \
+  assets/agents/developer/memory.md \
   assets/agents/reviewer/memory.md \
   docs/v2-architecture.md docs/v2-migration-from-v1.md docs/v2-migration-plan.md \
   docs/v2-quickstart.md docs/v2-troubleshooting.md \

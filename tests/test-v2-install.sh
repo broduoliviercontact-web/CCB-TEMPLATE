@@ -44,9 +44,8 @@ case "\${1:-}" in
 NAME ID SIZE MODIFIED
 glm-5.2:cloud a 1 now
 qwen3.5:397b-cloud b 1 now
-gemma4:31b-cloud c 1 now
-kimi-k2.7-code:cloud d 1 now
-deepseek-v4-pro:cloud e 1 now
+kimi-k2.7-code:cloud c 1 now
+kimi-k2.6:cloud d 1 now
 MODELS
   ;;
   *) exit 88 ;;
@@ -149,7 +148,7 @@ project="$WORK/project"
 run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" ANTHROPIC_AUTH_TOKEN='CCB_TEMPLATE_SIMULATED_TOKEN_DO_NOT_PERSIST' "$INSTALL" "$project" --name 'Web Project' --profile web --claude-ollama-cloud --yes
 [ "$status" -eq 0 ] || fail "installation failed: $output"
 cmp -s "$project/.ccb/ccb.config" "$ROOT/tests/fixtures/ccb.config.expected" || fail 'configuration is not deterministic expected output'
-for agent in manager graph graphiste developer reviewer; do
+for agent in manager graph developer reviewer; do
   grep -Fq "[agents.$agent]" "$project/.ccb/ccb.config" || fail "missing agent $agent"
   grep -Fq "[agents.$agent.provider_profile]" "$project/.ccb/ccb.config" || fail "missing provider profile $agent"
   grep -A2 -F "[agents.$agent.provider_profile]" "$project/.ccb/ccb.config" | grep -Fqx 'inherit_api = false' || fail "missing inherit_api $agent"
@@ -280,7 +279,7 @@ mkdir "$python_deps"
 cp "$BIN/python-missing-deps" "$python_deps/python3.14"
 cp "$BIN/python-good" "$python_deps/python3.13"
 chmod +x "$python_deps"/*
-run env PATH="$python_deps:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-deps-target" --name PythonDeps --profile web --claude-ollama-cloud --dry-run
+run env -u CCB_PYTHON PATH="$python_deps:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-deps-target" --name PythonDeps --profile web --claude-ollama-cloud --dry-run
 [ "$status" -eq 0 ] || fail "missing-dependencies fallback failed: $output"
 assert_contains "$output" "Python candidate rejected: $python_deps/python3.14 (missing tomllib/tomli, aiohttp, or cryptography)"
 assert_contains "$output" "Python: $python_deps/python3.13 (3.12)"
@@ -290,7 +289,7 @@ mkdir "$python_old"
 cp "$BIN/python-old" "$python_old/python3.14"
 cp "$BIN/python-good" "$python_old/python3.13"
 chmod +x "$python_old"/*
-run env PATH="$python_old:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-old-fallback-target" --name PythonOld --profile web --claude-ollama-cloud --dry-run
+run env -u CCB_PYTHON PATH="$python_old:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-old-fallback-target" --name PythonOld --profile web --claude-ollama-cloud --dry-run
 [ "$status" -eq 0 ] || fail "old-Python fallback failed: $output"
 assert_contains "$output" "Python candidate rejected: $python_old/python3.14 (requires Python 3.10+, found 3.9)"
 assert_contains "$output" "Python: $python_old/python3.13 (3.12)"
@@ -313,7 +312,7 @@ cp "$BIN/python-old" "$python_none/python3.11"
 cp "$BIN/python-old" "$python_none/python3.10"
 cp "$BIN/python-old" "$python_none/python3"
 chmod +x "$python_none"/*
-run env PATH="$python_none:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-none-target" --name PythonNone --profile web --claude-ollama-cloud --dry-run
+run env -u CCB_PYTHON PATH="$python_none:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-none-target" --name PythonNone --profile web --claude-ollama-cloud --dry-run
 [ "$status" -ne 0 ] || fail 'no-compatible-Python case succeeded'
 assert_contains "$output" 'no compatible Python found'
 
@@ -339,10 +338,10 @@ run env PATH="$oldbin:$PATH" CCB_PYTHON="$oldbin/python-good" "$INSTALL" "$WORK/
 assert_contains "$output" '8.4.3+'
 
 if [ "${CCB_TEMPLATE_RUN_CLOUD_TESTS:-0}" = 1 ]; then
-  for model in glm-5.2:cloud qwen3.5:397b-cloud gemma4:31b-cloud kimi-k2.7-code:cloud deepseek-v4-pro:cloud; do
+  for model in glm-5.2:cloud qwen3.5:397b-cloud kimi-k2.7-code:cloud kimi-k2.6:cloud; do
     ANTHROPIC_AUTH_TOKEN=ollama ANTHROPIC_BASE_URL=http://localhost:11434 claude --model "$model" -p 'Reply only: CCB template model check.' >/dev/null
   done
-  echo '[OK] Optional Cloud model tests passed (5 models)'
+  echo '[OK] Optional Cloud model tests passed (4 models)'
 else
   echo '[SKIP] Optional Cloud model tests (set CCB_TEMPLATE_RUN_CLOUD_TESTS=1 to run)'
 fi

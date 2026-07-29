@@ -107,7 +107,7 @@ v2_install_assets() {
     fi
   fi
   for path in "$target/.ccb" "$target/.ccb/agents" "$target/.ccb/ccb.config" \
-    "$target/.ccb/agents/manager" "$target/.ccb/agents/graph" "$target/.ccb/agents/graphiste" \
+    "$target/.ccb/agents/manager" "$target/.ccb/agents/graph" \
     "$target/.ccb/agents/developer" "$target/.ccb/agents/reviewer"; do
     v2_require_safe_path "$path"
   done
@@ -138,7 +138,7 @@ v2_install_assets() {
     trap - EXIT HUP INT TERM
     v2_info "installed: $config_dir/ccb.config"
   fi
-  for asset in AGENT_POLICY.md ccb_memory.md agents/manager/memory.md agents/graph/memory.md agents/graphiste/memory.md agents/developer/memory.md agents/reviewer/memory.md; do
+  for asset in AGENT_POLICY.md ccb_memory.md agents/manager/memory.md agents/graph/memory.md agents/developer/memory.md agents/reviewer/memory.md; do
     v2_install_one "$root/assets/$asset" "$config_dir/$asset" "$dry_run"
   done
   if [ "$token_optimization" -eq 1 ]; then

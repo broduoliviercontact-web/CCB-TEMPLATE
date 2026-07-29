@@ -49,16 +49,15 @@ RTK mainly filters verbose terminal output; any advertised percentage is an esti
 not guarantee an equivalent reduction in Claude usage. Tilth is downloaded and launched by npx
 only when Claude Code starts the configured MCP server, never by this bootstrap.
 
-The generated official configuration uses five Claude Code agents through Ollama's
+The generated official configuration uses four Claude Code agents through Ollama's
 Anthropic-compatible local endpoint:
 
 | Agent | Model |
 | --- | --- |
 | manager | `glm-5.2:cloud` |
 | graph | `qwen3.5:397b-cloud` |
-| graphiste | `gemma4:31b-cloud` |
 | developer | `kimi-k2.7-code:cloud` |
-| reviewer | `deepseek-v4-pro:cloud` |
+| reviewer | `kimi-k2.6:cloud` |
 
 See the [V2 quickstart](docs/v2-quickstart.md), [architecture](docs/v2-architecture.md),
 [migration guide](docs/v2-migration-from-v1.md), [migration plan](docs/v2-migration-plan.md) and
