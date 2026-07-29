@@ -11,6 +11,7 @@ usage: ./ccb-template init [TARGET]
        ./ccb-template monitor start|stop TARGET
        ./ccb-template monitor watch TARGET
        ./ccb-template usage TARGET
+       ./ccb-template pricing TARGET
        ./ccb-template start TARGET
 
 Create a new Git project configured with CCB-TEMPLATE. The command interactively
@@ -19,6 +20,7 @@ selects one installed Ollama Cloud model for each permanent CCB agent.
 `brief` creates a dated execution brief in TARGET/.ccb/briefs/.
 `manager-prompt` prints the prompt to paste into the CCB manager conversation.
 `usage` aggregates token metadata recorded by an enabled monitoring proxy.
+`pricing` shows the local rate file used solely for cost estimates.
 EOF
 }
 
@@ -90,22 +92,89 @@ APPLESCRIPT
 show_usage() {
   usage_target=$1 usage_file=$usage_target/.ccb/token-monitor/usage.jsonl
   [ -f "$usage_file" ] || { printf '%s\n' 'No token usage recorded yet.'; return 0; }
-  python3 - "$usage_file" <<'PY'
+  python3 - "$usage_file" "$usage_target/.ccb/token-monitor/pricing.json" <<'PY'
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
+usage_file, pricing_file = sys.argv[1:]
+try:
+    pricing = json.load(open(pricing_file, encoding="utf-8")).get("models", {})
+except (FileNotFoundError, json.JSONDecodeError, AttributeError):
+    pricing = {}
+
+events = []
+for line in open(usage_file, encoding="utf-8"):
+    try:
+        events.append(json.loads(line))
+    except json.JSONDecodeError:
+        continue
 totals = defaultdict(lambda: [0, 0, 0])
-for line in open(sys.argv[1], encoding="utf-8"):
-    event = json.loads(line)
+recent = [0, 0, 0]
+now = datetime.now(timezone.utc)
+for event in events:
     key = (event.get("agent") or "unknown", event.get("model") or "unknown")
-    totals[key][0] += event.get("input_tokens") or 0
-    totals[key][1] += event.get("output_tokens") or 0
+    input_tokens = event.get("input_tokens") or 0
+    output_tokens = event.get("output_tokens") or 0
+    totals[key][0] += input_tokens
+    totals[key][1] += output_tokens
     totals[key][2] += 1
-print("AGENT       MODEL                         INPUT      OUTPUT     REQUESTS")
+    try:
+        if datetime.fromisoformat(event["timestamp"]).astimezone(timezone.utc) >= now - timedelta(minutes=5):
+            recent[0] += input_tokens
+            recent[1] += output_tokens
+            recent[2] += 1
+    except (KeyError, ValueError):
+        pass
+
+total_input = sum(value[0] for value in totals.values())
+total_output = sum(value[1] for value in totals.values())
+total_requests = sum(value[2] for value in totals.values())
+has_color = not bool(__import__("os").environ.get("NO_COLOR"))
+def color(code, text): return f"\033[{code}m{text}\033[0m" if has_color else text
+def bar(share):
+    width = 16
+    filled = round(width * share)
+    return color("36", "█" * filled) + color("90", "░" * (width - filled))
+def estimate(model, input_tokens, output_tokens):
+    rate = pricing.get(model)
+    if not isinstance(rate, dict): return None
+    try:
+        return input_tokens / 1_000_000 * float(rate["input_per_million_usd"]) + output_tokens / 1_000_000 * float(rate["output_per_million_usd"])
+    except (KeyError, TypeError, ValueError): return None
+
+estimated_costs = [estimate(model, data[0], data[1]) for (_, model), data in totals.items()]
+known_costs = [cost for cost in estimated_costs if cost is not None]
+print(color("1;36", "CCB TOKEN MONITOR"), "·", now.astimezone().strftime("%Y-%m-%d %H:%M:%S"))
+print(f"Total  {total_input:,} input  ·  {total_output:,} output  ·  {total_requests} requests")
+if totals and len(known_costs) == len(totals):
+    print(color("33", f"Estimated cost  ~${sum(known_costs):.4f} USD"), color("90", "(local pricing configuration)"))
+else:
+    print(color("90", "Estimated cost  unavailable — configure .ccb/token-monitor/pricing.json"))
+print(f"Last 5 min  {recent[0]:,} input  ·  {recent[1]:,} output  ·  {recent[2]} requests")
+print()
+print("AGENT       MODEL                         INPUT      OUTPUT   SHARE                 REQS    EST. USD")
+print("─" * 106)
 for (agent, model), (input_tokens, output_tokens, requests) in sorted(totals.items()):
-    print(f"{agent:<11} {model:<29} {input_tokens:>10} {output_tokens:>11} {requests:>12}")
+    share = input_tokens / total_input if total_input else 0
+    cost = estimate(model, input_tokens, output_tokens)
+    alert = color("31", " ⚠") if share >= 0.70 else ""
+    rendered_cost = f"${cost:.4f}" if cost is not None else "n/a"
+    print(f"{agent:<11} {model:<29} {input_tokens:>10,} {output_tokens:>11,}  {bar(share)} {share:>5.1%}{alert} {requests:>6}  {rendered_cost:>10}")
+if any(data[0] / total_input >= 0.70 for data in totals.values()) if total_input else False:
+    print()
+    print(color("33", "⚠ Alert:"), "an agent uses 70% or more of input tokens.")
 PY
+}
+
+show_pricing() {
+  pricing_target=$1 pricing_file=$pricing_target/.ccb/token-monitor/pricing.json
+  [ -f "$pricing_file" ] || { printf 'No pricing file found: %s\n' "$pricing_file"; return 1; }
+  printf 'Local estimation rates: %s\n\n' "$pricing_file"
+  cat "$pricing_file"
+  printf '\n\nUse this format; rates are USD per million tokens and are never treated as Ollama billing data:\n'
+  printf '{"models":{"model:cloud":{"input_per_million_usd":2.0,"output_per_million_usd":8.0}}}\n'
 }
 
 print_manager_prompt() {
@@ -198,6 +267,11 @@ case "$command" in
   usage)
     [ "$#" -eq 1 ] || { usage >&2; exit 2; }
     show_usage "$1"
+    exit $?
+    ;;
+  pricing)
+    [ "$#" -eq 1 ] || { usage >&2; exit 2; }
+    show_pricing "$1"
     exit $?
     ;;
   start)

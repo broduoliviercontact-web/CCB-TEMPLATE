@@ -53,12 +53,21 @@ metrics with:
 ```
 
 If Ollama does not return token counters for a response, that request remains visible but its token
-columns are zero rather than estimated.
+columns are zero rather than estimated. The dashboard includes totals, per-agent share, recent
+five-minute activity and an alert when one agent reaches 70% of input-token usage.
 
 The interactive setup can open a separate Terminal window with live totals. Open it later with:
 
 ```sh
 ./ccb-template monitor watch /chemin/du/projet
+```
+
+Ollama does not expose a stable public per-model token price for this template to treat as billing
+truth. You may configure your own planning rates in `.ccb/token-monitor/pricing.json`; the dashboard
+labels the resulting dollar amount as an estimate only. Display the file format with:
+
+```sh
+./ccb-template pricing /chemin/du/projet
 ```
 
 <p align="center">

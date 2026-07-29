@@ -168,6 +168,7 @@ v2_install_assets() {
   if [ "$token_monitoring" -eq 1 ]; then
     v2_install_one "$root/assets/token-proxy.py" "$config_dir/token-proxy.py" "$dry_run"
     v2_install_token_monitor_python "$config_dir/token-monitor-python" "$dry_run"
+    v2_install_one "$root/assets/token-pricing.json" "$config_dir/token-monitor/pricing.json" "$dry_run"
   fi
   if [ "$token_optimization" -eq 1 ]; then
     v2_install_tilth_mcp "$target" "$dry_run"
