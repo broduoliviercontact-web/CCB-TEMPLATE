@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/ccb-template-hero.svg" alt="CCB-TEMPLATE — workflow local multi-agents pour Claude Code Bridge" width="100%">
+  <img src="readme-assets/ccb-template-hero.svg" alt="CCB-TEMPLATE — workflow local multi-agents pour Claude Code Bridge" width="100%">
 </p>
 
 # CCB Template
@@ -62,7 +62,7 @@ The interactive setup can open a separate Terminal window with live totals. Open
 ```
 
 <p align="center">
-  <img src="docs/images/cli-05-token-monitor.svg" alt="Terminal capture for optional CCB token monitoring" width="100%">
+  <img src="readme-assets/cli-05-token-monitor.svg" alt="Terminal capture for optional CCB token monitoring" width="100%">
 </p>
 
 ### Codex → CCB workflow
@@ -79,7 +79,7 @@ Paste that output into the CCB manager conversation. The manager then delegates 
 developer and reviewer; Codex remains your partner for decisions and follow-up briefs.
 
 <p align="center">
-  <img src="docs/images/workflow-chatgpt-codex-ccb.svg" alt="Workflow complet ChatGPT, Codex et CCB-TEMPLATE" width="100%">
+  <img src="readme-assets/workflow-chatgpt-codex-ccb.svg" alt="Workflow complet ChatGPT, Codex et CCB-TEMPLATE" width="100%">
 </p>
 
 ### CLI walkthrough
@@ -91,25 +91,25 @@ The terminal captures below illustrate the commands and prompts implemented by t
 #### 1. Initialise the project
 
 <p align="center">
-  <img src="docs/images/cli-01-init.svg" alt="Terminal capture for ccb-template init" width="100%">
+  <img src="readme-assets/cli-01-init.svg" alt="Terminal capture for ccb-template init" width="100%">
 </p>
 
 #### 2. Create a dated brief
 
 <p align="center">
-  <img src="docs/images/cli-02-brief.svg" alt="Terminal capture for ccb-template brief" width="100%">
+  <img src="readme-assets/cli-02-brief.svg" alt="Terminal capture for ccb-template brief" width="100%">
 </p>
 
 #### 3. Generate the CCB manager handoff
 
 <p align="center">
-  <img src="docs/images/cli-03-manager-prompt.svg" alt="Terminal capture for ccb-template manager-prompt" width="100%">
+  <img src="readme-assets/cli-03-manager-prompt.svg" alt="Terminal capture for ccb-template manager-prompt" width="100%">
 </p>
 
 #### 4. Validate and start CCB
 
 <p align="center">
-  <img src="docs/images/cli-04-start.svg" alt="Terminal capture for validating and starting CCB" width="100%">
+  <img src="readme-assets/cli-04-start.svg" alt="Terminal capture for validating and starting CCB" width="100%">
 </p>
 
 Every `ccb` command in this branch denotes the official globally installed CCB binary. The
