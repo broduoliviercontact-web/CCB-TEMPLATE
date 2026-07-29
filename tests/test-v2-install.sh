@@ -186,13 +186,20 @@ grep -A1 -F '[agents.developer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'm
 grep -A1 -F '[agents.reviewer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.7-code:cloud"' || fail 'reviewer custom model was not rendered'
 
 cli_project="$WORK/cli-project"
-run sh -c "printf '%s\\n' 'CLI Project' 1 2 3 4 n y n n | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$cli_project'"
+run sh -c "printf '%s\\n' 'CLI Project' 1 2 3 4 n n y n n | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$cli_project'"
 [ "$status" -eq 0 ] || fail "interactive CLI failed: $output"
 [ -d "$cli_project/.git" ] || fail 'interactive CLI did not initialise Git'
 grep -A1 -F '[agents.manager]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "glm-5.2:cloud"' || fail 'interactive CLI did not select manager model'
 grep -A1 -F '[agents.reviewer]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.6:cloud"' || fail 'interactive CLI did not select reviewer model'
 [ ! -e "$cli_project/.mcp.json" ] || fail 'interactive CLI ignored token-optimization opt-out'
 assert_contains "$output" 'CCB was not started.'
+
+monitored_project="$WORK/monitored-project"
+run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$monitored_project" --name MonitoredProject --profile web --claude-ollama-cloud --no-token-optimization --token-monitoring --yes
+[ "$status" -eq 0 ] || fail "token monitoring installation failed: $output"
+[ -f "$monitored_project/.ccb/token-proxy.py" ] || fail 'token monitoring proxy was not installed'
+grep -Fqx 'ANTHROPIC_BASE_URL = "http://127.0.0.1:11435/manager"' "$monitored_project/.ccb/ccb.config" || fail 'manager token monitoring endpoint was not rendered'
+grep -Fqx 'ANTHROPIC_BASE_URL = "http://127.0.0.1:11435/reviewer"' "$monitored_project/.ccb/ccb.config" || fail 'reviewer token monitoring endpoint was not rendered'
 
 run sh -c "printf '%s\\n' 'Implement the login screen.' '.' | '$ROOT/ccb-template' brief '$cli_project'"
 [ "$status" -eq 0 ] || fail "brief command failed: $output"

@@ -94,7 +94,7 @@ v2_install_tilth_mcp() {
 }
 
 v2_install_assets() {
-  root=$1 target=$2 name=$3 profile=$4 dry_run=$5 token_optimization=${6:-0} manager_model=${7:-glm-5.2:cloud} graph_model=${8:-qwen3.5:397b-cloud} developer_model=${9:-kimi-k2.7-code:cloud} reviewer_model=${10:-kimi-k2.6:cloud}
+  root=$1 target=$2 name=$3 profile=$4 dry_run=$5 token_optimization=${6:-0} manager_model=${7:-glm-5.2:cloud} graph_model=${8:-qwen3.5:397b-cloud} developer_model=${9:-kimi-k2.7-code:cloud} reviewer_model=${10:-kimi-k2.6:cloud} token_monitoring=${11:-0}
   v2_is_safe_name "$name" || v2_die 'project name contains an unsafe line break'
   if [ -e "$target" ]; then target=$(v2_real_dir "$target") || v2_die "target must be a real directory: $target"; else
     parent=$(v2_resolve_existing_dir "$(dirname "$target")") || v2_die "target parent must be an existing directory: $(dirname "$target")"
@@ -126,14 +126,14 @@ v2_install_assets() {
   if [ "$dry_run" -eq 1 ]; then
     rendered=$(mktemp "${TMPDIR:-/tmp}/ccb-config.XXXXXX") || v2_die 'cannot render configuration'
     trap 'rm -f "$rendered"' EXIT HUP INT TERM
-    v2_render_config "$rendered" "$name" "$profile" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
+    v2_render_config "$rendered" "$name" "$profile" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model" "$token_monitoring"
     printf '[PLAN] create: %s\n' "$config_dir/ccb.config"
     rm -f "$rendered"; trap - EXIT HUP INT TERM
   else
     mkdir -p "$config_dir" "$config_dir/agents"
     rendered=$(mktemp "$config_dir/.ccb.config.XXXXXX") || v2_die 'cannot render configuration'
     trap 'rm -f "$rendered"' EXIT HUP INT TERM
-    v2_render_config "$rendered" "$name" "$profile" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
+    v2_render_config "$rendered" "$name" "$profile" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model" "$token_monitoring"
     chmod 600 "$rendered"
     mv "$rendered" "$config_dir/ccb.config"
     trap - EXIT HUP INT TERM
@@ -148,6 +148,9 @@ v2_install_assets() {
   for skill in ccb-manager-planning ccb-graph-analysis ccb-developer-delivery ccb-reviewer-audit; do
     v2_install_one "$root/assets/skills/$skill/SKILL.md" "$target/.claude/skills/$skill/SKILL.md" "$dry_run"
   done
+  if [ "$token_monitoring" -eq 1 ]; then
+    v2_install_one "$root/assets/token-proxy.py" "$config_dir/token-proxy.py" "$dry_run"
+  fi
   if [ "$token_optimization" -eq 1 ]; then
     v2_install_tilth_mcp "$target" "$dry_run"
     v2_install_one "$root/assets/token-optimization.md" "$target/.claude/rules/token-optimization.md" "$dry_run"

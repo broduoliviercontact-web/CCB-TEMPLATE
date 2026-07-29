@@ -38,6 +38,7 @@ Options:
   --graph-model MODEL       Ollama Cloud model for graph
   --developer-model MODEL   Ollama Cloud model for developer
   --reviewer-model MODEL    Ollama Cloud model for reviewer
+  --token-monitoring         Route agents through the local token metrics proxy
   --yes                    Confirm a non-interactive installation
   --dry-run                Show the plan without writing files
   -h, --help               Show this help
@@ -46,6 +47,7 @@ EOF
 
 target= name= profile= cloud=0 token_optimization=1 yes=0 dry_run=0
 manager_model=glm-5.2:cloud graph_model=qwen3.5:397b-cloud developer_model=kimi-k2.7-code:cloud reviewer_model=kimi-k2.6:cloud
+token_monitoring=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
@@ -58,6 +60,7 @@ while [ "$#" -gt 0 ]; do
     --graph-model) shift; [ "$#" -gt 0 ] || v2_die '--graph-model requires a value'; graph_model=$1 ;;
     --developer-model) shift; [ "$#" -gt 0 ] || v2_die '--developer-model requires a value'; developer_model=$1 ;;
     --reviewer-model) shift; [ "$#" -gt 0 ] || v2_die '--reviewer-model requires a value'; reviewer_model=$1 ;;
+    --token-monitoring) token_monitoring=1 ;;
     --yes) yes=1 ;;
     --dry-run) dry_run=1 ;;
     -*) v2_die "unknown option: $1" ;;
@@ -81,7 +84,7 @@ if [ "$dry_run" -eq 0 ] && [ "$yes" -ne 1 ]; then
 fi
 
 v2_preflight "$ROOT" "$token_optimization" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
-v2_install_assets "$ROOT" "$target" "$name" "$profile" "$dry_run" "$token_optimization" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
+v2_install_assets "$ROOT" "$target" "$name" "$profile" "$dry_run" "$token_optimization" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model" "$token_monitoring"
 
 if [ "$dry_run" -eq 1 ]; then
   echo 'DRY RUN — no files were modified.'

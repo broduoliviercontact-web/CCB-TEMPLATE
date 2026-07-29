@@ -8,13 +8,99 @@ usage() {
 usage: ./ccb-template init [TARGET]
        ./ccb-template brief TARGET
        ./ccb-template manager-prompt TARGET BRIEF_FILE
+       ./ccb-template monitor start|stop TARGET
+       ./ccb-template monitor watch TARGET
+       ./ccb-template usage TARGET
+       ./ccb-template start TARGET
 
 Create a new Git project configured with CCB-TEMPLATE. The command interactively
 selects one installed Ollama Cloud model for each permanent CCB agent.
 
 `brief` creates a dated execution brief in TARGET/.ccb/briefs/.
 `manager-prompt` prints the prompt to paste into the CCB manager conversation.
+`usage` aggregates token metadata recorded by an enabled monitoring proxy.
 EOF
+}
+
+shell_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+is_monitored_project() {
+  [ -f "$1/.ccb/token-proxy.py" ] && [ ! -L "$1/.ccb/token-proxy.py" ]
+}
+
+monitor_start() {
+  monitor_target=$1
+  is_monitored_project "$monitor_target" || { printf '%s\n' 'error: token monitoring was not enabled for this project.' >&2; return 1; }
+  monitor_dir=$monitor_target/.ccb/token-monitor
+  [ ! -L "$monitor_dir" ] || { printf '%s\n' 'error: unsafe token monitor directory.' >&2; return 1; }
+  mkdir -p "$monitor_dir"
+  monitor_pid=$monitor_dir/proxy.pid
+  if [ -f "$monitor_pid" ] && kill -0 "$(cat "$monitor_pid")" 2>/dev/null; then
+    printf 'Token monitor already running (pid %s).\n' "$(cat "$monitor_pid")"
+    return 0
+  fi
+  command -v python3 >/dev/null 2>&1 || { printf '%s\n' 'error: python3 is required to start token monitoring.' >&2; return 1; }
+  python3 -c 'import aiohttp' >/dev/null 2>&1 || { printf '%s\n' 'error: python3 needs aiohttp; use the same CCB_PYTHON environment used during installation.' >&2; return 1; }
+  nohup python3 "$monitor_target/.ccb/token-proxy.py" --upstream http://127.0.0.1:11434 --port 11435 --metrics "$monitor_dir/usage.jsonl" >"$monitor_dir/proxy.log" 2>&1 &
+  printf '%s\n' "$!" >"$monitor_pid"
+  printf 'Token monitor started (pid %s).\n' "$!"
+}
+
+monitor_stop() {
+  monitor_target=$1 monitor_pid=$monitor_target/.ccb/token-monitor/proxy.pid
+  [ -f "$monitor_pid" ] || { printf '%s\n' 'Token monitor is not running.'; return 0; }
+  pid=$(cat "$monitor_pid")
+  if kill -0 "$pid" 2>/dev/null; then kill "$pid"; fi
+  rm -f "$monitor_pid"
+  printf '%s\n' 'Token monitor stopped.'
+}
+
+monitor_watch() {
+  monitor_target=$1
+  monitor_start "$monitor_target"
+  while :; do
+    clear 2>/dev/null || :
+    printf 'CCB token monitoring — refreshes every 2 seconds (Ctrl-C to stop)\n\n'
+    show_usage "$monitor_target"
+    sleep 2
+  done
+}
+
+open_monitor_terminal() {
+  terminal_target=$1
+  command -v osascript >/dev/null 2>&1 || { printf '%s\n' 'warning: cannot open a terminal automatically; run ccb-template monitor watch TARGET manually.' >&2; return 0; }
+  terminal_command="$(shell_quote "$ROOT/ccb-template") monitor watch $(shell_quote "$terminal_target")"
+  osascript - "$terminal_command" <<'APPLESCRIPT'
+on run argv
+  tell application "Terminal"
+    activate
+    do script item 1 of argv
+  end tell
+end run
+APPLESCRIPT
+}
+
+show_usage() {
+  usage_target=$1 usage_file=$usage_target/.ccb/token-monitor/usage.jsonl
+  [ -f "$usage_file" ] || { printf '%s\n' 'No token usage recorded yet.'; return 0; }
+  python3 - "$usage_file" <<'PY'
+import json
+import sys
+from collections import defaultdict
+
+totals = defaultdict(lambda: [0, 0, 0])
+for line in open(sys.argv[1], encoding="utf-8"):
+    event = json.loads(line)
+    key = (event.get("agent") or "unknown", event.get("model") or "unknown")
+    totals[key][0] += event.get("input_tokens") or 0
+    totals[key][1] += event.get("output_tokens") or 0
+    totals[key][2] += 1
+print("AGENT       MODEL                         INPUT      OUTPUT     REQUESTS")
+for (agent, model), (input_tokens, output_tokens, requests) in sorted(totals.items()):
+    print(f"{agent:<11} {model:<29} {input_tokens:>10} {output_tokens:>11} {requests:>12}")
+PY
 }
 
 print_manager_prompt() {
@@ -99,6 +185,21 @@ case "$command" in
     print_manager_prompt "$1" "$2"
     exit $?
     ;;
+  monitor)
+    [ "$#" -eq 2 ] || { usage >&2; exit 2; }
+    case "$1" in start) monitor_start "$2" ;; stop) monitor_stop "$2" ;; watch) monitor_watch "$2" ;; *) usage >&2; exit 2 ;; esac
+    exit $?
+    ;;
+  usage)
+    [ "$#" -eq 1 ] || { usage >&2; exit 2; }
+    show_usage "$1"
+    exit $?
+    ;;
+  start)
+    [ "$#" -eq 1 ] || { usage >&2; exit 2; }
+    if is_monitored_project "$1"; then monitor_start "$1"; fi
+    cd "$1" && exec ccb
+    ;;
   init) [ "$#" -le 1 ] || { usage >&2; exit 2; } ;;
   *) usage >&2; exit 2 ;;
 esac
@@ -139,6 +240,9 @@ reviewer_model=$(choose_model reviewer)
 printf '\nEnable token optimization (RTK + Tilth)? [Y/n] '
 IFS= read -r token_answer || exit 1
 case "$token_answer" in n|N|no|NO) token_option=--no-token-optimization ;; *) token_option=--token-optimization ;; esac
+printf 'Enable local token monitoring proxy? [y/N] '
+IFS= read -r monitor_answer || exit 1
+case "$monitor_answer" in y|Y|yes|YES) monitor_option=--token-monitoring ;; *) monitor_option= ;; esac
 
 printf '\nProject: %s\nManager: %s\nGraph: %s\nDeveloper: %s\nReviewer: %s\nGit: initialise repository\nContinue? [y/N] ' \
   "$target" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
@@ -148,9 +252,15 @@ case "$confirm" in y|Y|yes|YES) : ;; *) printf '%s\n' 'Cancelled.'; exit 0 ;; es
 "$ROOT/install.sh" "$target" --name "$name" --profile web --claude-ollama-cloud \
   --manager-model "$manager_model" --graph-model "$graph_model" \
   --developer-model "$developer_model" --reviewer-model "$reviewer_model" \
-  "$token_option" --yes
+  "$token_option" $monitor_option --yes
 git -C "$target" init >/dev/null
 printf 'Git repository initialised: %s/.git\n' "$target"
+if is_monitored_project "$target"; then
+  monitor_start "$target"
+  printf 'Open a live token monitoring terminal? [y/N] '
+  IFS= read -r terminal_answer || exit 1
+  case "$terminal_answer" in y|Y|yes|YES) open_monitor_terminal "$target" ;; *) : ;; esac
+fi
 printf 'Create an initial CCB brief now? [y/N] '
 IFS= read -r brief_answer || exit 1
 case "$brief_answer" in
@@ -160,6 +270,6 @@ esac
 printf 'Start CCB now? [Y/n] '
 IFS= read -r start_answer || exit 1
 case "$start_answer" in
-  n|N|no|NO) printf 'CCB was not started. Run: cd %s && ccb\n' "$target" ;;
-  *) cd "$target" && exec ccb ;;
+  n|N|no|NO) if is_monitored_project "$target"; then printf 'CCB was not started. Run: %s start %s\n' "$ROOT/ccb-template" "$target"; else printf 'CCB was not started. Run: cd %s && ccb\n' "$target"; fi ;;
+  *) if is_monitored_project "$target"; then monitor_start "$target"; fi; cd "$target" && exec ccb ;;
 esac

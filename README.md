@@ -36,6 +36,27 @@ creation, it proposes an initial CCB brief and explicitly asks whether to start 
 dated brief later with `./ccb-template brief /chemin/du/projet`; finish the input with a line
 containing only `.`.
 
+### Optional token monitoring
+
+Choose token monitoring during `ccb-template init`, or pass `--token-monitoring` to `install.sh`,
+to route the four agents through a local transparent proxy. It records only timestamp, agent,
+model, input tokens, output tokens and duration in `.ccb/token-monitor/`; it never stores prompt
+or response content. The interactive CLI starts the proxy during configuration. View the collected
+metrics with:
+
+```sh
+./ccb-template usage /chemin/du/projet
+```
+
+If Ollama does not return token counters for a response, that request remains visible but its token
+columns are zero rather than estimated.
+
+The interactive setup can open a separate Terminal window with live totals. Open it later with:
+
+```sh
+./ccb-template monitor watch /chemin/du/projet
+```
+
 ### Codex → CCB workflow
 
 Use Codex as the project copilot: turn the product discussion into a concise brief, then create it
