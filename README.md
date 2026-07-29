@@ -22,6 +22,18 @@ ccb config validate
 ccb
 ```
 
+### Interactive project creation
+
+Create a new project, choose an installed Ollama Cloud model for each permanent agent and
+initialise Git in one interactive flow:
+
+```sh
+./ccb-template init /chemin/du/projet
+```
+
+The target directory must be new or empty. The CLI never creates a commit or pushes. After project
+creation, it explicitly asks whether to start CCB.
+
 Every `ccb` command in this branch denotes the official globally installed CCB binary. The
 repository-local `./ccb` command has been removed, as have the V1 provider router, direct Ollama
 runtime and home-grown workflows. The installer never pushes or deploys automatically, never
@@ -30,14 +42,21 @@ interprets model responses and never starts CCB or a Cloud model by itself.
 `--profile web` selects the standard built-in asset preset. It is the only preset supported by
 V2.0.0 and does not load a `profiles/` directory.
 
-### Optional token optimization
+### Default agent guidance
 
-Add `--token-optimization` to prepare only the generated project for the external RTK terminal
-filter and the Tilth MCP code-navigation server. It is optional: standard CCB installation does
-not require RTK, Node.js, npm or npx. The mode verifies `rtk` and `npx`, writes project-local
+Each generated project receives a common `CLAUDE.md`, a role brief and durable memory for each
+CCB agent, plus project-local planning, architecture analysis, implementation and review skills.
+Existing user-authored files are preserved. CCB's managed agent homes remain runtime-owned; the
+role memories are the durable CCB-native instructions for the isolated agents.
+
+### Token optimization by default
+
+The standard installation prepares the generated project for the external RTK terminal filter and
+the Tilth MCP code-navigation server. It verifies `rtk` and `npx`, writes project-local
 `.mcp.json` with the pinned `npx -y tilth@0.9.0 --mcp` server, and adds a concise
 `.claude/rules/token-optimization.md` without replacing an existing user rule or `CLAUDE.md`.
-It never installs or initializes either tool.
+It never installs or initializes either tool. Use `--no-token-optimization` to skip this integration.
+`--token-optimization` remains accepted for explicit configuration and backwards-compatible scripts.
 
 ```sh
 brew install rtk-ai/tap/rtk

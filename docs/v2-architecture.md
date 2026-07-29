@@ -23,15 +23,20 @@ is the official global binary.
 The official `.ccb/ccb.config` declares the windows, agent model, description, isolated provider
 profile and the per-agent Ollama compatibility environment. `.ccb/ccb_memory.md` holds durable
 shared context. Each `.ccb/agents/<agent>/memory.md` holds durable role-specific context.
+The bootstrap also creates a common project `CLAUDE.md`, role briefs under
+`.ccb/agents/<agent>/CLAUDE.md`, and project-local skills under `.claude/skills/`. CCB-managed
+agent homes are runtime-owned, so role memories remain the durable instruction channel for its
+isolated agents.
 
 No template action pushes, deploys or interprets a model response.
 
-## Optional token optimization
+## Token optimization
 
-With `--token-optimization`, the bootstrap adds only project-native Claude Code inputs:
+By default, the bootstrap adds only project-native Claude Code inputs:
 `.mcp.json` configures the pinned Tilth stdio server through `npx`, and
 `.claude/rules/token-optimization.md` provides concise usage guidance for Tilth and RTK. RTK
-and Tilth remain external tools; the bootstrap neither installs, initializes nor runs them.
+and Tilth remain external tools; the bootstrap neither installs, initializes nor runs them. Pass
+`--no-token-optimization` to omit these inputs.
 
 CCB 8.4.3 projects each Claude agent into an isolated managed home. Its documented MCP
 projection includes current project/workspace MCP metadata when configuration inheritance is

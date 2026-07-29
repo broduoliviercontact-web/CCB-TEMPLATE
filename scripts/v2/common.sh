@@ -8,6 +8,14 @@ v2_is_safe_name() {
   case "$1" in ''|*"\n"*|*"\r"*) return 1 ;; *) return 0 ;; esac
 }
 
+v2_is_cloud_model() {
+  case "$1" in
+    *"\n"*|*"\r"*|*[!A-Za-z0-9._:-]*|*:) return 1 ;;
+    *:*cloud) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 v2_real_dir() {
   [ -d "$1" ] && [ ! -L "$1" ] || return 1
   (CDPATH= cd "$1" && pwd)

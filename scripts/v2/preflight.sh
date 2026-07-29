@@ -51,7 +51,7 @@ v2_select_python() {
 }
 
 v2_preflight() {
-  root=$1 token_optimization=${2:-0}
+  root=$1 token_optimization=${2:-0} manager_model=${3:-glm-5.2:cloud} graph_model=${4:-qwen3.5:397b-cloud} developer_model=${5:-kimi-k2.7-code:cloud} reviewer_model=${6:-kimi-k2.6:cloud}
   system=$(uname -s 2>/dev/null || true)
   case "$system" in Darwin|Linux|FreeBSD) v2_info "platform: $system" ;; *) v2_die "unsupported platform: ${system:-unknown}; use macOS or a Unix-compatible environment" ;; esac
   command -v tmux >/dev/null 2>&1 || v2_die 'tmux is required; install it with your system package manager'
@@ -71,10 +71,11 @@ v2_preflight() {
   v2_info "Claude Code: $(command -v claude)"
   command -v ollama >/dev/null 2>&1 || v2_die 'Ollama is required; install Ollama and start its local server'
   models=$(ollama list 2>/dev/null) || v2_die 'Ollama server is not reachable; start Ollama and retry'
-  for model in glm-5.2:cloud qwen3.5:397b-cloud kimi-k2.7-code:cloud kimi-k2.6:cloud; do
+  for model in "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"; do
+    v2_is_cloud_model "$model" || v2_die "invalid Ollama Cloud model: $model"
     printf '%s\n' "$models" | awk 'NR > 1 { print $1 }' | grep -Fqx "$model" || v2_die "Ollama Cloud model is unavailable: $model"
   done
-  v2_info 'Ollama server and four required Cloud models: available'
+  v2_info 'Ollama server and selected Cloud models: available'
 
   if [ "$token_optimization" -eq 1 ]; then
     command -v rtk >/dev/null 2>&1 || v2_die "$(printf '%s\n%s\n%s\n%s' \

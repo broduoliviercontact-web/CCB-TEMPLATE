@@ -94,7 +94,7 @@ v2_install_tilth_mcp() {
 }
 
 v2_install_assets() {
-  root=$1 target=$2 name=$3 profile=$4 dry_run=$5 token_optimization=${6:-0}
+  root=$1 target=$2 name=$3 profile=$4 dry_run=$5 token_optimization=${6:-0} manager_model=${7:-glm-5.2:cloud} graph_model=${8:-qwen3.5:397b-cloud} developer_model=${9:-kimi-k2.7-code:cloud} reviewer_model=${10:-kimi-k2.6:cloud}
   v2_is_safe_name "$name" || v2_die 'project name contains an unsafe line break'
   if [ -e "$target" ]; then target=$(v2_real_dir "$target") || v2_die "target must be a real directory: $target"; else
     parent=$(v2_resolve_existing_dir "$(dirname "$target")") || v2_die "target parent must be an existing directory: $(dirname "$target")"
@@ -108,7 +108,8 @@ v2_install_assets() {
   fi
   for path in "$target/.ccb" "$target/.ccb/agents" "$target/.ccb/ccb.config" \
     "$target/.ccb/agents/manager" "$target/.ccb/agents/graph" \
-    "$target/.ccb/agents/developer" "$target/.ccb/agents/reviewer"; do
+    "$target/.ccb/agents/developer" "$target/.ccb/agents/reviewer" \
+    "$target/CLAUDE.md" "$target/.claude" "$target/.claude/skills"; do
     v2_require_safe_path "$path"
   done
   if [ "$token_optimization" -eq 1 ]; then
@@ -125,21 +126,27 @@ v2_install_assets() {
   if [ "$dry_run" -eq 1 ]; then
     rendered=$(mktemp "${TMPDIR:-/tmp}/ccb-config.XXXXXX") || v2_die 'cannot render configuration'
     trap 'rm -f "$rendered"' EXIT HUP INT TERM
-    v2_render_config "$rendered" "$name" "$profile"
+    v2_render_config "$rendered" "$name" "$profile" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
     printf '[PLAN] create: %s\n' "$config_dir/ccb.config"
     rm -f "$rendered"; trap - EXIT HUP INT TERM
   else
     mkdir -p "$config_dir" "$config_dir/agents"
     rendered=$(mktemp "$config_dir/.ccb.config.XXXXXX") || v2_die 'cannot render configuration'
     trap 'rm -f "$rendered"' EXIT HUP INT TERM
-    v2_render_config "$rendered" "$name" "$profile"
+    v2_render_config "$rendered" "$name" "$profile" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
     chmod 600 "$rendered"
     mv "$rendered" "$config_dir/ccb.config"
     trap - EXIT HUP INT TERM
     v2_info "installed: $config_dir/ccb.config"
   fi
-  for asset in AGENT_POLICY.md ccb_memory.md agents/manager/memory.md agents/graph/memory.md agents/developer/memory.md agents/reviewer/memory.md; do
+  for asset in AGENT_POLICY.md ccb_memory.md \
+    agents/manager/memory.md agents/graph/memory.md agents/developer/memory.md agents/reviewer/memory.md \
+    agents/manager/CLAUDE.md agents/graph/CLAUDE.md agents/developer/CLAUDE.md agents/reviewer/CLAUDE.md; do
     v2_install_one "$root/assets/$asset" "$config_dir/$asset" "$dry_run"
+  done
+  v2_install_one "$root/assets/CLAUDE.md" "$target/CLAUDE.md" "$dry_run"
+  for skill in ccb-manager-planning ccb-graph-analysis ccb-developer-delivery ccb-reviewer-audit; do
+    v2_install_one "$root/assets/skills/$skill/SKILL.md" "$target/.claude/skills/$skill/SKILL.md" "$dry_run"
   done
   if [ "$token_optimization" -eq 1 ]; then
     v2_install_tilth_mcp "$target" "$dry_run"

@@ -2,10 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- Enable the RTK and Tilth token-optimization integration by default; add
+  `--no-token-optimization` for an explicit opt-out while retaining `--token-optimization`.
+
 ### Added
 
-- Optional `--token-optimization` project bootstrap for RTK guidance and a pinned Tilth MCP
-  server, with safe `.mcp.json` merging and preservation of existing Claude project rules.
+- Interactive `ccb-template init` project creation with per-agent Ollama Cloud model selection
+  and Git repository initialization.
 
 ### Fixed
 

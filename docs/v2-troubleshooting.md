@@ -32,16 +32,17 @@ TOML validation error, inspect `.ccb/ccb.config` and rerun `ccb config validate`
 
 ## Token optimization prerequisites or MCP configuration
 
-`--token-optimization` is optional. If RTK is missing on macOS, install and initialize it only
-after choosing its telemetry settings yourself:
+Token optimization is enabled by default. If RTK is missing on macOS, install and initialize it
+only after choosing its telemetry settings yourself:
 
 ```sh
 brew install rtk-ai/tap/rtk
 rtk init -g
 ```
 
-The mode also requires `npx`; install Node.js/npm through their official distribution, then
+The integration also requires `npx`; install Node.js/npm through their official distribution, then
 check `npx tilth --version`. Tilth is not downloaded during bootstrap: Claude Code later starts
 the project MCP command `npx -y tilth@0.9.0 --mcp`. If an existing `.mcp.json` is invalid or its
 `mcpServers` member is not an object, repair it manually and retry; the bootstrap leaves it
 unchanged on refusal. Existing `.claude/rules/token-optimization.md` files are preserved.
+Use `--no-token-optimization` when this integration is not wanted.

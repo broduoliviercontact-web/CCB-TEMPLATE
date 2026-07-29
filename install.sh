@@ -23,7 +23,7 @@ fi
 
 usage() {
   cat <<'EOF'
-usage: ./install.sh TARGET --name NAME --profile web --claude-ollama-cloud [--token-optimization] [--yes|--dry-run]
+usage: ./install.sh TARGET --name NAME --profile web --claude-ollama-cloud [MODEL OPTIONS] [--no-token-optimization] [--yes|--dry-run]
 
 Prepare a project for the official Claude Code Bridge (CCB) with Claude Code
 using Ollama Cloud through its Anthropic-compatible local endpoint.
@@ -32,14 +32,20 @@ Options:
   --name NAME              Project name written to shared memory
   --profile web             Required built-in V2 preset (web is the only preset currently supported)
   --claude-ollama-cloud     Enable the required Claude Code + Ollama Cloud layout
-  --token-optimization      Configure project-local RTK and Tilth guidance
+  --token-optimization      Configure project-local RTK and Tilth guidance (default)
+  --no-token-optimization   Skip the RTK and Tilth project integration
+  --manager-model MODEL     Ollama Cloud model for manager
+  --graph-model MODEL       Ollama Cloud model for graph
+  --developer-model MODEL   Ollama Cloud model for developer
+  --reviewer-model MODEL    Ollama Cloud model for reviewer
   --yes                    Confirm a non-interactive installation
   --dry-run                Show the plan without writing files
   -h, --help               Show this help
 EOF
 }
 
-target= name= profile= cloud=0 token_optimization=0 yes=0 dry_run=0
+target= name= profile= cloud=0 token_optimization=1 yes=0 dry_run=0
+manager_model=glm-5.2:cloud graph_model=qwen3.5:397b-cloud developer_model=kimi-k2.7-code:cloud reviewer_model=kimi-k2.6:cloud
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
@@ -47,6 +53,11 @@ while [ "$#" -gt 0 ]; do
     --profile) shift; [ "$#" -gt 0 ] || v2_die '--profile requires a value'; profile=$1 ;;
     --claude-ollama-cloud) cloud=1 ;;
     --token-optimization) token_optimization=1 ;;
+    --no-token-optimization) token_optimization=0 ;;
+    --manager-model) shift; [ "$#" -gt 0 ] || v2_die '--manager-model requires a value'; manager_model=$1 ;;
+    --graph-model) shift; [ "$#" -gt 0 ] || v2_die '--graph-model requires a value'; graph_model=$1 ;;
+    --developer-model) shift; [ "$#" -gt 0 ] || v2_die '--developer-model requires a value'; developer_model=$1 ;;
+    --reviewer-model) shift; [ "$#" -gt 0 ] || v2_die '--reviewer-model requires a value'; reviewer_model=$1 ;;
     --yes) yes=1 ;;
     --dry-run) dry_run=1 ;;
     -*) v2_die "unknown option: $1" ;;
@@ -69,8 +80,8 @@ if [ "$dry_run" -eq 0 ] && [ "$yes" -ne 1 ]; then
   case "$answer" in y|Y|yes|YES) : ;; *) echo 'Installation cancelled.'; exit 0 ;; esac
 fi
 
-v2_preflight "$ROOT" "$token_optimization"
-v2_install_assets "$ROOT" "$target" "$name" "$profile" "$dry_run" "$token_optimization"
+v2_preflight "$ROOT" "$token_optimization" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
+v2_install_assets "$ROOT" "$target" "$name" "$profile" "$dry_run" "$token_optimization" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
 
 if [ "$dry_run" -eq 1 ]; then
   echo 'DRY RUN — no files were modified.'

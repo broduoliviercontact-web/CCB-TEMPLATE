@@ -99,19 +99,26 @@ ENV="PATH=$BIN:$PATH CCB_PYTHON=$BIN/python-good"
 help=$($INSTALL --help)
 assert_contains "$help" '--claude-ollama-cloud'
 assert_contains "$help" '--token-optimization'
+assert_contains "$help" '--no-token-optimization'
 assert_contains "$help" 'web is the only preset currently supported'
 if rg -n 'profiles/' "$ROOT/install.sh" "$ROOT/scripts/v2"; then fail 'V2 bootstrap reads a removed profiles directory'; fi
 
 dry="$WORK/dry"
-run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$dry" --name Dry --profile web --claude-ollama-cloud --dry-run
+run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$dry" --name Dry --profile web --claude-ollama-cloud --no-token-optimization --dry-run
 [ "$status" -eq 0 ] || fail "dry-run failed: $output"
 [ ! -e "$dry" ] || fail 'dry-run wrote the target'
 assert_contains "$output" 'DRY RUN — no files were modified.'
 
-standard_without_tools="$WORK/standard-without-token-tools"
-run env PATH="$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$standard_without_tools" --name StandardWithoutTools --profile web --claude-ollama-cloud --dry-run
-[ "$status" -eq 0 ] || fail "standard installation was blocked without RTK/npx: $output"
-[ ! -e "$standard_without_tools" ] || fail 'standard dry-run without RTK/npx wrote the target'
+default_missing_rtk="$WORK/default-missing-rtk"
+run env PATH="$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$default_missing_rtk" --name DefaultMissingRTK --profile web --claude-ollama-cloud --dry-run
+[ "$status" -ne 0 ] || fail 'default installation accepted missing RTK'
+assert_contains "$output" 'RTK is required with --token-optimization'
+[ ! -e "$default_missing_rtk" ] || fail 'default installation without RTK wrote the target'
+
+opt_out_without_tools="$WORK/opt-out-without-token-tools"
+run env PATH="$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$opt_out_without_tools" --name OptOutWithoutTools --profile web --claude-ollama-cloud --no-token-optimization --dry-run
+[ "$status" -eq 0 ] || fail "opt-out installation was blocked without RTK/npx: $output"
+[ ! -e "$opt_out_without_tools" ] || fail 'opt-out dry-run without RTK/npx wrote the target'
 
 token_missing_rtk="$WORK/token-missing-rtk"
 run env PATH="$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$token_missing_rtk" --name TokenMissingRTK --profile web --claude-ollama-cloud --token-optimization --dry-run
@@ -145,7 +152,7 @@ run sh -c "printf '' | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$INS
 [ ! -e "$WORK/non-tty" ] || fail 'non-TTY refusal wrote files'
 
 project="$WORK/project"
-run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" ANTHROPIC_AUTH_TOKEN='CCB_TEMPLATE_SIMULATED_TOKEN_DO_NOT_PERSIST' "$INSTALL" "$project" --name 'Web Project' --profile web --claude-ollama-cloud --yes
+run env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" ANTHROPIC_AUTH_TOKEN='CCB_TEMPLATE_SIMULATED_TOKEN_DO_NOT_PERSIST' "$INSTALL" "$project" --name 'Web Project' --profile web --claude-ollama-cloud --yes
 [ "$status" -eq 0 ] || fail "installation failed: $output"
 cmp -s "$project/.ccb/ccb.config" "$ROOT/tests/fixtures/ccb.config.expected" || fail 'configuration is not deterministic expected output'
 for agent in manager graph developer reviewer; do
@@ -154,6 +161,11 @@ for agent in manager graph developer reviewer; do
   grep -A2 -F "[agents.$agent.provider_profile]" "$project/.ccb/ccb.config" | grep -Fqx 'inherit_api = false' || fail "missing inherit_api $agent"
   grep -A2 -F "[agents.$agent.provider_profile]" "$project/.ccb/ccb.config" | grep -Fqx 'inherit_auth = false' || fail "missing inherit_auth $agent"
   [ -f "$project/.ccb/agents/$agent/memory.md" ] || fail "missing memory $agent"
+  [ -f "$project/.ccb/agents/$agent/CLAUDE.md" ] || fail "missing role brief $agent"
+done
+[ -f "$project/CLAUDE.md" ] || fail 'missing shared project CLAUDE.md'
+for skill in ccb-manager-planning ccb-graph-analysis ccb-developer-delivery ccb-reviewer-audit; do
+  [ -f "$project/.claude/skills/$skill/SKILL.md" ] || fail "missing default skill $skill"
 done
 grep -Fqx 'ANTHROPIC_AUTH_TOKEN = "ollama"' "$project/.ccb/ccb.config" || fail 'missing literal Ollama authentication marker'
 grep -Fqx 'ANTHROPIC_BASE_URL = "http://localhost:11434"' "$project/.ccb/ccb.config" || fail 'missing Ollama base URL'
@@ -162,8 +174,25 @@ retired_model=$retired_prefix:480b-cloud
 if rg -n "$retired_model|sk-ant-|Bearer [A-Za-z0-9]" "$ROOT/install.sh" "$ROOT/scripts/v2" "$ROOT/assets" "$project/.ccb" >/dev/null; then fail 'new V2 files contain a retired model or sensitive token'; fi
 grep -Fxv -- '--version' "$WORK/ccb.calls" >/dev/null && fail 'installer executed ccb beyond --version' || :
 [ ! -e "$WORK/claude.calls" ] || fail 'installer executed Claude Code'
-[ ! -e "$project/.mcp.json" ] || fail 'standard installation created a Tilth MCP configuration'
-[ ! -e "$project/.claude" ] || fail 'standard installation created Claude token-optimization files'
+[ -f "$project/.mcp.json" ] || fail 'default installation did not create a Tilth MCP configuration'
+[ -f "$project/.claude/rules/token-optimization.md" ] || fail 'default installation did not create Claude token-optimization files'
+
+custom_models="$WORK/custom-models"
+run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$custom_models" --name CustomModels --profile web --claude-ollama-cloud --no-token-optimization --manager-model kimi-k2.6:cloud --graph-model glm-5.2:cloud --developer-model qwen3.5:397b-cloud --reviewer-model kimi-k2.7-code:cloud --yes
+[ "$status" -eq 0 ] || fail "custom model installation failed: $output"
+grep -A1 -F '[agents.manager]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.6:cloud"' || fail 'manager custom model was not rendered'
+grep -A1 -F '[agents.graph]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "glm-5.2:cloud"' || fail 'graph custom model was not rendered'
+grep -A1 -F '[agents.developer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "qwen3.5:397b-cloud"' || fail 'developer custom model was not rendered'
+grep -A1 -F '[agents.reviewer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.7-code:cloud"' || fail 'reviewer custom model was not rendered'
+
+cli_project="$WORK/cli-project"
+run sh -c "printf '%s\\n' 'CLI Project' 1 2 3 4 n y n | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$cli_project'"
+[ "$status" -eq 0 ] || fail "interactive CLI failed: $output"
+[ -d "$cli_project/.git" ] || fail 'interactive CLI did not initialise Git'
+grep -A1 -F '[agents.manager]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "glm-5.2:cloud"' || fail 'interactive CLI did not select manager model'
+grep -A1 -F '[agents.reviewer]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.6:cloud"' || fail 'interactive CLI did not select reviewer model'
+[ ! -e "$cli_project/.mcp.json" ] || fail 'interactive CLI ignored token-optimization opt-out'
+assert_contains "$output" 'CCB was not started.'
 
 token_project="$WORK/token project"
 run env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$token_project" --name 'Token Project' --profile web --claude-ollama-cloud --token-optimization --yes
@@ -252,26 +281,26 @@ grep -Fxv -- '--version' "$WORK/ccb.calls" >/dev/null && fail 'token-optimizatio
 [ ! -e "$WORK/npx.calls" ] || fail 'token-optimization executed npx or Tilth'
 
 second="$WORK/second"
-env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$second" --name 'Other name' --profile web --claude-ollama-cloud --yes >/dev/null
+env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$second" --name 'Other name' --profile web --claude-ollama-cloud --no-token-optimization --yes >/dev/null
 cmp -s "$project/.ccb/ccb.config" "$second/.ccb/ccb.config" || fail 'configuration changed with project name'
 
 preserve="$WORK/preserve"
 mkdir -p "$preserve/.ccb"
 printf 'custom memory\n' >"$preserve/.ccb/ccb_memory.md"
-env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$preserve" --name Preserve --profile web --claude-ollama-cloud --yes >/dev/null
+env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$preserve" --name Preserve --profile web --claude-ollama-cloud --no-token-optimization --yes >/dev/null
 [ "$(cat "$preserve/.ccb/ccb_memory.md")" = 'custom memory' ] || fail 'existing memory was overwritten'
 
 conflict="$WORK/conflict"
 mkdir -p "$conflict/.ccb"
 printf 'existing config\n' >"$conflict/.ccb/ccb.config"
-run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$conflict" --name Conflict --profile web --claude-ollama-cloud --yes
+run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$conflict" --name Conflict --profile web --claude-ollama-cloud --no-token-optimization --yes
 [ "$status" -ne 0 ] || fail 'existing ccb.config was overwritten'
 [ "$(cat "$conflict/.ccb/ccb.config")" = 'existing config' ] || fail 'ccb.config changed after refusal'
 
 linked="$WORK/linked"
 mkdir "$linked"
 ln -s "$WORK/elsewhere" "$linked/.ccb"
-run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$linked" --name Linked --profile web --claude-ollama-cloud --yes
+run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$linked" --name Linked --profile web --claude-ollama-cloud --no-token-optimization --yes
 [ "$status" -ne 0 ] || fail 'symbolic .ccb directory accepted'
 
 python_deps="$WORK/python-deps"
@@ -279,7 +308,7 @@ mkdir "$python_deps"
 cp "$BIN/python-missing-deps" "$python_deps/python3.14"
 cp "$BIN/python-good" "$python_deps/python3.13"
 chmod +x "$python_deps"/*
-run env -u CCB_PYTHON PATH="$python_deps:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-deps-target" --name PythonDeps --profile web --claude-ollama-cloud --dry-run
+run env -u CCB_PYTHON PATH="$python_deps:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-deps-target" --name PythonDeps --profile web --claude-ollama-cloud --no-token-optimization --dry-run
 [ "$status" -eq 0 ] || fail "missing-dependencies fallback failed: $output"
 assert_contains "$output" "Python candidate rejected: $python_deps/python3.14 (missing tomllib/tomli, aiohttp, or cryptography)"
 assert_contains "$output" "Python: $python_deps/python3.13 (3.12)"
@@ -289,7 +318,7 @@ mkdir "$python_old"
 cp "$BIN/python-old" "$python_old/python3.14"
 cp "$BIN/python-good" "$python_old/python3.13"
 chmod +x "$python_old"/*
-run env -u CCB_PYTHON PATH="$python_old:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-old-fallback-target" --name PythonOld --profile web --claude-ollama-cloud --dry-run
+run env -u CCB_PYTHON PATH="$python_old:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-old-fallback-target" --name PythonOld --profile web --claude-ollama-cloud --no-token-optimization --dry-run
 [ "$status" -eq 0 ] || fail "old-Python fallback failed: $output"
 assert_contains "$output" "Python candidate rejected: $python_old/python3.14 (requires Python 3.10+, found 3.9)"
 assert_contains "$output" "Python: $python_old/python3.13 (3.12)"
@@ -298,7 +327,7 @@ python_ccb="$WORK/python-ccb-fallback"
 mkdir "$python_ccb"
 cp "$BIN/python-good" "$python_ccb/python3.14"
 chmod +x "$python_ccb/python3.14"
-run env PATH="$python_ccb:$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-old" "$INSTALL" "$WORK/python-ccb-fallback-target" --name PythonCCB --profile web --claude-ollama-cloud --dry-run
+run env PATH="$python_ccb:$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-old" "$INSTALL" "$WORK/python-ccb-fallback-target" --name PythonCCB --profile web --claude-ollama-cloud --no-token-optimization --dry-run
 [ "$status" -eq 0 ] || fail "CCB_PYTHON fallback failed: $output"
 assert_contains "$output" "Python candidate rejected: $BIN/python-old (requires Python 3.10+, found 3.9)"
 assert_contains "$output" "Python: $python_ccb/python3.14 (3.12)"
@@ -312,7 +341,7 @@ cp "$BIN/python-old" "$python_none/python3.11"
 cp "$BIN/python-old" "$python_none/python3.10"
 cp "$BIN/python-old" "$python_none/python3"
 chmod +x "$python_none"/*
-run env -u CCB_PYTHON PATH="$python_none:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-none-target" --name PythonNone --profile web --claude-ollama-cloud --dry-run
+run env -u CCB_PYTHON PATH="$python_none:$BIN:/usr/bin:/bin" "$INSTALL" "$WORK/python-none-target" --name PythonNone --profile web --claude-ollama-cloud --no-token-optimization --dry-run
 [ "$status" -ne 0 ] || fail 'no-compatible-Python case succeeded'
 assert_contains "$output" 'no compatible Python found'
 
@@ -320,7 +349,7 @@ python_priority="$WORK/python-priority"
 mkdir "$python_priority"
 cp "$BIN/python-missing-deps" "$python_priority/python3.14"
 chmod +x "$python_priority/python3.14"
-run env PATH="$python_priority:$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$WORK/python-priority-target" --name PythonPriority --profile web --claude-ollama-cloud --dry-run
+run env PATH="$python_priority:$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$WORK/python-priority-target" --name PythonPriority --profile web --claude-ollama-cloud --no-token-optimization --dry-run
 [ "$status" -eq 0 ] || fail "CCB_PYTHON priority failed: $output"
 assert_contains "$output" "Python: $BIN/python-good (3.12)"
 if printf '%s\n' "$output" | grep -Fq 'python3.14'; then fail 'compatible CCB_PYTHON did not retain priority'; fi
@@ -333,7 +362,7 @@ cat >"$oldbin/ccb" <<'EOF'
 echo 'ccb (Claude Code Bridge) v8.4.2 test'
 EOF
 chmod +x "$oldbin"/*
-run env PATH="$oldbin:$PATH" CCB_PYTHON="$oldbin/python-good" "$INSTALL" "$WORK/ccb-old" --name OldCCB --profile web --claude-ollama-cloud --dry-run
+run env PATH="$oldbin:$PATH" CCB_PYTHON="$oldbin/python-good" "$INSTALL" "$WORK/ccb-old" --name OldCCB --profile web --claude-ollama-cloud --no-token-optimization --dry-run
 [ "$status" -ne 0 ] || fail 'CCB 8.4.2 accepted'
 assert_contains "$output" '8.4.3+'
 

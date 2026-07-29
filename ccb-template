@@ -1,0 +1,93 @@
+#!/bin/sh
+set -eu
+
+ROOT=$(CDPATH= cd "$(dirname "$0")" && pwd)
+
+usage() {
+  cat <<'EOF'
+usage: ./ccb-template init [TARGET]
+
+Create a new Git project configured with CCB-TEMPLATE. The command interactively
+selects one installed Ollama Cloud model for each permanent CCB agent.
+EOF
+}
+
+choose_model() {
+  role=$1
+  while :; do
+    printf '\nChoose the Ollama Cloud model for %s:\n' "$role" >&2
+    index=1
+    printf '%s\n' "$cloud_models" | while IFS= read -r model; do
+      printf '  %s) %s\n' "$index" "$model" >&2
+      index=$((index + 1))
+    done
+    printf '> ' >&2
+    IFS= read -r choice || exit 1
+    case "$choice" in
+      *[!0-9]*|'') printf 'Enter the number of a listed model.\n' >&2; continue ;;
+    esac
+    selected=$(printf '%s\n' "$cloud_models" | sed -n "${choice}p")
+    [ -n "$selected" ] || { printf 'Enter the number of a listed model.\n' >&2; continue; }
+    printf '%s\n' "$selected"
+    return 0
+  done
+}
+
+[ "${1:-}" = init ] || { usage >&2; exit 2; }
+shift
+[ "$#" -le 1 ] || { usage >&2; exit 2; }
+
+command -v ollama >/dev/null 2>&1 || { printf '%s\n' 'error: Ollama is required and must be running.' >&2; exit 1; }
+command -v git >/dev/null 2>&1 || { printf '%s\n' 'error: git is required to initialise the project.' >&2; exit 1; }
+cloud_models=$(ollama list 2>/dev/null | awk 'NR > 1 && $1 ~ /:.*cloud$/ { print $1 }') || {
+  printf '%s\n' 'error: Ollama is not reachable; start it and retry.' >&2
+  exit 1
+}
+[ -n "$cloud_models" ] || {
+  printf '%s\n' 'error: no installed Ollama Cloud model was found; pull one ending in :cloud and retry.' >&2
+  exit 1
+}
+
+target=${1:-}
+if [ -z "$target" ]; then
+  printf 'Project directory: '
+  IFS= read -r target || exit 1
+fi
+[ -n "$target" ] || { printf '%s\n' 'error: project directory is required.' >&2; exit 1; }
+parent=$(dirname "$target")
+[ -d "$parent" ] || { printf 'error: project parent does not exist: %s\n' "$parent" >&2; exit 1; }
+if [ -e "$target" ]; then
+  [ -d "$target" ] && [ ! -L "$target" ] || { printf 'error: project directory is unsafe: %s\n' "$target" >&2; exit 1; }
+  [ -z "$(find "$target" -mindepth 1 -maxdepth 1 -print -quit)" ] || { printf 'error: project directory must be empty: %s\n' "$target" >&2; exit 1; }
+fi
+
+printf 'Project name [%s]: ' "$(basename "$target")"
+IFS= read -r name || exit 1
+[ -n "$name" ] || name=$(basename "$target")
+
+manager_model=$(choose_model manager)
+graph_model=$(choose_model graph)
+developer_model=$(choose_model developer)
+reviewer_model=$(choose_model reviewer)
+
+printf '\nEnable token optimization (RTK + Tilth)? [Y/n] '
+IFS= read -r token_answer || exit 1
+case "$token_answer" in n|N|no|NO) token_option=--no-token-optimization ;; *) token_option=--token-optimization ;; esac
+
+printf '\nProject: %s\nManager: %s\nGraph: %s\nDeveloper: %s\nReviewer: %s\nGit: initialise repository\nContinue? [y/N] ' \
+  "$target" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
+IFS= read -r confirm || exit 1
+case "$confirm" in y|Y|yes|YES) : ;; *) printf '%s\n' 'Cancelled.'; exit 0 ;; esac
+
+"$ROOT/install.sh" "$target" --name "$name" --profile web --claude-ollama-cloud \
+  --manager-model "$manager_model" --graph-model "$graph_model" \
+  --developer-model "$developer_model" --reviewer-model "$reviewer_model" \
+  "$token_option" --yes
+git -C "$target" init >/dev/null
+printf 'Git repository initialised: %s/.git\n' "$target"
+printf 'Start CCB now? [Y/n] '
+IFS= read -r start_answer || exit 1
+case "$start_answer" in
+  n|N|no|NO) printf 'CCB was not started. Run: cd %s && ccb\n' "$target" ;;
+  *) cd "$target" && exec ccb ;;
+esac

@@ -15,12 +15,16 @@ for path in \
 done
 
 for path in \
-  install.sh VERSION LICENSE README.md \
+  install.sh ccb-template VERSION LICENSE README.md \
   scripts/v2/common.sh scripts/v2/preflight.sh scripts/v2/render-config.sh scripts/v2/install-assets.sh \
-  assets/AGENT_POLICY.md assets/ccb_memory.md assets/token-optimization.md \
+  assets/AGENT_POLICY.md assets/CLAUDE.md assets/ccb_memory.md assets/token-optimization.md \
   assets/agents/manager/memory.md assets/agents/graph/memory.md \
   assets/agents/developer/memory.md \
   assets/agents/reviewer/memory.md \
+  assets/agents/manager/CLAUDE.md assets/agents/graph/CLAUDE.md \
+  assets/agents/developer/CLAUDE.md assets/agents/reviewer/CLAUDE.md \
+  assets/skills/ccb-manager-planning/SKILL.md assets/skills/ccb-graph-analysis/SKILL.md \
+  assets/skills/ccb-developer-delivery/SKILL.md assets/skills/ccb-reviewer-audit/SKILL.md \
   docs/v2-architecture.md docs/v2-migration-from-v1.md docs/v2-migration-plan.md \
   docs/v2-quickstart.md docs/v2-troubleshooting.md \
   tests/fixtures/ccb.config.expected tests/test-v2-install.sh tests/test-v2-docs.sh; do
