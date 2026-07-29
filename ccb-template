@@ -6,10 +6,62 @@ ROOT=$(CDPATH= cd "$(dirname "$0")" && pwd)
 usage() {
   cat <<'EOF'
 usage: ./ccb-template init [TARGET]
+       ./ccb-template brief TARGET
+       ./ccb-template manager-prompt TARGET BRIEF_FILE
 
 Create a new Git project configured with CCB-TEMPLATE. The command interactively
 selects one installed Ollama Cloud model for each permanent CCB agent.
+
+`brief` creates a dated execution brief in TARGET/.ccb/briefs/.
+`manager-prompt` prints the prompt to paste into the CCB manager conversation.
 EOF
+}
+
+print_manager_prompt() {
+  prompt_target=$1 prompt_brief=$2
+  case "$prompt_brief" in
+    *'/'*|*'..'*) printf '%s\n' 'error: brief file must be a filename inside .ccb/briefs.' >&2; return 1 ;;
+  esac
+  [ -d "$prompt_target" ] && [ ! -L "$prompt_target" ] && [ -f "$prompt_target/.ccb/briefs/$prompt_brief" ] && [ ! -L "$prompt_target/.ccb/briefs/$prompt_brief" ] || {
+    printf 'error: brief not found: %s/.ccb/briefs/%s\n' "$prompt_target" "$prompt_brief" >&2
+    return 1
+  }
+  cat <<EOF
+You are the CCB manager for this project.
+
+Read .ccb/briefs/$prompt_brief and treat it as the requested scope.
+First confirm the objective, assumptions, acceptance criteria and risks. Then delegate architecture
+analysis to graph, implementation only to developer, and independent validation to reviewer.
+Follow .ccb/AGENT_POLICY.md and do not modify application files yourself. Report concise progress,
+validation evidence and any decision that needs the user's approval.
+EOF
+}
+
+write_brief() {
+  brief_target=$1 brief_name=$2
+  [ -d "$brief_target" ] && [ ! -L "$brief_target" ] && [ -d "$brief_target/.ccb" ] && [ ! -L "$brief_target/.ccb" ] || {
+    printf 'error: not a CCB project: %s\n' "$brief_target" >&2
+    return 1
+  }
+  brief_dir=$brief_target/.ccb/briefs
+  [ ! -L "$brief_dir" ] || { printf 'error: unsafe brief directory: %s\n' "$brief_dir" >&2; return 1; }
+  mkdir -p "$brief_dir"
+  brief_file=$brief_dir/$brief_name.md
+  [ ! -e "$brief_file" ] || { printf 'error: brief already exists: %s\n' "$brief_file" >&2; return 1; }
+  brief_temp=$(mktemp "$brief_dir/.brief.XXXXXX") || return 1
+  trap 'rm -f "$brief_temp"' EXIT HUP INT TERM
+  printf '# CCB Brief\n\n' >"$brief_temp"
+  printf 'Describe the requested work. End with a line containing only a dot (.):\n' >&2
+  lines=0
+  while IFS= read -r line; do
+    [ "$line" = . ] && break
+    printf '%s\n' "$line" >>"$brief_temp"
+    lines=$((lines + 1))
+  done
+  [ "$lines" -gt 0 ] || { rm -f "$brief_temp"; trap - EXIT HUP INT TERM; printf '%s\n' 'No brief created.'; return 0; }
+  chmod 600 "$brief_temp" && mv "$brief_temp" "$brief_file"
+  trap - EXIT HUP INT TERM
+  printf 'Brief created: %s\n' "$brief_file"
 }
 
 choose_model() {
@@ -33,9 +85,23 @@ choose_model() {
   done
 }
 
-[ "${1:-}" = init ] || { usage >&2; exit 2; }
+[ "$#" -gt 0 ] || { usage >&2; exit 2; }
+command=$1
 shift
-[ "$#" -le 1 ] || { usage >&2; exit 2; }
+case "$command" in
+  brief)
+    [ "$#" -eq 1 ] || { usage >&2; exit 2; }
+    write_brief "$1" "brief-$(date +%Y%m%d-%H%M%S)"
+    exit $?
+    ;;
+  manager-prompt)
+    [ "$#" -eq 2 ] || { usage >&2; exit 2; }
+    print_manager_prompt "$1" "$2"
+    exit $?
+    ;;
+  init) [ "$#" -le 1 ] || { usage >&2; exit 2; } ;;
+  *) usage >&2; exit 2 ;;
+esac
 
 command -v ollama >/dev/null 2>&1 || { printf '%s\n' 'error: Ollama is required and must be running.' >&2; exit 1; }
 command -v git >/dev/null 2>&1 || { printf '%s\n' 'error: git is required to initialise the project.' >&2; exit 1; }
@@ -85,6 +151,12 @@ case "$confirm" in y|Y|yes|YES) : ;; *) printf '%s\n' 'Cancelled.'; exit 0 ;; es
   "$token_option" --yes
 git -C "$target" init >/dev/null
 printf 'Git repository initialised: %s/.git\n' "$target"
+printf 'Create an initial CCB brief now? [y/N] '
+IFS= read -r brief_answer || exit 1
+case "$brief_answer" in
+  y|Y|yes|YES) write_brief "$target" initial-brief ;;
+  *) : ;;
+esac
 printf 'Start CCB now? [Y/n] '
 IFS= read -r start_answer || exit 1
 case "$start_answer" in

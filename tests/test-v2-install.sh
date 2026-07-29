@@ -186,13 +186,24 @@ grep -A1 -F '[agents.developer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'm
 grep -A1 -F '[agents.reviewer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.7-code:cloud"' || fail 'reviewer custom model was not rendered'
 
 cli_project="$WORK/cli-project"
-run sh -c "printf '%s\\n' 'CLI Project' 1 2 3 4 n y n | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$cli_project'"
+run sh -c "printf '%s\\n' 'CLI Project' 1 2 3 4 n y n n | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$cli_project'"
 [ "$status" -eq 0 ] || fail "interactive CLI failed: $output"
 [ -d "$cli_project/.git" ] || fail 'interactive CLI did not initialise Git'
 grep -A1 -F '[agents.manager]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "glm-5.2:cloud"' || fail 'interactive CLI did not select manager model'
 grep -A1 -F '[agents.reviewer]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.6:cloud"' || fail 'interactive CLI did not select reviewer model'
 [ ! -e "$cli_project/.mcp.json" ] || fail 'interactive CLI ignored token-optimization opt-out'
 assert_contains "$output" 'CCB was not started.'
+
+run sh -c "printf '%s\\n' 'Implement the login screen.' '.' | '$ROOT/ccb-template' brief '$cli_project'"
+[ "$status" -eq 0 ] || fail "brief command failed: $output"
+brief_file=$(find "$cli_project/.ccb/briefs" -name 'brief-*.md' -type f -print -quit)
+[ -n "$brief_file" ] || fail 'brief command did not create a brief file'
+grep -Fqx 'Implement the login screen.' "$brief_file" || fail 'brief command did not preserve brief content'
+
+run "$ROOT/ccb-template" manager-prompt "$cli_project" "$(basename "$brief_file")"
+[ "$status" -eq 0 ] || fail "manager-prompt command failed: $output"
+assert_contains "$output" "Read .ccb/briefs/$(basename "$brief_file")"
+assert_contains "$output" 'delegate architecture'
 
 token_project="$WORK/token project"
 run env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$token_project" --name 'Token Project' --profile web --claude-ollama-cloud --token-optimization --yes

@@ -32,7 +32,22 @@ initialise Git in one interactive flow:
 ```
 
 The target directory must be new or empty. The CLI never creates a commit or pushes. After project
-creation, it explicitly asks whether to start CCB.
+creation, it proposes an initial CCB brief and explicitly asks whether to start CCB. Create a new
+dated brief later with `./ccb-template brief /chemin/du/projet`; finish the input with a line
+containing only `.`.
+
+### Codex → CCB workflow
+
+Use Codex as the project copilot: turn the product discussion into a concise brief, then create it
+with `ccb-template brief`. Ask Codex to review the brief before execution. Generate the exact
+manager handoff prompt with:
+
+```sh
+./ccb-template manager-prompt /chemin/du/projet initial-brief.md
+```
+
+Paste that output into the CCB manager conversation. The manager then delegates to graph,
+developer and reviewer; Codex remains your partner for decisions and follow-up briefs.
 
 Every `ccb` command in this branch denotes the official globally installed CCB binary. The
 repository-local `./ccb` command has been removed, as have the V1 provider router, direct Ollama

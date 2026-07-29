@@ -26,7 +26,7 @@ for path in \
   assets/skills/ccb-manager-planning/SKILL.md assets/skills/ccb-graph-analysis/SKILL.md \
   assets/skills/ccb-developer-delivery/SKILL.md assets/skills/ccb-reviewer-audit/SKILL.md \
   docs/v2-architecture.md docs/v2-migration-from-v1.md docs/v2-migration-plan.md \
-  docs/v2-quickstart.md docs/v2-troubleshooting.md \
+  docs/v2-quickstart.md docs/v2-troubleshooting.md docs/v2-codex-workflow.md \
   tests/fixtures/ccb.config.expected tests/test-v2-install.sh tests/test-v2-docs.sh; do
   require_file "$path"
 done
@@ -61,7 +61,7 @@ fi
 
 for document in "$ROOT"/docs/*; do
   case "$(basename "$document")" in
-    v2-architecture.md|v2-migration-from-v1.md|v2-migration-plan.md|v2-quickstart.md|v2-troubleshooting.md) : ;;
+    v2-architecture.md|v2-codex-workflow.md|v2-migration-from-v1.md|v2-migration-plan.md|v2-quickstart.md|v2-troubleshooting.md) : ;;
     *) fail "non-V2 documentation remains: $(basename "$document")" ;;
   esac
 done
