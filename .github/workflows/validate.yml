@@ -22,7 +22,7 @@ jobs:
           sh -n tests/test-v2-docs.sh
           sh -n tests/test-v2-clean-tree.sh
           sh -n tests/test-v2-release.sh
-      - name: Run V2 tests
+      - name: Run V2 bootstrap and token-optimization tests
         run: |
           ./tests/test-v2-install.sh
           ./tests/test-v2-docs.sh

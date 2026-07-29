@@ -17,6 +17,8 @@ require "$ROOT/README.md" 'official CCB 8.4.3 or later'
 require "$ROOT/README.md" 'only preset supported by'
 require "$ROOT/README.md" 'v1.8.0'
 require "$ROOT/CHANGELOG.md" '## 2.0.0 — 2026-07-28'
+require "$ROOT/CHANGELOG.md" '## Unreleased'
+require "$ROOT/CHANGELOG.md" '--token-optimization'
 for section in '### Breaking changes' '### Added' '### Removed' '### Migration'; do
   require "$ROOT/CHANGELOG.md" "$section"
 done
@@ -45,4 +47,4 @@ if rg -n 'sk-ant-|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|Bearer [A-
   "$ROOT/scripts/v2" "$ROOT/assets" "$ROOT/docs/v2-"*.md; then
   fail 'secret-like value appears in an active file'
 fi
-echo '[OK] V2 release tests passed (17 checks)'
+echo '[OK] V2 release tests passed (19 checks)'

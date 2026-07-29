@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Optional `--token-optimization` project bootstrap for RTK guidance and a pinned Tilth MCP
+  server, with safe `.mcp.json` merging and preservation of existing Claude project rules.
+
 ## 2.0.0 — 2026-07-28
 
 ### Breaking changes

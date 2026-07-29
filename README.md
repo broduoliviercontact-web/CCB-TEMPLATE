@@ -30,6 +30,25 @@ interprets model responses and never starts CCB or a Cloud model by itself.
 `--profile web` selects the standard built-in asset preset. It is the only preset supported by
 V2.0.0 and does not load a `profiles/` directory.
 
+### Optional token optimization
+
+Add `--token-optimization` to prepare only the generated project for the external RTK terminal
+filter and the Tilth MCP code-navigation server. It is optional: standard CCB installation does
+not require RTK, Node.js, npm or npx. The mode verifies `rtk` and `npx`, writes project-local
+`.mcp.json` with the pinned `npx -y tilth@0.9.0 --mcp` server, and adds a concise
+`.claude/rules/token-optimization.md` without replacing an existing user rule or `CLAUDE.md`.
+It never installs or initializes either tool.
+
+```sh
+brew install rtk-ai/tap/rtk
+rtk init -g
+npx tilth --version
+```
+
+RTK mainly filters verbose terminal output; any advertised percentage is an estimate and does
+not guarantee an equivalent reduction in Claude usage. Tilth is downloaded and launched by npx
+only when Claude Code starts the configured MCP server, never by this bootstrap.
+
 The generated official configuration uses five Claude Code agents through Ollama's
 Anthropic-compatible local endpoint:
 

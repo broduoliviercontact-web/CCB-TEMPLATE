@@ -18,8 +18,83 @@ v2_install_one() {
   v2_info "installed: $destination"
 }
 
+v2_validate_mcp_json() {
+  mcp_file=$1
+  "$CCB_TEMPLATE_PYTHON" -c '
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    document = json.load(source)
+if not isinstance(document, dict):
+    raise ValueError("the top-level JSON value must be an object")
+servers = document.get("mcpServers")
+if servers is not None and not isinstance(servers, dict):
+    raise ValueError("mcpServers must be an object")
+' "$mcp_file" >/dev/null 2>&1
+}
+
+v2_write_tilth_mcp_json() {
+  source_file=$1 temporary_file=$2
+  "$CCB_TEMPLATE_PYTHON" -c '
+import json
+import sys
+
+source_path, destination_path = sys.argv[1:]
+if source_path == "-":
+    document = {}
+else:
+    with open(source_path, encoding="utf-8") as source:
+        document = json.load(source)
+if not isinstance(document, dict):
+    raise ValueError("the top-level JSON value must be an object")
+servers = document.get("mcpServers")
+if servers is None:
+    servers = {}
+    document["mcpServers"] = servers
+elif not isinstance(servers, dict):
+    raise ValueError("mcpServers must be an object")
+servers["tilth"] = {
+    "command": "npx",
+    "args": ["-y", "tilth@0.9.0", "--mcp"],
+}
+with open(destination_path, "w", encoding="utf-8", newline="\n") as destination:
+    json.dump(document, destination, ensure_ascii=False, indent=2)
+    destination.write("\n")
+' "$source_file" "$temporary_file"
+}
+
+v2_install_tilth_mcp() {
+  target=$1 dry_run=$2
+  destination=$target/.mcp.json
+  v2_require_safe_path "$destination"
+  if [ -e "$destination" ] && [ ! -f "$destination" ]; then
+    v2_die "MCP configuration must be a regular file: $destination"
+  fi
+  if [ -e "$destination" ]; then
+    v2_validate_mcp_json "$destination" || v2_die "refusing invalid or incompatible MCP configuration: $destination"
+    if [ "$dry_run" -eq 1 ]; then
+      printf '[PLAN] merge Tilth MCP server: %s\n' "$destination"
+      return 0
+    fi
+    source_file=$destination
+    action=updated
+  else
+    if [ "$dry_run" -eq 1 ]; then
+      printf '[PLAN] create Tilth MCP configuration: %s\n' "$destination"
+      return 0
+    fi
+    source_file=-
+    action=installed
+  fi
+  temporary=$(mktemp "$target/.ccb-template-mcp.XXXXXX") || v2_die "cannot prepare $destination"
+  v2_write_tilth_mcp_json "$source_file" "$temporary" || { rm -f "$temporary"; v2_die "cannot prepare Tilth MCP configuration: $destination"; }
+  chmod 600 "$temporary" && mv "$temporary" "$destination" || { rm -f "$temporary"; v2_die "cannot install $destination"; }
+  v2_info "$action Tilth MCP configuration: $destination"
+}
+
 v2_install_assets() {
-  root=$1 target=$2 name=$3 profile=$4 dry_run=$5
+  root=$1 target=$2 name=$3 profile=$4 dry_run=$5 token_optimization=${6:-0}
   v2_is_safe_name "$name" || v2_die 'project name contains an unsafe line break'
   if [ -e "$target" ]; then target=$(v2_real_dir "$target") || v2_die "target must be a real directory: $target"; else
     parent=$(v2_resolve_existing_dir "$(dirname "$target")") || v2_die "target parent must be an existing directory: $(dirname "$target")"
@@ -36,6 +111,15 @@ v2_install_assets() {
     "$target/.ccb/agents/developer" "$target/.ccb/agents/reviewer"; do
     v2_require_safe_path "$path"
   done
+  if [ "$token_optimization" -eq 1 ]; then
+    v2_require_safe_path "$target/.mcp.json"
+    v2_require_safe_path "$target/.claude"
+    v2_require_safe_path "$target/.claude/rules"
+    v2_require_safe_path "$target/.claude/rules/token-optimization.md"
+    if [ -e "$target/.mcp.json" ]; then
+      v2_validate_mcp_json "$target/.mcp.json" || v2_die "refusing invalid or incompatible MCP configuration: $target/.mcp.json"
+    fi
+  fi
   if [ -e "$target/.ccb/ccb.config" ]; then v2_die "refusing to overwrite existing CCB configuration: $target/.ccb/ccb.config"; fi
   config_dir=$target/.ccb
   if [ "$dry_run" -eq 1 ]; then
@@ -57,4 +141,8 @@ v2_install_assets() {
   for asset in AGENT_POLICY.md ccb_memory.md agents/manager/memory.md agents/graph/memory.md agents/graphiste/memory.md agents/developer/memory.md agents/reviewer/memory.md; do
     v2_install_one "$root/assets/$asset" "$config_dir/$asset" "$dry_run"
   done
+  if [ "$token_optimization" -eq 1 ]; then
+    v2_install_tilth_mcp "$target" "$dry_run"
+    v2_install_one "$root/assets/token-optimization.md" "$target/.claude/rules/token-optimization.md" "$dry_run"
+  fi
 }

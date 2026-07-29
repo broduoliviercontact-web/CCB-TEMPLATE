@@ -66,6 +66,24 @@ Install after reviewing the preflight:
   --yes
 ```
 
+### Optional: token optimization
+
+`--token-optimization` is an opt-in project-local integration for the external RTK terminal
+filter and Tilth MCP server. Install and initialize RTK yourself, then confirm npx can resolve
+Tilth:
+
+```sh
+brew install rtk-ai/tap/rtk
+rtk init -g
+npx tilth --version
+```
+
+Add the option to the installer command to create `.mcp.json` using the pinned command
+`npx -y tilth@0.9.0 --mcp` and a concise `.claude/rules/token-optimization.md`. The bootstrap
+does not run RTK initialization, download Tilth or replace an existing `.mcp.json`, rule or
+`CLAUDE.md`. RTK filters primarily terminal output; its estimates do not guarantee a matching
+reduction in Claude usage. Tilth is started by npx only when Claude Code starts the MCP server.
+
 ## 4. Validate and start
 
 ```sh

@@ -14,6 +14,8 @@ fi
 trap 'rm -rf "$WORK"' EXIT HUP INT TERM
 BIN="$WORK/bin"
 mkdir -p "$BIN"
+PYTHON_FOR_TESTS=$(command -v python3 2>/dev/null || true)
+[ -n "$PYTHON_FOR_TESTS" ] || { echo 'FAIL: python3 is required to test JSON merging' >&2; exit 1; }
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 assert_contains() { printf '%s\n' "$1" | grep -Fq -- "$2" || fail "missing $2"; }
@@ -55,10 +57,13 @@ cat >"$BIN/ccb" <<EOF
 printf '%s\n' "\$*" >>"$WORK/ccb.calls"
 case "\${1:-}" in --version) echo 'ccb (Claude Code Bridge) v8.4.3 test' ;; *) exit 91 ;; esac
 EOF
-cat >"$BIN/python-good" <<'EOF'
+cat >"$BIN/python-good" <<EOF
 #!/bin/sh
-if [ "${1:-}" = -c ]; then echo 3.12; exit 0; fi
-exit 1
+case "\${2:-}" in
+  *sys.version_info*) echo 3.12; exit 0 ;;
+  *importlib.util*) exit 0 ;;
+  *) exec "$PYTHON_FOR_TESTS" "\$@" ;;
+esac
 EOF
 cat >"$BIN/python-old" <<'EOF'
 #!/bin/sh
@@ -74,10 +79,27 @@ esac
 EOF
 chmod +x "$BIN"/*
 
+TOKEN_BIN="$WORK/token-bin"
+RTK_ONLY_BIN="$WORK/rtk-only-bin"
+mkdir -p "$TOKEN_BIN" "$RTK_ONLY_BIN"
+cat >"$TOKEN_BIN/rtk" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >>"$WORK/rtk.calls"
+exit 94
+EOF
+cat >"$TOKEN_BIN/npx" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >>"$WORK/npx.calls"
+exit 95
+EOF
+cp "$TOKEN_BIN/rtk" "$RTK_ONLY_BIN/rtk"
+chmod +x "$TOKEN_BIN"/* "$RTK_ONLY_BIN"/*
+
 ENV="PATH=$BIN:$PATH CCB_PYTHON=$BIN/python-good"
 
 help=$($INSTALL --help)
 assert_contains "$help" '--claude-ollama-cloud'
+assert_contains "$help" '--token-optimization'
 assert_contains "$help" 'web is the only preset currently supported'
 if rg -n 'profiles/' "$ROOT/install.sh" "$ROOT/scripts/v2"; then fail 'V2 bootstrap reads a removed profiles directory'; fi
 
@@ -86,6 +108,32 @@ run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$dry" --name
 [ "$status" -eq 0 ] || fail "dry-run failed: $output"
 [ ! -e "$dry" ] || fail 'dry-run wrote the target'
 assert_contains "$output" 'DRY RUN — no files were modified.'
+
+standard_without_tools="$WORK/standard-without-token-tools"
+run env PATH="$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$standard_without_tools" --name StandardWithoutTools --profile web --claude-ollama-cloud --dry-run
+[ "$status" -eq 0 ] || fail "standard installation was blocked without RTK/npx: $output"
+[ ! -e "$standard_without_tools" ] || fail 'standard dry-run without RTK/npx wrote the target'
+
+token_missing_rtk="$WORK/token-missing-rtk"
+run env PATH="$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$token_missing_rtk" --name TokenMissingRTK --profile web --claude-ollama-cloud --token-optimization --dry-run
+[ "$status" -ne 0 ] || fail 'missing RTK was accepted with --token-optimization'
+assert_contains "$output" 'RTK is required with --token-optimization'
+assert_contains "$output" 'brew install rtk-ai/tap/rtk'
+assert_contains "$output" 'rtk init -g'
+[ ! -e "$token_missing_rtk" ] || fail 'missing RTK wrote the target'
+
+token_missing_npx="$WORK/token-missing-npx"
+run env PATH="$RTK_ONLY_BIN:$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$token_missing_npx" --name TokenMissingNPX --profile web --claude-ollama-cloud --token-optimization --dry-run
+[ "$status" -ne 0 ] || fail 'missing npx was accepted with --token-optimization'
+assert_contains "$output" 'npx is required with --token-optimization'
+[ ! -e "$token_missing_npx" ] || fail 'missing npx wrote the target'
+
+token_dry="$WORK/token-dry"
+run env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$token_dry" --name TokenDry --profile web --claude-ollama-cloud --token-optimization --dry-run
+[ "$status" -eq 0 ] || fail "token-optimization dry-run failed: $output"
+[ ! -e "$token_dry" ] || fail 'token-optimization dry-run wrote the target'
+assert_contains "$output" '[PLAN] create Tilth MCP configuration:'
+assert_contains "$output" "$token_dry/.claude/rules/token-optimization.md"
 
 invalid_profile="$WORK/invalid-profile"
 run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$invalid_profile" --name InvalidProfile --profile python --claude-ollama-cloud --dry-run
@@ -115,6 +163,94 @@ retired_model=$retired_prefix:480b-cloud
 if rg -n "$retired_model|sk-ant-|Bearer [A-Za-z0-9]" "$ROOT/install.sh" "$ROOT/scripts/v2" "$ROOT/assets" "$project/.ccb" >/dev/null; then fail 'new V2 files contain a retired model or sensitive token'; fi
 grep -Fxv -- '--version' "$WORK/ccb.calls" >/dev/null && fail 'installer executed ccb beyond --version' || :
 [ ! -e "$WORK/claude.calls" ] || fail 'installer executed Claude Code'
+[ ! -e "$project/.mcp.json" ] || fail 'standard installation created a Tilth MCP configuration'
+[ ! -e "$project/.claude" ] || fail 'standard installation created Claude token-optimization files'
+
+token_project="$WORK/token project"
+run env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$token_project" --name 'Token Project' --profile web --claude-ollama-cloud --token-optimization --yes
+[ "$status" -eq 0 ] || fail "token-optimization installation failed: $output"
+[ -f "$token_project/.claude/rules/token-optimization.md" ] || fail 'token-optimization rule was not installed'
+[ -f "$token_project/.mcp.json" ] || fail 'Tilth MCP configuration was not installed'
+grep -Fqx -- '- Keep responses concise by default: do not restate the request or add a preamble.' "$token_project/.claude/rules/token-optimization.md" || fail 'token-optimization rule is missing concise-response guidance'
+grep -Fqx -- '- Prefer targeted changes to broad rewrites; provide detail when the user asks for it or validation evidence requires it.' "$token_project/.claude/rules/token-optimization.md" || fail 'token-optimization rule is missing targeted-change guidance'
+"$PYTHON_FOR_TESTS" -c '
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as source:
+    document = json.load(source)
+assert document == {"mcpServers": {"tilth": {"command": "npx", "args": ["-y", "tilth@0.9.0", "--mcp"]}}}
+' "$token_project/.mcp.json" || fail 'Tilth MCP configuration is not deterministic'
+[ ! -e "$WORK/rtk.calls" ] || fail 'installer executed RTK'
+[ ! -e "$WORK/npx.calls" ] || fail 'installer executed npx or Tilth'
+
+merged_mcp="$WORK/merged-mcp"
+mkdir "$merged_mcp"
+cat >"$merged_mcp/.mcp.json" <<'EOF'
+{
+  "mcpServers": {
+    "other": {
+      "command": "other-server",
+      "args": ["--safe"]
+    },
+    "tilth": {
+      "command": "old-tilth"
+    }
+  },
+  "metadata": {
+    "keep": true
+  }
+}
+EOF
+env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$merged_mcp" --name MergedMCP --profile web --claude-ollama-cloud --token-optimization --yes >/dev/null
+"$PYTHON_FOR_TESTS" -c '
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as source:
+    document = json.load(source)
+assert document["mcpServers"]["other"] == {"command": "other-server", "args": ["--safe"]}
+assert document["mcpServers"]["tilth"] == {"command": "npx", "args": ["-y", "tilth@0.9.0", "--mcp"]}
+assert document["metadata"] == {"keep": True}
+' "$merged_mcp/.mcp.json" || fail 'MCP merge did not preserve other servers or deterministically update Tilth'
+
+invalid_mcp="$WORK/invalid-mcp"
+mkdir "$invalid_mcp"
+printf '{ invalid JSON\n' >"$invalid_mcp/.mcp.json"
+invalid_before=$(cat "$invalid_mcp/.mcp.json")
+run env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$invalid_mcp" --name InvalidMCP --profile web --claude-ollama-cloud --token-optimization --yes
+[ "$status" -ne 0 ] || fail 'invalid MCP JSON was accepted'
+assert_contains "$output" 'refusing invalid or incompatible MCP configuration'
+[ "$(cat "$invalid_mcp/.mcp.json")" = "$invalid_before" ] || fail 'invalid MCP JSON was altered'
+[ ! -e "$invalid_mcp/.ccb/ccb.config" ] || fail 'invalid MCP JSON wrote CCB configuration before refusal'
+
+incompatible_mcp="$WORK/incompatible-mcp"
+mkdir "$incompatible_mcp"
+printf '{"mcpServers": []}\n' >"$incompatible_mcp/.mcp.json"
+incompatible_before=$(cat "$incompatible_mcp/.mcp.json")
+run env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$incompatible_mcp" --name IncompatibleMCP --profile web --claude-ollama-cloud --token-optimization --yes
+[ "$status" -ne 0 ] || fail 'incompatible MCP structure was accepted'
+[ "$(cat "$incompatible_mcp/.mcp.json")" = "$incompatible_before" ] || fail 'incompatible MCP JSON was altered'
+
+linked_mcp="$WORK/linked-mcp"
+mkdir "$linked_mcp"
+printf '{"mcpServers": {}}\n' >"$WORK/mcp-outside.json"
+ln -s "$WORK/mcp-outside.json" "$linked_mcp/.mcp.json"
+linked_before=$(cat "$WORK/mcp-outside.json")
+run env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$linked_mcp" --name LinkedMCP --profile web --claude-ollama-cloud --token-optimization --yes
+[ "$status" -ne 0 ] || fail 'symbolic MCP configuration was accepted'
+assert_contains "$output" 'refusing symbolic link:'
+[ "$(cat "$WORK/mcp-outside.json")" = "$linked_before" ] || fail 'symbolic MCP target was altered'
+
+preserve_rule="$WORK/preserve-rule"
+mkdir -p "$preserve_rule/.claude/rules"
+printf 'user token rule\n' >"$preserve_rule/.claude/rules/token-optimization.md"
+printf 'user CLAUDE memory\n' >"$preserve_rule/CLAUDE.md"
+run env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$preserve_rule" --name PreserveRule --profile web --claude-ollama-cloud --token-optimization --yes
+[ "$status" -eq 0 ] || fail "existing rule installation failed: $output"
+[ "$(cat "$preserve_rule/.claude/rules/token-optimization.md")" = 'user token rule' ] || fail 'existing token-optimization rule was overwritten'
+[ "$(cat "$preserve_rule/CLAUDE.md")" = 'user CLAUDE memory' ] || fail 'CLAUDE.md was changed'
+assert_contains "$output" "preserved: $preserve_rule/.claude/rules/token-optimization.md"
+grep -Fxv -- '--version' "$WORK/ccb.calls" >/dev/null && fail 'token-optimization executed ccb beyond --version' || :
+[ ! -e "$WORK/claude.calls" ] || fail 'token-optimization executed Claude Code'
+[ ! -e "$WORK/rtk.calls" ] || fail 'token-optimization executed RTK'
+[ ! -e "$WORK/npx.calls" ] || fail 'token-optimization executed npx or Tilth'
 
 second="$WORK/second"
 env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$second" --name 'Other name' --profile web --claude-ollama-cloud --yes >/dev/null
@@ -211,4 +347,4 @@ else
   echo '[SKIP] Optional Cloud model tests (set CCB_TEMPLATE_RUN_CLOUD_TESTS=1 to run)'
 fi
 
-echo '[OK] V2 install tests passed (17 scenarios)'
+echo '[OK] V2 install tests passed (token-optimization coverage included)'

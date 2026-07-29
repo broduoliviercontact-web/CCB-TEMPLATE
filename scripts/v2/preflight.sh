@@ -51,7 +51,7 @@ v2_select_python() {
 }
 
 v2_preflight() {
-  root=$1
+  root=$1 token_optimization=${2:-0}
   system=$(uname -s 2>/dev/null || true)
   case "$system" in Darwin|Linux|FreeBSD) v2_info "platform: $system" ;; *) v2_die "unsupported platform: ${system:-unknown}; use macOS or a Unix-compatible environment" ;; esac
   command -v tmux >/dev/null 2>&1 || v2_die 'tmux is required; install it with your system package manager'
@@ -75,4 +75,15 @@ v2_preflight() {
     printf '%s\n' "$models" | awk 'NR > 1 { print $1 }' | grep -Fqx "$model" || v2_die "Ollama Cloud model is unavailable: $model"
   done
   v2_info 'Ollama server and five required Cloud models: available'
+
+  if [ "$token_optimization" -eq 1 ]; then
+    command -v rtk >/dev/null 2>&1 || v2_die "$(printf '%s\n%s\n%s\n%s' \
+      'RTK is required with --token-optimization. On macOS run:' \
+      'brew install rtk-ai/tap/rtk' \
+      'rtk init -g' \
+      'The bootstrap never installs or initializes RTK for you.')"
+    v2_info "RTK: $(command -v rtk)"
+    command -v npx >/dev/null 2>&1 || v2_die 'npx is required with --token-optimization to launch the project Tilth MCP server; install Node.js/npm so npx is available'
+    v2_info "npx: $(command -v npx)"
+  fi
 }

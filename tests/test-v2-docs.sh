@@ -11,6 +11,9 @@ require "$ROOT/README.md" 'repository-local `./ccb` command has been removed'
 require "$ROOT/README.md" 'official globally installed CCB binary'
 require "$ROOT/README.md" 'V1.8.0 archive'
 require "$ROOT/README.md" 'does not use OpenCode'
+require "$ROOT/README.md" '--token-optimization'
+require "$ROOT/README.md" 'rtk init -g'
+require "$ROOT/README.md" 'tilth@0.9.0'
 
 for document in docs/v2-quickstart.md docs/v2-architecture.md docs/v2-migration-from-v1.md docs/v2-troubleshooting.md; do
   [ -f "$ROOT/$document" ] || fail "missing $document"
@@ -25,6 +28,7 @@ done
 require "$ROOT/.github/workflows/validate.yml" './tests/test-v2-install.sh'
 require "$ROOT/.github/workflows/validate.yml" './tests/test-v2-docs.sh'
 require "$ROOT/.github/workflows/validate.yml" './tests/test-v2-clean-tree.sh'
+require "$ROOT/.github/workflows/validate.yml" 'token-optimization tests'
 require "$ROOT/README.md" 'V1 profiles, skills, prompts and manuals were removed'
 require "$ROOT/README.md" 'standard built-in asset preset'
 require "$ROOT/docs/v2-quickstart.md" 'standard built-in asset preset'
@@ -34,5 +38,8 @@ if rg -n '^\s*ccb\s*$|\$\s*ccb\s*$' "$ROOT/tests/test-v2-install.sh" "$ROOT/test
 fi
 require "$ROOT/docs/v2-architecture.md" 'does not call Ollama directly'
 require "$ROOT/docs/v2-architecture.md" 'not a workflow engine'
+require "$ROOT/docs/v2-architecture.md" 'project/workspace MCP metadata'
+require "$ROOT/docs/v2-quickstart.md" 'npx tilth --version'
+require "$ROOT/docs/v2-troubleshooting.md" 'MCP configuration'
 
-echo '[OK] V2 documentation tests passed (18 checks)'
+echo '[OK] V2 documentation tests passed (25 checks)'

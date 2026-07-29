@@ -26,3 +26,16 @@ profile and the per-agent Ollama compatibility environment. `.ccb/ccb_memory.md`
 shared context. Each `.ccb/agents/<agent>/memory.md` holds durable role-specific context.
 
 No template action pushes, deploys or interprets a model response.
+
+## Optional token optimization
+
+With `--token-optimization`, the bootstrap adds only project-native Claude Code inputs:
+`.mcp.json` configures the pinned Tilth stdio server through `npx`, and
+`.claude/rules/token-optimization.md` provides concise usage guidance for Tilth and RTK. RTK
+and Tilth remain external tools; the bootstrap neither installs, initializes nor runs them.
+
+CCB 8.4.3 projects each Claude agent into an isolated managed home. Its documented MCP
+projection includes current project/workspace MCP metadata when configuration inheritance is
+enabled; V2 leaves that inheritance enabled. CCB does not document native project rules as a
+managed-home projection. The rule is therefore supplied for Claude Code's native project rule
+loader, without a claim that CCB itself duplicates it into every isolated home.

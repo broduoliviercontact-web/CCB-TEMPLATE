@@ -17,7 +17,7 @@ done
 for path in \
   install.sh VERSION LICENSE README.md \
   scripts/v2/common.sh scripts/v2/preflight.sh scripts/v2/render-config.sh scripts/v2/install-assets.sh \
-  assets/AGENT_POLICY.md assets/ccb_memory.md \
+  assets/AGENT_POLICY.md assets/ccb_memory.md assets/token-optimization.md \
   assets/agents/manager/memory.md assets/agents/graph/memory.md \
   assets/agents/graphiste/memory.md assets/agents/developer/memory.md \
   assets/agents/reviewer/memory.md \
