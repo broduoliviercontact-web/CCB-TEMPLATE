@@ -198,6 +198,7 @@ monitored_project="$WORK/monitored-project"
 run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$monitored_project" --name MonitoredProject --profile web --claude-ollama-cloud --no-token-optimization --token-monitoring --yes
 [ "$status" -eq 0 ] || fail "token monitoring installation failed: $output"
 [ -f "$monitored_project/.ccb/token-proxy.py" ] || fail 'token monitoring proxy was not installed'
+[ "$(cat "$monitored_project/.ccb/token-monitor-python")" = "$BIN/python-good" ] || fail 'token monitoring did not retain the validated Python interpreter'
 grep -Fqx 'ANTHROPIC_BASE_URL = "http://127.0.0.1:11435/manager"' "$monitored_project/.ccb/ccb.config" || fail 'manager token monitoring endpoint was not rendered'
 grep -Fqx 'ANTHROPIC_BASE_URL = "http://127.0.0.1:11435/reviewer"' "$monitored_project/.ccb/ccb.config" || fail 'reviewer token monitoring endpoint was not rendered'
 

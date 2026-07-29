@@ -41,9 +41,14 @@ monitor_start() {
     printf 'Token monitor already running (pid %s).\n' "$(cat "$monitor_pid")"
     return 0
   fi
-  command -v python3 >/dev/null 2>&1 || { printf '%s\n' 'error: python3 is required to start token monitoring.' >&2; return 1; }
-  python3 -c 'import aiohttp' >/dev/null 2>&1 || { printf '%s\n' 'error: python3 needs aiohttp; use the same CCB_PYTHON environment used during installation.' >&2; return 1; }
-  nohup python3 "$monitor_target/.ccb/token-proxy.py" --upstream http://127.0.0.1:11434 --port 11435 --metrics "$monitor_dir/usage.jsonl" >"$monitor_dir/proxy.log" 2>&1 &
+  monitor_python=python3
+  monitor_python_file=$monitor_target/.ccb/token-monitor-python
+  if [ -f "$monitor_python_file" ] && [ ! -L "$monitor_python_file" ]; then
+    monitor_python=$(sed -n '1p' "$monitor_python_file")
+  fi
+  command -v "$monitor_python" >/dev/null 2>&1 || { printf 'error: token monitor Python is unavailable: %s\n' "$monitor_python" >&2; return 1; }
+  "$monitor_python" -c 'import aiohttp' >/dev/null 2>&1 || { printf 'error: token monitor Python needs aiohttp: %s\n' "$monitor_python" >&2; return 1; }
+  nohup "$monitor_python" "$monitor_target/.ccb/token-proxy.py" --upstream http://127.0.0.1:11434 --port 11435 --metrics "$monitor_dir/usage.jsonl" >"$monitor_dir/proxy.log" 2>&1 &
   printf '%s\n' "$!" >"$monitor_pid"
   printf 'Token monitor started (pid %s).\n' "$!"
 }
