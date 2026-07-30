@@ -49,7 +49,7 @@ or response content. The interactive CLI starts the proxy during configuration. 
 metrics with:
 
 ```sh
-./ccb-template usage /chemin/du/projet
+./ccb-template monitor /chemin/du/projet
 ```
 
 If Ollama does not return token counters for a response, that request remains visible but its token
@@ -67,7 +67,7 @@ truth. You may configure your own planning rates in `.ccb/token-monitor/pricing.
 labels the resulting dollar amount as an estimate only. Display the file format with:
 
 ```sh
-./ccb-template pricing /chemin/du/projet
+./ccb-template monitor price /chemin/du/projet
 ```
 
 <p align="center">
@@ -86,6 +86,25 @@ manager handoff prompt with:
 
 Paste that output into the CCB manager conversation. The manager then delegates to graph,
 developer and reviewer; Codex remains your partner for decisions and follow-up briefs.
+
+### Codex project-starter skill
+
+The repository includes the reusable `$start-ccb-project` Codex skill. It turns an idea discussed
+with ChatGPT into a bounded first brief, asks for confirmation before creating anything, runs the
+interactive CCB initializer, and produces the handoff prompt for the CCB manager.
+
+Install it in your personal Codex skills directory from a clone of this repository:
+
+```sh
+mkdir -p ~/.codex/skills
+cp -R ./codex-skills/start-ccb-project ~/.codex/skills/
+```
+
+Then, in a new Codex task, use:
+
+```text
+Use $start-ccb-project to turn this idea into a new CCB project: [your idea]
+```
 
 <p align="center">
   <img src="readme-assets/workflow-chatgpt-codex-ccb.svg" alt="Workflow complet ChatGPT, Codex et CCB-TEMPLATE" width="100%">

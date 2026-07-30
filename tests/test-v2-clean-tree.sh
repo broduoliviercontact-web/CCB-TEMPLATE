@@ -25,6 +25,9 @@ for path in \
   assets/agents/developer/CLAUDE.md assets/agents/reviewer/CLAUDE.md \
   assets/skills/ccb-manager-planning/SKILL.md assets/skills/ccb-graph-analysis/SKILL.md \
   assets/skills/ccb-developer-delivery/SKILL.md assets/skills/ccb-reviewer-audit/SKILL.md \
+  codex-skills/start-ccb-project/SKILL.md \
+  codex-skills/start-ccb-project/agents/openai.yaml \
+  codex-skills/start-ccb-project/references/brief-template.md \
   docs/v2-architecture.md docs/v2-migration-from-v1.md docs/v2-migration-plan.md \
   docs/v2-quickstart.md docs/v2-troubleshooting.md docs/v2-codex-workflow.md \
   tests/fixtures/ccb.config.expected tests/test-v2-install.sh tests/test-v2-docs.sh; do

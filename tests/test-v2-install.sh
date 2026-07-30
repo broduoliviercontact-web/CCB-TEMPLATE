@@ -204,11 +204,11 @@ grep -Fqx 'ANTHROPIC_BASE_URL = "http://127.0.0.1:11435/manager"' "$monitored_pr
 grep -Fqx 'ANTHROPIC_BASE_URL = "http://127.0.0.1:11435/reviewer"' "$monitored_project/.ccb/ccb.config" || fail 'reviewer token monitoring endpoint was not rendered'
 printf '%s\n' '{"models":{"kimi-k2.7-code:cloud":{"input_per_million_usd":2,"output_per_million_usd":8}}}' >"$monitored_project/.ccb/token-monitor/pricing.json"
 printf '%s\n' '{"timestamp":"2026-07-29T22:00:00+00:00","agent":"manager","model":"kimi-k2.7-code:cloud","input_tokens":1000000,"output_tokens":500000,"duration_ms":100}' >"$monitored_project/.ccb/token-monitor/usage.jsonl"
-run "$ROOT/ccb-template" usage "$monitored_project"
+run "$ROOT/ccb-template" monitor "$monitored_project"
 [ "$status" -eq 0 ] || fail "token usage dashboard failed: $output"
 assert_contains "$output" 'Estimated cost'
 assert_contains "$output" '$6.0000'
-run "$ROOT/ccb-template" pricing "$monitored_project"
+run "$ROOT/ccb-template" monitor price "$monitored_project"
 [ "$status" -eq 0 ] || fail "pricing command failed: $output"
 assert_contains "$output" 'input_per_million_usd'
 

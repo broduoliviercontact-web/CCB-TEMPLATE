@@ -1,0 +1,4 @@
+interface:
+  display_name: "Start CCB Project"
+  short_description: "Frame an idea and launch a CCB project workflow."
+  default_prompt: "Use $start-ccb-project to turn my idea into a first CCB-TEMPLATE project brief."
