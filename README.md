@@ -40,10 +40,22 @@ creation, it proposes an initial CCB brief and explicitly asks whether to start 
 dated brief later with `./ccb-template brief /chemin/du/projet`; finish the input with a line
 containing only `.`.
 
+For a Codex-driven workflow where the product brief has already been confirmed, use the automatic
+mode. It selects the preferred installed Ollama Cloud models, enables token optimization and token
+monitoring, initializes Git, starts only the monitoring proxy and leaves CCB itself stopped:
+
+```sh
+./ccb-template init /chemin/du/projet --auto
+```
+
+The automatic mode does not create a brief or start CCB. Codex creates the first dated brief and
+the manager handoff after initialization. The target directory must still be new or empty.
+
 ### Optional token monitoring
 
-Choose token monitoring during `ccb-template init`, or pass `--token-monitoring` to `install.sh`,
-to route the four agents through a local transparent proxy. It records only timestamp, agent,
+Choose token monitoring during `ccb-template init`, pass `--token-monitoring` to `install.sh`, or
+enable it later with `ccb-template monitor enable /chemin/du/projet` to route the four agents
+through a local transparent proxy. It records only timestamp, agent,
 model, input tokens, output tokens and duration in `.ccb/token-monitor/`; it never stores prompt
 or response content. Each project automatically receives a free local port (stored in
 `.ccb/token-monitor/port`), so several projects can run independently. The interactive CLI starts the proxy during configuration. View the collected
@@ -51,6 +63,23 @@ metrics with:
 
 ```sh
 ./ccb-template monitor /chemin/du/projet
+```
+
+For an existing CCB project, enable or disable the proxy without replacing the project
+configuration:
+
+```sh
+./ccb-template monitor enable /chemin/du/projet
+./ccb-template monitor disable /chemin/du/projet
+```
+
+The command preserves a direct-connection backup, changes only the four agent API URLs, starts
+the proxy after validation, and restores the direct configuration if the proxy cannot start.
+The monitor needs Python 3.10+ with `aiohttp` and `cryptography`. If the template cannot find
+that interpreter automatically, set `CCB_PYTHON` before enabling it:
+
+```sh
+CCB_PYTHON=/path/to/venv/bin/python ./ccb-template monitor enable /chemin/du/projet
 ```
 
 If Ollama does not return token counters for a response, that request remains visible but its token

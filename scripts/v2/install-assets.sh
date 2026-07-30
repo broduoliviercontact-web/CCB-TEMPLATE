@@ -183,6 +183,7 @@ v2_install_assets() {
     v2_install_one "$root/assets/$asset" "$config_dir/$asset" "$dry_run"
   done
   v2_install_one "$root/assets/CLAUDE.md" "$target/CLAUDE.md" "$dry_run"
+  v2_install_one "$root/assets/.gitignore" "$target/.gitignore" "$dry_run"
   for skill in ccb-manager-planning ccb-graph-analysis ccb-developer-delivery ccb-reviewer-audit; do
     v2_install_one "$root/assets/skills/$skill/SKILL.md" "$target/.claude/skills/$skill/SKILL.md" "$dry_run"
   done
