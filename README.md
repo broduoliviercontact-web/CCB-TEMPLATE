@@ -124,8 +124,10 @@ developer and reviewer; Codex remains your partner for decisions and follow-up b
 ### Codex project-starter skill
 
 The repository includes the reusable `$start-ccb-project` Codex skill. It turns an idea discussed
-with ChatGPT into a bounded first brief, asks for confirmation before creating anything, runs the
-interactive CCB initializer, and produces the handoff prompt for the CCB manager.
+with ChatGPT into a bounded first brief, asks for confirmation of the target directory, runs the
+automatic CCB initializer with token optimization and monitoring, and produces the handoff prompt
+for the CCB manager. Use the interactive initializer only when you explicitly want to choose the
+models and options manually.
 
 Install it in your personal Codex skills directory from a clone of this repository:
 
