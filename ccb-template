@@ -6,10 +6,11 @@ ROOT=$(CDPATH= cd "$(dirname "$0")" && pwd)
 usage() {
   cat <<'EOF'
 usage: ./ccb-template init [TARGET]
+       ./ccb-template init TARGET --auto
        ./ccb-template brief TARGET
        ./ccb-template manager-prompt TARGET BRIEF_FILE
        ./ccb-template monitor TARGET
-       ./ccb-template monitor start|stop|watch|price TARGET
+       ./ccb-template monitor enable|disable|start|stop|watch|price TARGET
        ./ccb-template start TARGET
 
 Create a new Git project configured with CCB-TEMPLATE. The command interactively
@@ -61,6 +62,166 @@ monitor_restore_assets() {
   fi
 }
 
+monitor_python_for() {
+  monitor_target=$1
+  monitor_python_file=$monitor_target/.ccb/token-monitor-python
+  monitor_backup_python=$monitor_target/.ccb-template/token-monitor/python
+  for python_setting in "$monitor_python_file" "$monitor_backup_python"; do
+    if [ -f "$python_setting" ] && [ ! -L "$python_setting" ]; then
+      candidate=$(sed -n '1p' "$python_setting")
+      if [ -n "$candidate" ] && command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import aiohttp, cryptography' >/dev/null 2>&1; then
+        printf '%s\n' "$candidate"
+        return 0
+      fi
+    fi
+  done
+  if [ -n "${CCB_PYTHON:-}" ] && command -v "$CCB_PYTHON" >/dev/null 2>&1 && "$CCB_PYTHON" -c 'import aiohttp, cryptography' >/dev/null 2>&1; then
+    printf '%s\n' "$CCB_PYTHON"
+    return 0
+  fi
+  for candidate in "$(command -v python3 2>/dev/null || true)" "$(command -v python 2>/dev/null || true)"; do
+    if [ -n "$candidate" ] && "$candidate" -c 'import aiohttp, cryptography' >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  printf '%s\n' 'error: no Python with aiohttp and cryptography was found. Set CCB_PYTHON to a compatible interpreter.' >&2
+  return 1
+}
+
+monitor_select_port() {
+  monitor_python=$1
+  start=${CCB_TOKEN_MONITOR_PORT_START:-11435}
+  "$monitor_python" - "$start" <<'PY'
+import socket
+import sys
+
+start = int(sys.argv[1])
+for port in range(start, 65536):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            continue
+        print(port)
+        break
+else:
+    raise SystemExit("no free local TCP port available for token monitoring")
+PY
+}
+
+monitor_install_file() {
+  source_file=$1 destination=$2
+  [ ! -L "$destination" ] || { printf 'error: unsafe token monitor path: %s\n' "$destination" >&2; return 1; }
+  if [ -e "$destination" ]; then return 0; fi
+  mkdir -p "$(dirname "$destination")"
+  temporary=$(mktemp "$(dirname "$destination")/.ccb-template.XXXXXX") || return 1
+  cp "$source_file" "$temporary" && chmod 600 "$temporary" && mv "$temporary" "$destination" || {
+    rm -f "$temporary"
+    return 1
+  }
+}
+
+monitor_write_value() {
+  value=$1 destination=$2
+  [ ! -L "$destination" ] || { printf 'error: unsafe token monitor path: %s\n' "$destination" >&2; return 1; }
+  mkdir -p "$(dirname "$destination")"
+  temporary=$(mktemp "$(dirname "$destination")/.ccb-template.XXXXXX") || return 1
+  printf '%s\n' "$value" >"$temporary" && chmod 600 "$temporary" && mv "$temporary" "$destination" || {
+    rm -f "$temporary"
+    return 1
+  }
+}
+
+monitor_rewrite_config() {
+  config_file=$1 enabled=$2 port=${3:-}
+  temporary=$(mktemp "$(dirname "$config_file")/.ccb-config.XXXXXX") || return 1
+  awk -v enabled="$enabled" -v port="$port" '
+    function base(agent) {
+      if (enabled == "0") return "http://localhost:11434"
+      return "http://127.0.0.1:" port "/" agent
+    }
+    /^\[agents\.(manager|graph|developer|reviewer)\.env\]$/ {
+      agent = $0
+      sub(/^\[agents\./, "", agent)
+      sub(/\.env\]$/, "", agent)
+      print
+      next
+    }
+    /^ANTHROPIC_BASE_URL = / {
+      print "ANTHROPIC_BASE_URL = \"" base(agent) "\""
+      next
+    }
+    { print }
+  ' "$config_file" >"$temporary" && chmod 600 "$temporary" && mv "$temporary" "$config_file" || {
+    rm -f "$temporary"
+    return 1
+  }
+}
+
+monitor_enable() {
+  monitor_target=$1
+  config_file=$monitor_target/.ccb/ccb.config
+  backup_file=$monitor_target/.ccb-template/token-monitor/ccb.config.direct
+  [ -d "$monitor_target" ] && [ ! -L "$monitor_target" ] || { printf 'error: project directory is missing: %s\n' "$monitor_target" >&2; return 1; }
+  [ -f "$config_file" ] && [ ! -L "$config_file" ] || { printf 'error: CCB configuration is missing: %s\n' "$config_file" >&2; return 1; }
+  if is_monitored_project "$monitor_target"; then
+    monitor_start "$monitor_target"
+    return $?
+  fi
+  monitor_python=$(monitor_python_for "$monitor_target") || return 1
+  monitor_dir=$monitor_target/.ccb/token-monitor
+  monitor_backup_dir=$monitor_target/.ccb-template/token-monitor
+  [ ! -L "$monitor_dir" ] && [ ! -L "$monitor_backup_dir" ] || { printf '%s\n' 'error: unsafe token monitor directory.' >&2; return 1; }
+  mkdir -p "$monitor_dir" "$monitor_backup_dir"
+  if [ ! -f "$backup_file" ]; then
+    monitor_install_file "$config_file" "$backup_file" || return 1
+  fi
+  if [ -f "$monitor_dir/port" ]; then
+    monitor_port=$(sed -n '1p' "$monitor_dir/port")
+  elif [ -f "$monitor_backup_dir/port" ]; then
+    monitor_port=$(sed -n '1p' "$monitor_backup_dir/port")
+  else
+    monitor_port=$(monitor_select_port "$monitor_python") || return 1
+  fi
+  case "$monitor_port" in *[!0-9]*|'') printf '%s\n' 'error: invalid token monitor port.' >&2; return 1 ;; esac
+  [ "$monitor_port" -ge 1024 ] 2>/dev/null && [ "$monitor_port" -le 65535 ] 2>/dev/null || { printf '%s\n' 'error: invalid token monitor port.' >&2; return 1; }
+  monitor_install_file "$ROOT/assets/token-proxy.py" "$monitor_target/.ccb/token-proxy.py" || return 1
+  monitor_install_file "$ROOT/assets/token-proxy.py" "$monitor_backup_dir/token-proxy.py" || return 1
+  monitor_install_file "$ROOT/assets/token-pricing.json" "$monitor_dir/pricing.json" || return 1
+  monitor_install_file "$ROOT/assets/token-pricing.json" "$monitor_backup_dir/pricing.json" || return 1
+  monitor_write_value "$monitor_python" "$monitor_target/.ccb/token-monitor-python" || return 1
+  monitor_write_value "$monitor_python" "$monitor_backup_dir/python" || return 1
+  monitor_write_value "$monitor_port" "$monitor_dir/port" || return 1
+  monitor_write_value "$monitor_port" "$monitor_backup_dir/port" || return 1
+  monitor_rewrite_config "$config_file" 1 "$monitor_port" || return 1
+  if ! monitor_start "$monitor_target"; then
+    cp "$backup_file" "$config_file"
+    rm -f "$monitor_dir/port" "$monitor_target/.ccb/token-monitor-python"
+    printf '%s\n' 'error: monitoring was not enabled; the original CCB configuration was restored.' >&2
+    return 1
+  fi
+  printf 'Token monitoring enabled for %s.\n' "$monitor_target"
+}
+
+monitor_disable() {
+  monitor_target=$1
+  config_file=$monitor_target/.ccb/ccb.config
+  backup_file=$monitor_target/.ccb-template/token-monitor/ccb.config.direct
+  [ -f "$config_file" ] && [ ! -L "$config_file" ] || { printf 'error: CCB configuration is missing: %s\n' "$config_file" >&2; return 1; }
+  is_monitored_project "$monitor_target" || { printf '%s\n' 'Token monitoring is not enabled for this project.'; return 0; }
+  monitor_stop "$monitor_target"
+  if [ -f "$backup_file" ] && [ ! -L "$backup_file" ]; then
+    cp "$backup_file" "$config_file"
+    chmod 600 "$config_file"
+  else
+    monitor_rewrite_config "$config_file" 0
+  fi
+  rm -f "$monitor_target/.ccb/token-monitor/port" "$monitor_target/.ccb/token-monitor-python" "$monitor_target/.ccb-template/token-monitor/port"
+  printf 'Token monitoring disabled for %s.\n' "$monitor_target"
+}
+
 monitor_port_for() {
   port_file=$1/.ccb/token-monitor/port
   [ -f "$port_file" ] && [ ! -L "$port_file" ] || { printf '%s\n' 'error: token monitor port setting is missing.' >&2; return 1; }
@@ -93,13 +254,7 @@ monitor_start() {
     printf 'Token monitor already running (pid %s).\n' "$(cat "$monitor_pid")"
     return 0
   fi
-  monitor_python=python3
-  monitor_python_file=$monitor_target/.ccb/token-monitor-python
-  if [ -f "$monitor_python_file" ] && [ ! -L "$monitor_python_file" ]; then
-    monitor_python=$(sed -n '1p' "$monitor_python_file")
-  fi
-  command -v "$monitor_python" >/dev/null 2>&1 || { printf 'error: token monitor Python is unavailable: %s\n' "$monitor_python" >&2; return 1; }
-  "$monitor_python" -c 'import aiohttp' >/dev/null 2>&1 || { printf 'error: token monitor Python needs aiohttp: %s\n' "$monitor_python" >&2; return 1; }
+  monitor_python=$(monitor_python_for "$monitor_target") || return 1
   monitor_port=$(monitor_port_for "$monitor_target")
   monitor_config_matches_port "$monitor_target" "$monitor_port"
   nohup "$monitor_python" "$monitor_target/.ccb/token-proxy.py" --upstream http://127.0.0.1:11434 --port "$monitor_port" --metrics "$monitor_dir/usage.jsonl" >"$monitor_dir/proxy.log" 2>&1 &
@@ -158,7 +313,8 @@ APPLESCRIPT
 show_usage() {
   usage_target=$1 usage_file=$usage_target/.ccb/token-monitor/usage.jsonl
   [ -f "$usage_file" ] || { printf '%s\n' 'No token usage recorded yet.'; return 0; }
-  python3 - "$usage_file" "$usage_target/.ccb/token-monitor/pricing.json" <<'PY'
+  monitor_python=$(monitor_python_for "$usage_target" 2>/dev/null || command -v python3)
+  "$monitor_python" - "$usage_file" "$usage_target/.ccb/token-monitor/pricing.json" <<'PY'
 import json
 import sys
 from datetime import datetime, timedelta, timezone
@@ -313,9 +469,29 @@ choose_model() {
   done
 }
 
+auto_model_for() {
+  role=$1
+  case "$role" in
+    manager) preferred='kimi-k3:cloud glm-5.2:cloud glm-5.1:cloud' ;;
+    graph) preferred='glm-5.2:cloud glm-5.1:cloud kimi-k3:cloud' ;;
+    developer) preferred='qwen3-coder-next:cloud kimi-k2.7-code:cloud devstral-small-2:24b-cloud' ;;
+    reviewer) preferred='deepseek-v4-flash:cloud deepseek-v4-pro:cloud kimi-k2.6:cloud' ;;
+    *) printf 'error: unknown automatic model role: %s\n' "$role" >&2; return 1 ;;
+  esac
+  for model in $preferred; do
+    if printf '%s\n' "$cloud_models" | grep -Fqx "$model"; then
+      printf '%s\n' "$model"
+      return 0
+    fi
+  done
+  printf '%s\n' "$cloud_models" | sed -n '1p'
+}
+
 [ "$#" -gt 0 ] || { usage >&2; exit 2; }
 command=$1
 shift
+init_auto=0
+init_target=
 case "$command" in
   brief)
     [ "$#" -eq 1 ] || { usage >&2; exit 2; }
@@ -330,7 +506,7 @@ case "$command" in
   monitor)
     case "$#" in
       1) show_usage "$1" ;;
-      2) case "$1" in start) monitor_start "$2" ;; stop) monitor_stop "$2" ;; watch) monitor_watch "$2" ;; price) show_pricing "$2" ;; *) usage >&2; exit 2 ;; esac ;;
+      2) case "$1" in enable) monitor_enable "$2" ;; disable) monitor_disable "$2" ;; start) monitor_start "$2" ;; stop) monitor_stop "$2" ;; watch) monitor_watch "$2" ;; price) show_pricing "$2" ;; *) usage >&2; exit 2 ;; esac ;;
       *) usage >&2; exit 2 ;;
     esac
     exit $?
@@ -340,7 +516,17 @@ case "$command" in
     if is_monitored_project "$1"; then monitor_start "$1"; fi
     cd "$1" && exec ccb
     ;;
-  init) [ "$#" -le 1 ] || { usage >&2; exit 2; } ;;
+  init)
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --auto|--non-interactive) init_auto=1 ;;
+        --*) printf 'error: unknown init option: %s\n' "$1" >&2; exit 2 ;;
+        *) [ -z "$init_target" ] || { usage >&2; exit 2; }; init_target=$1 ;;
+      esac
+      shift
+    done
+    [ -n "$init_target" ] && set -- "$init_target" || set --
+    ;;
   *) usage >&2; exit 2 ;;
 esac
 
@@ -357,6 +543,7 @@ cloud_models=$(ollama list 2>/dev/null | awk 'NR > 1 && $1 ~ /:.*cloud$/ { print
 
 target=${1:-}
 if [ -z "$target" ]; then
+  [ "$init_auto" -eq 0 ] || { printf '%s\n' 'error: --auto requires an explicit target directory.' >&2; exit 2; }
   printf 'Project directory: '
   IFS= read -r target || exit 1
 fi
@@ -368,26 +555,39 @@ if [ -e "$target" ]; then
   [ -z "$(find "$target" -mindepth 1 -maxdepth 1 -print -quit)" ] || { printf 'error: project directory must be empty: %s\n' "$target" >&2; exit 1; }
 fi
 
-printf 'Project name [%s]: ' "$(basename "$target")"
-IFS= read -r name || exit 1
-[ -n "$name" ] || name=$(basename "$target")
+if [ "$init_auto" -eq 1 ]; then
+  name=$(basename "$target")
+  manager_model=$(auto_model_for manager)
+  graph_model=$(auto_model_for graph)
+  developer_model=$(auto_model_for developer)
+  reviewer_model=$(auto_model_for reviewer)
+  token_option=--token-optimization
+  monitor_option=--token-monitoring
+  printf 'Automatic CCB setup: %s\n' "$target"
+  printf 'Manager: %s\nGraph: %s\nDeveloper: %s\nReviewer: %s\n' \
+    "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
+else
+  printf 'Project name [%s]: ' "$(basename "$target")"
+  IFS= read -r name || exit 1
+  [ -n "$name" ] || name=$(basename "$target")
 
-manager_model=$(choose_model manager)
-graph_model=$(choose_model graph)
-developer_model=$(choose_model developer)
-reviewer_model=$(choose_model reviewer)
+  manager_model=$(choose_model manager)
+  graph_model=$(choose_model graph)
+  developer_model=$(choose_model developer)
+  reviewer_model=$(choose_model reviewer)
 
-printf '\nEnable token optimization (RTK + Tilth)? [Y/n] '
-IFS= read -r token_answer || exit 1
-case "$token_answer" in n|N|no|NO) token_option=--no-token-optimization ;; *) token_option=--token-optimization ;; esac
-printf 'Enable local token monitoring proxy? [y/N] '
-IFS= read -r monitor_answer || exit 1
-case "$monitor_answer" in y|Y|yes|YES) monitor_option=--token-monitoring ;; *) monitor_option= ;; esac
+  printf '\nEnable token optimization (RTK + Tilth)? [Y/n] '
+  IFS= read -r token_answer || exit 1
+  case "$token_answer" in n|N|no|NO) token_option=--no-token-optimization ;; *) token_option=--token-optimization ;; esac
+  printf 'Enable local token monitoring proxy? [y/N] '
+  IFS= read -r monitor_answer || exit 1
+  case "$monitor_answer" in y|Y|yes|YES) monitor_option=--token-monitoring ;; *) monitor_option= ;; esac
 
-printf '\nProject: %s\nManager: %s\nGraph: %s\nDeveloper: %s\nReviewer: %s\nGit: initialise repository\nContinue? [y/N] ' \
-  "$target" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
-IFS= read -r confirm || exit 1
-case "$confirm" in y|Y|yes|YES) : ;; *) printf '%s\n' 'Cancelled.'; exit 0 ;; esac
+  printf '\nProject: %s\nManager: %s\nGraph: %s\nDeveloper: %s\nReviewer: %s\nGit: initialise repository\nContinue? [y/N] ' \
+    "$target" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
+  IFS= read -r confirm || exit 1
+  case "$confirm" in y|Y|yes|YES) : ;; *) printf '%s\n' 'Cancelled.'; exit 0 ;; esac
+fi
 
 "$ROOT/install.sh" "$target" --name "$name" --profile web --claude-ollama-cloud \
   --manager-model "$manager_model" --graph-model "$graph_model" \
@@ -395,8 +595,16 @@ case "$confirm" in y|Y|yes|YES) : ;; *) printf '%s\n' 'Cancelled.'; exit 0 ;; es
   "$token_option" $monitor_option --yes
 git -C "$target" init >/dev/null
 printf 'Git repository initialised: %s/.git\n' "$target"
-if is_monitored_project "$target"; then
+if [ "$init_auto" -eq 1 ] && is_monitored_project "$target"; then
   monitor_start "$target"
+  printf 'Token monitoring enabled. Open it with: %s monitor watch %s\n' "$ROOT/ccb-template" "$target"
+fi
+if [ "$init_auto" -eq 1 ]; then
+  printf 'Automatic CCB setup complete. CCB was not started.\n'
+  printf 'Create the first brief with: %s brief %s\n' "$ROOT/ccb-template" "$target"
+  exit 0
+fi
+if is_monitored_project "$target"; then
   printf 'Open a live token monitoring terminal? [y/N] '
   IFS= read -r terminal_answer || exit 1
   case "$terminal_answer" in y|Y|yes|YES) open_monitor_terminal "$target" ;; *) : ;; esac

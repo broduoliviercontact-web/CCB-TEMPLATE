@@ -1,0 +1,16 @@
+# CCB runtime state
+.ccb/ccbd/
+.ccb/.claude-*-session
+.ccb/agents/*/agent.json
+.ccb/agents/*/events.jsonl
+.ccb/agents/*/provider-runtime/
+.ccb/agents/*/provider-state/
+.ccb/agents/*/restore.json
+.ccb/agents/*/runtime.json
+.ccb/project.identity.lock
+.ccb/token-monitor/proxy.log
+.ccb/token-monitor/proxy.pid
+.ccb/token-monitor/usage.jsonl
+
+# Durable monitor backup is configuration support, not application source.
+.ccb-template/token-monitor/
