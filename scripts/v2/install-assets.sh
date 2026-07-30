@@ -110,6 +110,21 @@ v2_install_token_monitor_python() {
   v2_info "installed: $destination"
 }
 
+v2_install_token_monitor_port() {
+  destination=$1 port=$2 dry_run=$3
+  v2_is_valid_port "$port" || v2_die "invalid token monitor port: $port"
+  v2_require_safe_path "$destination"
+  if [ "$dry_run" -eq 1 ]; then
+    printf '[PLAN] create: %s (port %s)\n' "$destination" "$port"
+    return 0
+  fi
+  parent=$(dirname "$destination")
+  mkdir -p "$parent"
+  temporary=$(mktemp "$parent/.ccb-template-port.XXXXXX") || v2_die "cannot prepare $destination"
+  printf '%s\n' "$port" >"$temporary" && chmod 600 "$temporary" && mv "$temporary" "$destination" || { rm -f "$temporary"; v2_die "cannot install $destination"; }
+  v2_info "installed: $destination"
+}
+
 v2_install_assets() {
   root=$1 target=$2 name=$3 profile=$4 dry_run=$5 token_optimization=${6:-0} manager_model=${7:-glm-5.2:cloud} graph_model=${8:-qwen3.5:397b-cloud} developer_model=${9:-kimi-k2.7-code:cloud} reviewer_model=${10:-kimi-k2.6:cloud} token_monitoring=${11:-0}
   v2_is_safe_name "$name" || v2_die 'project name contains an unsafe line break'
@@ -140,17 +155,23 @@ v2_install_assets() {
   fi
   if [ -e "$target/.ccb/ccb.config" ]; then v2_die "refusing to overwrite existing CCB configuration: $target/.ccb/ccb.config"; fi
   config_dir=$target/.ccb
+  monitor_port=
+  if [ "$token_monitoring" -eq 1 ]; then
+    monitor_port=$(v2_select_token_monitor_port) || v2_die 'cannot select a free local token monitor port'
+    v2_is_valid_port "$monitor_port" || v2_die "invalid selected token monitor port: $monitor_port"
+    v2_info "selected token monitor port: $monitor_port"
+  fi
   if [ "$dry_run" -eq 1 ]; then
     rendered=$(mktemp "${TMPDIR:-/tmp}/ccb-config.XXXXXX") || v2_die 'cannot render configuration'
     trap 'rm -f "$rendered"' EXIT HUP INT TERM
-    v2_render_config "$rendered" "$name" "$profile" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model" "$token_monitoring"
+    v2_render_config "$rendered" "$name" "$profile" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model" "$token_monitoring" "$monitor_port"
     printf '[PLAN] create: %s\n' "$config_dir/ccb.config"
     rm -f "$rendered"; trap - EXIT HUP INT TERM
   else
     mkdir -p "$config_dir" "$config_dir/agents"
     rendered=$(mktemp "$config_dir/.ccb.config.XXXXXX") || v2_die 'cannot render configuration'
     trap 'rm -f "$rendered"' EXIT HUP INT TERM
-    v2_render_config "$rendered" "$name" "$profile" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model" "$token_monitoring"
+    v2_render_config "$rendered" "$name" "$profile" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model" "$token_monitoring" "$monitor_port"
     chmod 600 "$rendered"
     mv "$rendered" "$config_dir/ccb.config"
     trap - EXIT HUP INT TERM
@@ -168,7 +189,12 @@ v2_install_assets() {
   if [ "$token_monitoring" -eq 1 ]; then
     v2_install_one "$root/assets/token-proxy.py" "$config_dir/token-proxy.py" "$dry_run"
     v2_install_token_monitor_python "$config_dir/token-monitor-python" "$dry_run"
+    v2_install_token_monitor_port "$config_dir/token-monitor/port" "$monitor_port" "$dry_run"
     v2_install_one "$root/assets/token-pricing.json" "$config_dir/token-monitor/pricing.json" "$dry_run"
+    v2_install_one "$root/assets/token-proxy.py" "$target/.ccb-template/token-monitor/token-proxy.py" "$dry_run"
+    v2_install_token_monitor_python "$target/.ccb-template/token-monitor/python" "$dry_run"
+    v2_install_token_monitor_port "$target/.ccb-template/token-monitor/port" "$monitor_port" "$dry_run"
+    v2_install_one "$root/assets/token-pricing.json" "$target/.ccb-template/token-monitor/pricing.json" "$dry_run"
   fi
   if [ "$token_optimization" -eq 1 ]; then
     v2_install_tilth_mcp "$target" "$dry_run"

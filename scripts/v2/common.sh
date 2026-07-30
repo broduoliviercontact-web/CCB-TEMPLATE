@@ -16,6 +16,35 @@ v2_is_cloud_model() {
   esac
 }
 
+v2_is_valid_port() {
+  case "$1" in
+    *[!0-9]*|'') return 1 ;;
+  esac
+  [ "$1" -ge 1024 ] 2>/dev/null && [ "$1" -le 65535 ] 2>/dev/null
+}
+
+v2_select_token_monitor_port() {
+  start=${CCB_TOKEN_MONITOR_PORT_START:-11435}
+  v2_is_valid_port "$start" || v2_die "invalid token monitor port start: $start"
+  "$CCB_TEMPLATE_PYTHON" - "$start" <<'PY'
+import socket
+import sys
+
+start = int(sys.argv[1])
+for port in range(start, 65536):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            continue
+        print(port)
+        break
+else:
+    raise SystemExit("no free local TCP port available for token monitoring")
+PY
+}
+
 v2_real_dir() {
   [ -d "$1" ] && [ ! -L "$1" ] || return 1
   (CDPATH= cd "$1" && pwd)

@@ -1,7 +1,7 @@
 #!/bin/sh
 
 v2_render_config() {
-  output=$1 name=$2 profile=$3 manager_model=${4:-glm-5.2:cloud} graph_model=${5:-qwen3.5:397b-cloud} developer_model=${6:-kimi-k2.7-code:cloud} reviewer_model=${7:-kimi-k2.6:cloud} token_monitoring=${8:-0}
+  output=$1 name=$2 profile=$3 manager_model=${4:-glm-5.2:cloud} graph_model=${5:-qwen3.5:397b-cloud} developer_model=${6:-kimi-k2.7-code:cloud} reviewer_model=${7:-kimi-k2.6:cloud} token_monitoring=${8:-0} monitor_port=${9:-}
   v2_is_safe_name "$name" || v2_die 'project name contains an unsafe line break'
   [ "$profile" = web ] || v2_die 'unsupported profile'
   for model in "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"; do
@@ -11,10 +11,11 @@ v2_render_config() {
   manager_base_url=http://localhost:11434
   graph_base_url=$manager_base_url developer_base_url=$manager_base_url reviewer_base_url=$manager_base_url
   if [ "$token_monitoring" -eq 1 ]; then
-    manager_base_url=http://127.0.0.1:11435/manager
-    graph_base_url=http://127.0.0.1:11435/graph
-    developer_base_url=http://127.0.0.1:11435/developer
-    reviewer_base_url=http://127.0.0.1:11435/reviewer
+    v2_is_valid_port "$monitor_port" || v2_die 'token monitoring requires a valid local port'
+    manager_base_url=http://127.0.0.1:$monitor_port/manager
+    graph_base_url=http://127.0.0.1:$monitor_port/graph
+    developer_base_url=http://127.0.0.1:$monitor_port/developer
+    reviewer_base_url=http://127.0.0.1:$monitor_port/reviewer
   fi
   cat >"$output" <<EOF
 version = 2

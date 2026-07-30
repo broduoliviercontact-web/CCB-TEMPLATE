@@ -50,6 +50,12 @@ async def health(_: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
 
+async def agent_health(request: web.Request) -> web.Response:
+    if request.match_info["agent"] not in AGENTS:
+        raise web.HTTPNotFound()
+    return web.json_response({"status": "ok"})
+
+
 async def forward(request: web.Request) -> web.StreamResponse:
     agent = request.match_info["agent"]
     if agent not in AGENTS:
@@ -109,6 +115,8 @@ def main() -> None:
     app.on_startup.append(startup)
     app.on_cleanup.append(cleanup)
     app.router.add_get("/health", health)
+    app.router.add_get("/{agent}", agent_health)
+    app.router.add_get("/{agent}/", agent_health)
     app.router.add_route("*", "/{agent}/{tail:.*}", forward)
     web.run_app(app, host="127.0.0.1", port=arguments.port, print=None)
 

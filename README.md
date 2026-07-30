@@ -45,7 +45,8 @@ containing only `.`.
 Choose token monitoring during `ccb-template init`, or pass `--token-monitoring` to `install.sh`,
 to route the four agents through a local transparent proxy. It records only timestamp, agent,
 model, input tokens, output tokens and duration in `.ccb/token-monitor/`; it never stores prompt
-or response content. The interactive CLI starts the proxy during configuration. View the collected
+or response content. Each project automatically receives a free local port (stored in
+`.ccb/token-monitor/port`), so several projects can run independently. The interactive CLI starts the proxy during configuration. View the collected
 metrics with:
 
 ```sh
@@ -69,6 +70,10 @@ labels the resulting dollar amount as an estimate only. Display the file format 
 ```sh
 ./ccb-template monitor price /chemin/du/projet
 ```
+
+`ccb-template start /chemin/du/projet` waits until this proxy is ready before launching CCB. If
+`ccb kill -f` has removed monitor files under `.ccb/`, the command restores the proxy, Python
+setting, port and pricing file from the durable `.ccb-template/token-monitor/` backup first.
 
 <p align="center">
   <img src="readme-assets/cli-05-token-monitor.svg" alt="Terminal capture for optional CCB token monitoring" width="100%">

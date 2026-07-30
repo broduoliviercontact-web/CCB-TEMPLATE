@@ -11,6 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install token proxy test dependency
+        run: python -m pip install aiohttp
       - name: Validate V2 shell syntax
         run: |
           sh -n install.sh
@@ -22,9 +27,11 @@ jobs:
           sh -n tests/test-v2-docs.sh
           sh -n tests/test-v2-clean-tree.sh
           sh -n tests/test-v2-release.sh
+          sh -n tests/test-token-proxy.sh
       - name: Run V2 bootstrap and token-optimization tests
         run: |
           ./tests/test-v2-install.sh
           ./tests/test-v2-docs.sh
           ./tests/test-v2-clean-tree.sh
           ./tests/test-v2-release.sh
+          ./tests/test-token-proxy.sh

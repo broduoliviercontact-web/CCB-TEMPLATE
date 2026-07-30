@@ -11,7 +11,8 @@ if [ "$TMP_BASE" = / ]; then
 else
   WORK=$(mktemp -d "$TMP_BASE/ccb-v2-install.XXXXXX")
 fi
-trap 'rm -rf "$WORK"' EXIT HUP INT TERM
+listener_pid=
+trap 'if [ -n "${listener_pid:-}" ]; then kill "$listener_pid" 2>/dev/null || :; fi; rm -rf "$WORK"' EXIT HUP INT TERM
 BIN="$WORK/bin"
 mkdir -p "$BIN"
 PYTHON_FOR_TESTS=$(command -v python3 2>/dev/null || true)
@@ -195,13 +196,23 @@ grep -A1 -F '[agents.reviewer]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'mode
 assert_contains "$output" 'CCB was not started.'
 
 monitored_project="$WORK/monitored-project"
+"$PYTHON_FOR_TESTS" -c 'import socket, time; sock = socket.socket(); sock.bind(("127.0.0.1", 11435)); sock.listen(); time.sleep(30)' >/dev/null 2>&1 &
+listener_pid=$!
+sleep 0.1
 run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$monitored_project" --name MonitoredProject --profile web --claude-ollama-cloud --no-token-optimization --token-monitoring --yes
 [ "$status" -eq 0 ] || fail "token monitoring installation failed: $output"
 [ -f "$monitored_project/.ccb/token-proxy.py" ] || fail 'token monitoring proxy was not installed'
 [ "$(cat "$monitored_project/.ccb/token-monitor-python")" = "$BIN/python-good" ] || fail 'token monitoring did not retain the validated Python interpreter'
 [ -f "$monitored_project/.ccb/token-monitor/pricing.json" ] || fail 'token monitoring pricing configuration was not installed'
-grep -Fqx 'ANTHROPIC_BASE_URL = "http://127.0.0.1:11435/manager"' "$monitored_project/.ccb/ccb.config" || fail 'manager token monitoring endpoint was not rendered'
-grep -Fqx 'ANTHROPIC_BASE_URL = "http://127.0.0.1:11435/reviewer"' "$monitored_project/.ccb/ccb.config" || fail 'reviewer token monitoring endpoint was not rendered'
+monitor_port=$(cat "$monitored_project/.ccb/token-monitor/port")
+[ "$monitor_port" != 11435 ] || fail 'token monitoring reused occupied port 11435'
+[ "$(cat "$monitored_project/.ccb-template/token-monitor/port")" = "$monitor_port" ] || fail 'token monitor durable port backup differs'
+for agent in manager graph developer reviewer; do
+  grep -Fqx "ANTHROPIC_BASE_URL = \"http://127.0.0.1:$monitor_port/$agent\"" "$monitored_project/.ccb/ccb.config" || fail "$agent token monitoring endpoint was not rendered"
+done
+if rg -n 'unset .*;;' "$monitored_project/.ccb"; then fail 'generated CCB files contain malformed unset syntax'; fi
+[ -f "$monitored_project/.ccb-template/token-monitor/token-proxy.py" ] || fail 'token monitor durable proxy backup was not installed'
+[ -f "$monitored_project/.ccb-template/token-monitor/pricing.json" ] || fail 'token monitor durable pricing backup was not installed'
 printf '%s\n' '{"models":{"kimi-k2.7-code:cloud":{"input_per_million_usd":2,"output_per_million_usd":8}}}' >"$monitored_project/.ccb/token-monitor/pricing.json"
 printf '%s\n' '{"timestamp":"2026-07-29T22:00:00+00:00","agent":"manager","model":"kimi-k2.7-code:cloud","input_tokens":1000000,"output_tokens":500000,"duration_ms":100}' >"$monitored_project/.ccb/token-monitor/usage.jsonl"
 run "$ROOT/ccb-template" monitor "$monitored_project"

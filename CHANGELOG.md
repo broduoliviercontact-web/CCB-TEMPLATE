@@ -11,12 +11,15 @@
 
 - Interactive `ccb-template init` project creation with per-agent Ollama Cloud model selection
   and Git repository initialization.
+- Per-project token-monitor ports with persistent recovery metadata and proxy integration tests.
 
 ### Fixed
 
 - Align the generated CCB topology with the four permanent roles supported by the current CCB
   governance: manager, graph, developer and reviewer.
 - Keep CCB runtime state and Graphify outputs out of the repository worktree.
+- Start and health-check the token proxy before CCB, preventing an unavailable proxy from causing
+  CCB to remove agent base URLs.
 
 ## 2.0.0 — 2026-07-28
 

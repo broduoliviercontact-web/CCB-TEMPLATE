@@ -26,12 +26,65 @@ shell_quote() {
 }
 
 is_monitored_project() {
-  [ -f "$1/.ccb/token-proxy.py" ] && [ ! -L "$1/.ccb/token-proxy.py" ]
+  [ -f "$1/.ccb/token-monitor/port" ] && [ ! -L "$1/.ccb/token-monitor/port" ] || \
+    [ -f "$1/.ccb-template/token-monitor/port" ] && [ ! -L "$1/.ccb-template/token-monitor/port" ]
+}
+
+monitor_restore_assets() {
+  restore_target=$1 restore_dir=$restore_target/.ccb/token-monitor restore_backup=$restore_target/.ccb-template/token-monitor
+  [ -d "$restore_target/.ccb" ] && [ ! -L "$restore_target/.ccb" ] || { printf '%s\n' 'error: CCB configuration is missing; re-run the template installer before starting CCB.' >&2; return 1; }
+  [ ! -L "$restore_dir" ] && [ ! -L "$restore_backup" ] || { printf '%s\n' 'error: unsafe token monitor directory.' >&2; return 1; }
+  mkdir -p "$restore_dir"
+  if [ ! -f "$restore_target/.ccb/token-proxy.py" ]; then
+    source_proxy=$restore_backup/token-proxy.py
+    [ -f "$source_proxy" ] || source_proxy=$ROOT/assets/token-proxy.py
+    cp "$source_proxy" "$restore_target/.ccb/token-proxy.py"
+    chmod 600 "$restore_target/.ccb/token-proxy.py"
+    printf '%s\n' 'Restored token monitor proxy asset.'
+  fi
+  if [ ! -f "$restore_target/.ccb/token-monitor-python" ] && [ -f "$restore_backup/python" ]; then
+    cp "$restore_backup/python" "$restore_target/.ccb/token-monitor-python"
+    chmod 600 "$restore_target/.ccb/token-monitor-python"
+    printf '%s\n' 'Restored token monitor Python setting.'
+  fi
+  if [ ! -f "$restore_dir/port" ] && [ -f "$restore_backup/port" ]; then
+    cp "$restore_backup/port" "$restore_dir/port"
+    chmod 600 "$restore_dir/port"
+    printf '%s\n' 'Restored token monitor port setting.'
+  fi
+  if [ ! -f "$restore_dir/pricing.json" ]; then
+    source_pricing=$restore_backup/pricing.json
+    [ -f "$source_pricing" ] || source_pricing=$ROOT/assets/token-pricing.json
+    cp "$source_pricing" "$restore_dir/pricing.json"
+    chmod 600 "$restore_dir/pricing.json"
+    printf '%s\n' 'Restored token monitor pricing configuration.'
+  fi
+}
+
+monitor_port_for() {
+  port_file=$1/.ccb/token-monitor/port
+  [ -f "$port_file" ] && [ ! -L "$port_file" ] || { printf '%s\n' 'error: token monitor port setting is missing.' >&2; return 1; }
+  port=$(sed -n '1p' "$port_file")
+  case "$port" in *[!0-9]*|'') printf 'error: invalid token monitor port: %s\n' "$port" >&2; return 1 ;; esac
+  [ "$port" -ge 1024 ] 2>/dev/null && [ "$port" -le 65535 ] 2>/dev/null || { printf 'error: invalid token monitor port: %s\n' "$port" >&2; return 1; }
+  printf '%s\n' "$port"
+}
+
+monitor_config_matches_port() {
+  config_target=$1 config_port=$2 config_file=$1/.ccb/ccb.config
+  [ -f "$config_file" ] && [ ! -L "$config_file" ] || { printf '%s\n' 'error: CCB configuration is missing.' >&2; return 1; }
+  for agent in manager graph developer reviewer; do
+    grep -Fqx "ANTHROPIC_BASE_URL = \"http://127.0.0.1:$config_port/$agent\"" "$config_file" || {
+      printf 'error: CCB token monitor URL is inconsistent for %s; re-run the template installer.\n' "$agent" >&2
+      return 1
+    }
+  done
 }
 
 monitor_start() {
   monitor_target=$1
   is_monitored_project "$monitor_target" || { printf '%s\n' 'error: token monitoring was not enabled for this project.' >&2; return 1; }
+  monitor_restore_assets "$monitor_target"
   monitor_dir=$monitor_target/.ccb/token-monitor
   [ ! -L "$monitor_dir" ] || { printf '%s\n' 'error: unsafe token monitor directory.' >&2; return 1; }
   mkdir -p "$monitor_dir"
@@ -47,9 +100,23 @@ monitor_start() {
   fi
   command -v "$monitor_python" >/dev/null 2>&1 || { printf 'error: token monitor Python is unavailable: %s\n' "$monitor_python" >&2; return 1; }
   "$monitor_python" -c 'import aiohttp' >/dev/null 2>&1 || { printf 'error: token monitor Python needs aiohttp: %s\n' "$monitor_python" >&2; return 1; }
-  nohup "$monitor_python" "$monitor_target/.ccb/token-proxy.py" --upstream http://127.0.0.1:11434 --port 11435 --metrics "$monitor_dir/usage.jsonl" >"$monitor_dir/proxy.log" 2>&1 &
+  monitor_port=$(monitor_port_for "$monitor_target")
+  monitor_config_matches_port "$monitor_target" "$monitor_port"
+  nohup "$monitor_python" "$monitor_target/.ccb/token-proxy.py" --upstream http://127.0.0.1:11434 --port "$monitor_port" --metrics "$monitor_dir/usage.jsonl" >"$monitor_dir/proxy.log" 2>&1 &
   printf '%s\n' "$!" >"$monitor_pid"
-  printf 'Token monitor started (pid %s).\n' "$!"
+  attempts=0
+  while [ "$attempts" -lt 20 ]; do
+    if "$monitor_python" -c 'import sys, urllib.request; urllib.request.urlopen(sys.argv[1], timeout=0.2).read()' "http://127.0.0.1:$monitor_port/health" >/dev/null 2>&1; then
+      printf 'Token monitor started (pid %s, port %s).\n' "$(cat "$monitor_pid")" "$monitor_port"
+      return 0
+    fi
+    attempts=$((attempts + 1))
+    sleep 0.1
+  done
+  kill "$(cat "$monitor_pid")" 2>/dev/null || :
+  rm -f "$monitor_pid"
+  printf 'error: token monitor did not become ready on port %s; inspect %s\n' "$monitor_port" "$monitor_dir/proxy.log" >&2
+  return 1
 }
 
 monitor_stop() {
