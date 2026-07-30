@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install token proxy test dependency
-        run: python -m pip install aiohttp
+        run: python -m pip install aiohttp cryptography
       - name: Validate V2 shell syntax
         run: |
           sh -n install.sh
