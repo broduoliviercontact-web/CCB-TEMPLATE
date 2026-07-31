@@ -110,3 +110,16 @@ start_proxy_pid=$(cat "$project/.ccb/token-monitor/proxy.pid")
 kill "$start_proxy_pid" 2>/dev/null || :
 
 echo '[OK] ccb-template start waits for the project monitor before CCB'
+
+dashboard_project=$WORK/dashboard-project
+mkdir -p "$dashboard_project/.ccb/token-monitor" "$WORK/no-python3"
+printf '%s\n' "$PYTHON" >"$dashboard_project/.ccb/token-monitor-python"
+printf '%s\n' '{"timestamp":"2026-07-31T07:00:00+00:00","agent":"manager","model":"test:cloud","input_tokens":11,"output_tokens":3,"duration_ms":42}' >"$dashboard_project/.ccb/token-monitor/usage.jsonl"
+cat >"$WORK/no-python3/python3" <<'EOF'
+#!/bin/sh
+exit 97
+EOF
+chmod +x "$WORK/no-python3/python3"
+PATH="$WORK/no-python3:/usr/bin:/bin" "$ROOT/ccb-template" monitor "$dashboard_project" >/dev/null || fail 'ccb-template monitor did not use the stored project Python'
+
+echo '[OK] ccb-template monitor uses the project Python setting'

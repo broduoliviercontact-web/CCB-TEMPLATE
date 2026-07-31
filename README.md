@@ -166,7 +166,11 @@ The standard installation prepares the generated project for the external RTK te
 the Tilth MCP code-navigation server. It verifies `rtk` and `npx`, writes project-local
 `.mcp.json` with the pinned `npx -y tilth@0.9.0 --mcp` server, and adds a concise
 `.claude/rules/token-optimization.md` without replacing an existing user rule or `CLAUDE.md`.
-It never installs or initializes either tool. Use `--no-token-optimization` to skip this integration.
+It never installs or initializes RTK. For Tilth, it prewarms the pinned npm package in each
+managed Claude Code agent home, seeds Claude Code's onboarding state, and links the local Claude
+Code CLI there. The seeded state trusts the generated project and approves the RTK `CLAUDE.md`
+external include for that project, so the first CCB start does not stop on a theme/import prompt or
+require four concurrent cold `npx` downloads. Use `--no-token-optimization` to skip this integration.
 `--token-optimization` remains accepted for explicit configuration and backwards-compatible scripts.
 
 ```sh
@@ -176,8 +180,9 @@ npx tilth --version
 ```
 
 RTK mainly filters verbose terminal output; any advertised percentage is an estimate and does
-not guarantee an equivalent reduction in Claude usage. Tilth is downloaded and launched by npx
-only when Claude Code starts the configured MCP server, never by this bootstrap.
+not guarantee an equivalent reduction in Claude usage. Tilth is launched by npx when Claude Code
+starts the configured MCP server; the bootstrap only runs `npx -y tilth@0.9.0 --version` once per
+agent home to warm the isolated caches.
 
 The generated official configuration uses four Claude Code agents through Ollama's
 Anthropic-compatible local endpoint:

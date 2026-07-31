@@ -35,8 +35,11 @@ No template action pushes, deploys or interprets a model response.
 By default, the bootstrap adds only project-native Claude Code inputs:
 `.mcp.json` configures the pinned Tilth stdio server through `npx`, and
 `.claude/rules/token-optimization.md` provides concise usage guidance for Tilth and RTK. RTK
-and Tilth remain external tools; the bootstrap neither installs, initializes nor runs them. Pass
-`--no-token-optimization` to omit these inputs.
+and Tilth remain external tools; the bootstrap does not install or initialize RTK. It does prewarm
+the pinned Tilth npm package once per managed Claude Code home and links the local Claude Code CLI
+into those isolated homes to avoid first-start MCP timeouts. It also seeds Claude Code onboarding
+and generated-project trust state so newly generated agents can start without waiting for the native
+theme picker or RTK external-import prompt. Pass `--no-token-optimization` to omit these inputs.
 
 CCB 8.4.3 projects each Claude agent into an isolated managed home. Its documented MCP
 projection includes current project/workspace MCP metadata when configuration inheritance is

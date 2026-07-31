@@ -90,7 +90,10 @@ EOF
 cat >"$TOKEN_BIN/npx" <<EOF
 #!/bin/sh
 printf '%s\n' "\$*" >>"$WORK/npx.calls"
-exit 95
+case "\$*" in
+  '-y tilth@0.9.0 --version') echo 'tilth 0.9.0'; exit 0 ;;
+  *) exit 95 ;;
+esac
 EOF
 cp "$TOKEN_BIN/rtk" "$RTK_ONLY_BIN/rtk"
 chmod +x "$TOKEN_BIN"/* "$RTK_ONLY_BIN"/*
@@ -141,12 +144,21 @@ run env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$
 [ ! -e "$token_dry" ] || fail 'token-optimization dry-run wrote the target'
 assert_contains "$output" '[PLAN] create Tilth MCP configuration:'
 assert_contains "$output" "$token_dry/.claude/rules/token-optimization.md"
+assert_contains "$output" '[PLAN] seed Claude Code onboarding state:'
+assert_contains "$output" '[PLAN] prewarm Tilth MCP cache for manager:'
+[ ! -e "$WORK/npx.calls" ] || fail 'token-optimization dry-run executed npx or Tilth'
 
 invalid_profile="$WORK/invalid-profile"
 run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$invalid_profile" --name InvalidProfile --profile python --claude-ollama-cloud --dry-run
 [ "$status" -ne 0 ] || fail 'unsupported profile succeeded'
 assert_contains "$output" '--profile supports only the built-in web preset'
 [ ! -e "$invalid_profile" ] || fail 'unsupported profile wrote the target'
+
+unsafe_name="$WORK/unsafe-name"
+run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$unsafe_name" --name "$(printf 'Bad\nName')" --profile web --claude-ollama-cloud --no-token-optimization --dry-run
+[ "$status" -ne 0 ] || fail 'project name with a line break succeeded'
+assert_contains "$output" 'project name contains an unsafe line break'
+[ ! -e "$unsafe_name" ] || fail 'unsafe project name wrote the target'
 
 run sh -c "printf '' | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$INSTALL' '$WORK/non-tty' --name NonTTY --profile web --claude-ollama-cloud"
 [ "$status" -ne 0 ] || fail 'non-TTY install without --yes succeeded'
@@ -248,7 +260,24 @@ with open(sys.argv[1], encoding="utf-8") as source:
 assert document == {"mcpServers": {"tilth": {"command": "npx", "args": ["-y", "tilth@0.9.0", "--mcp"]}}}
 ' "$token_project/.mcp.json" || fail 'Tilth MCP configuration is not deterministic'
 [ ! -e "$WORK/rtk.calls" ] || fail 'installer executed RTK'
-[ ! -e "$WORK/npx.calls" ] || fail 'installer executed npx or Tilth'
+npx_count=$(grep -Fxc -- '-y tilth@0.9.0 --version' "$WORK/npx.calls")
+[ "$npx_count" -eq 8 ] || fail "installer did not prewarm Tilth once per agent: $npx_count"
+for agent in manager graph developer reviewer; do
+  link="$token_project/.ccb/agents/$agent/provider-state/claude/home/.local/bin/claude"
+  [ -L "$link" ] || fail "Claude Code CLI link missing for $agent"
+  [ "$(readlink "$link")" = "$BIN/claude" ] || fail "Claude Code CLI link points to the wrong target for $agent"
+  "$PYTHON_FOR_TESTS" -c '
+import json, sys
+import os
+with open(sys.argv[1], encoding="utf-8") as source:
+    document = json.load(source)
+assert document["hasCompletedOnboarding"] is True
+project = os.path.realpath(sys.argv[2])
+assert document["projects"][project]["hasClaudeMdExternalIncludesApproved"] is True
+assert document["projects"][project]["hasTrustDialogAccepted"] is True
+assert document[project]["hasCompletedProjectOnboarding"] is True
+' "$token_project/.ccb/agents/$agent/provider-state/claude/home/.claude/.claude.json" "$token_project" || fail "Claude Code onboarding state missing for $agent"
+done
 
 merged_mcp="$WORK/merged-mcp"
 mkdir "$merged_mcp"
@@ -318,7 +347,8 @@ assert_contains "$output" "preserved: $preserve_rule/.claude/rules/token-optimiz
 grep -Fxv -- '--version' "$WORK/ccb.calls" >/dev/null && fail 'token-optimization executed ccb beyond --version' || :
 [ ! -e "$WORK/claude.calls" ] || fail 'token-optimization executed Claude Code'
 [ ! -e "$WORK/rtk.calls" ] || fail 'token-optimization executed RTK'
-[ ! -e "$WORK/npx.calls" ] || fail 'token-optimization executed npx or Tilth'
+npx_count=$(grep -Fxc -- '-y tilth@0.9.0 --version' "$WORK/npx.calls")
+[ "$npx_count" -eq 16 ] || fail "unexpected Tilth prewarm count after token installs: $npx_count"
 
 second="$WORK/second"
 env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$second" --name 'Other name' --profile web --claude-ollama-cloud --no-token-optimization --yes >/dev/null

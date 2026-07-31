@@ -80,9 +80,12 @@ npx tilth --version
 
 The installer creates `.mcp.json` using the pinned command `npx -y tilth@0.9.0 --mcp` and a concise
 `.claude/rules/token-optimization.md`. Pass `--no-token-optimization` to skip this integration. The bootstrap
-does not run RTK initialization, download Tilth or replace an existing `.mcp.json`, rule or
-`CLAUDE.md`. RTK filters primarily terminal output; its estimates do not guarantee a matching
-reduction in Claude usage. Tilth is started by npx only when Claude Code starts the MCP server.
+does not run RTK initialization or replace an existing `.mcp.json`, rule or `CLAUDE.md`. It does
+prewarm Tilth once per managed agent home with `npx -y tilth@0.9.0 --version` and links the local
+Claude Code CLI into each isolated home. It also seeds Claude Code onboarding/project trust state
+so first-start agents do not wait on the theme picker or RTK external-import prompt. RTK filters
+primarily terminal output; its estimates do not guarantee a matching reduction in Claude usage.
+Tilth is started by npx when Claude Code starts the MCP server, using the prewarmed isolated cache.
 
 ## 4. Validate and start
 

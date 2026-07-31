@@ -93,6 +93,116 @@ v2_install_tilth_mcp() {
   v2_info "$action Tilth MCP configuration: $destination"
 }
 
+v2_claude_bin() {
+  claude_bin=$(command -v claude 2>/dev/null || true)
+  [ -n "$claude_bin" ] || v2_die 'Claude Code is required; install the official Claude Code CLI'
+  case "$claude_bin" in
+    /*) printf '%s\n' "$claude_bin" ;;
+    *) printf '%s/%s\n' "$(CDPATH= cd "$(dirname "$claude_bin")" && pwd)" "$(basename "$claude_bin")" ;;
+  esac
+}
+
+v2_prepare_agent_claude_home() {
+  target=$1 agent=$2 dry_run=$3
+  claude_bin=$4
+  home=$target/.ccb/agents/$agent/provider-state/claude/home
+  link=$home/.local/bin/claude
+  v2_require_safe_path "$home"
+  v2_require_safe_path "$home/.local"
+  v2_require_safe_path "$home/.local/bin"
+  if [ "$dry_run" -eq 1 ]; then
+    printf '[PLAN] prepare Claude Code agent home: %s\n' "$home"
+    printf '[PLAN] link Claude Code CLI: %s -> %s\n' "$link" "$claude_bin"
+    return 0
+  fi
+  mkdir -p "$home/.local/bin"
+  if [ -e "$link" ] || [ -L "$link" ]; then
+    current=$(readlink "$link" 2>/dev/null || true)
+    [ "$current" = "$claude_bin" ] || v2_die "refusing to replace existing Claude Code CLI path: $link"
+    v2_info "preserved Claude Code CLI link: $link"
+    return 0
+  fi
+  ln -s "$claude_bin" "$link" || v2_die "cannot link Claude Code CLI: $link"
+  v2_info "linked Claude Code CLI: $link"
+}
+
+v2_prewarm_tilth_home() {
+  target=$1 agent=$2 dry_run=$3
+  home=$target/.ccb/agents/$agent/provider-state/claude/home
+  v2_require_safe_path "$home"
+  if [ "$dry_run" -eq 1 ]; then
+    printf '[PLAN] prewarm Tilth MCP cache for %s: HOME=%s npx -y tilth@0.9.0 --version\n' "$agent" "$home"
+    return 0
+  fi
+  mkdir -p "$home"
+  env HOME="$home" npm_config_cache="$home/.npm" npx -y tilth@0.9.0 --version >/dev/null 2>&1 || \
+    v2_die "cannot prewarm Tilth MCP cache for $agent; run npx tilth --version manually and retry"
+  v2_info "prewarmed Tilth MCP cache for $agent"
+}
+
+v2_seed_claude_onboarding() {
+  target=$1 agent=$2 dry_run=$3
+  state=$target/.ccb/agents/$agent/provider-state/claude/home/.claude/.claude.json
+  v2_require_safe_path "$state"
+  if [ "$dry_run" -eq 1 ]; then
+    printf '[PLAN] seed Claude Code onboarding state: %s\n' "$state"
+    return 0
+  fi
+  parent=$(dirname "$state")
+  mkdir -p "$parent"
+  temporary=$(mktemp "$parent/.ccb-template-claude-state.XXXXXX") || v2_die "cannot prepare $state"
+  "$CCB_TEMPLATE_PYTHON" - "$state" "$temporary" "$target" <<'PY' || { rm -f "$temporary"; v2_die "cannot prepare Claude Code onboarding state: $state"; }
+import json
+import os
+import sys
+
+source_path, destination_path, project_path = sys.argv[1:]
+document = {}
+if os.path.exists(source_path):
+    with open(source_path, encoding="utf-8") as source:
+        document = json.load(source)
+    if not isinstance(document, dict):
+        raise ValueError("Claude Code state must be a JSON object")
+document["hasCompletedOnboarding"] = True
+document.setdefault("lastOnboardingVersion", "2.1.0")
+project_state = {
+    "hasTrustDialogAccepted": True,
+    "allowedTools": [],
+    "hasClaudeMdExternalIncludesApproved": True,
+    "hasClaudeMdExternalIncludesWarningShown": True,
+    "hasCompletedProjectOnboarding": True,
+}
+projects = document.setdefault("projects", {})
+if not isinstance(projects, dict):
+    raise ValueError("Claude Code projects state must be a JSON object")
+existing = projects.get(project_path, {})
+if not isinstance(existing, dict):
+    existing = {}
+existing.update(project_state)
+projects[project_path] = existing
+top_level_project = document.get(project_path, {})
+if not isinstance(top_level_project, dict):
+    top_level_project = {}
+top_level_project.update(project_state)
+document[project_path] = top_level_project
+with open(destination_path, "w", encoding="utf-8", newline="\n") as destination:
+    json.dump(document, destination, ensure_ascii=False, indent=2, sort_keys=True)
+    destination.write("\n")
+PY
+  chmod 600 "$temporary" && mv "$temporary" "$state" || { rm -f "$temporary"; v2_die "cannot install $state"; }
+  v2_info "seeded Claude Code onboarding state for $agent"
+}
+
+v2_prepare_token_optimization_runtime() {
+  target=$1 dry_run=$2
+  claude_bin=$(v2_claude_bin)
+  for agent in manager graph developer reviewer; do
+    v2_prepare_agent_claude_home "$target" "$agent" "$dry_run" "$claude_bin"
+    v2_seed_claude_onboarding "$target" "$agent" "$dry_run"
+    v2_prewarm_tilth_home "$target" "$agent" "$dry_run"
+  done
+}
+
 v2_install_token_monitor_python() {
   destination=$1 dry_run=$2
   v2_require_safe_path "$destination"
@@ -199,5 +309,6 @@ v2_install_assets() {
   if [ "$token_optimization" -eq 1 ]; then
     v2_install_tilth_mcp "$target" "$dry_run"
     v2_install_one "$root/assets/token-optimization.md" "$target/.claude/rules/token-optimization.md" "$dry_run"
+    v2_prepare_token_optimization_runtime "$target" "$dry_run"
   fi
 }

@@ -5,7 +5,10 @@ v2_info() { printf '[OK] %s\n' "$*"; }
 v2_warn() { printf '[WARN] %s\n' "$*" >&2; }
 
 v2_is_safe_name() {
-  case "$1" in ''|*"\n"*|*"\r"*) return 1 ;; *) return 0 ;; esac
+  newline='
+'
+  carriage_return=$(printf '\r')
+  case "$1" in ''|*"$newline"*|*"$carriage_return"*) return 1 ;; *) return 0 ;; esac
 }
 
 v2_is_cloud_model() {
