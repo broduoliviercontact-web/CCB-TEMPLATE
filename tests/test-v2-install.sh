@@ -154,6 +154,12 @@ run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$invalid_pro
 assert_contains "$output" '--profile supports only the built-in web preset'
 [ ! -e "$invalid_profile" ] || fail 'unsupported profile wrote the target'
 
+unsafe_name="$WORK/unsafe-name"
+run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$unsafe_name" --name "$(printf 'Bad\nName')" --profile web --claude-ollama-cloud --no-token-optimization --dry-run
+[ "$status" -ne 0 ] || fail 'project name with a line break succeeded'
+assert_contains "$output" 'project name contains an unsafe line break'
+[ ! -e "$unsafe_name" ] || fail 'unsafe project name wrote the target'
+
 run sh -c "printf '' | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$INSTALL' '$WORK/non-tty' --name NonTTY --profile web --claude-ollama-cloud"
 [ "$status" -ne 0 ] || fail 'non-TTY install without --yes succeeded'
 [ ! -e "$WORK/non-tty" ] || fail 'non-TTY refusal wrote files'
