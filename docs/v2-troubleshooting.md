@@ -32,7 +32,8 @@ TOML validation error, inspect `.ccb/ccb.config` and rerun `ccb config validate`
 
 ## Token optimization prerequisites or MCP configuration
 
-Token optimization is optional. Run the full diagnostic before enabling it:
+Token optimization is enabled by default. Run the full diagnostic when RTK, npx or Tilth look
+unavailable:
 
 ```sh
 ./ccb-template doctor --full
@@ -54,5 +55,5 @@ seeds Claude Code onboarding and generated-project trust state in each isolated 
 agents still stop on the theme picker or RTK external-import prompt, restart from a project
 generated with the current template. If an existing `.mcp.json` is invalid or its `mcpServers`
 member is not an object, repair it manually and retry; the bootstrap leaves it unchanged on refusal.
-Existing `.claude/rules/token-optimization.md` files are preserved. Use `--no-token-optimization`
-or the standard `ccb-template init TARGET` flow when this integration is not wanted.
+Existing `.claude/rules/token-optimization.md` files are preserved. Use `--no-token-optimization`,
+or answer `n` in `ccb-template init --advanced`, when this integration is not wanted.

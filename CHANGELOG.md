@@ -4,8 +4,9 @@
 
 ### Changed
 
-- Make the default setup path lighter: RTK, npx and Tilth are optional and enabled only through
-  `--token-optimization` or `ccb-template init --advanced`.
+- Keep RTK and Tilth token optimization enabled by default. `--token-optimization` remains accepted
+  for explicit scripts, while `--no-token-optimization` and the advanced initializer opt-out remain
+  available when needed.
 - Keep dependency-free minimal delivery rules in the four generated agent skills, with attribution
   to Ponytail inspiration but no Ponytail plugin dependency.
 

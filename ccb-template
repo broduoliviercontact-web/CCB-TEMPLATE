@@ -22,8 +22,9 @@ usage: ./ccb-template doctor [--full]
 
 Create a new Git project configured with CCB-TEMPLATE. The default init flow
 selects available Ollama Cloud models automatically and asks one main
-confirmation before writing. Use init --advanced to choose each model and
-optional RTK, Tilth and local token monitoring integrations.
+confirmation before writing. RTK and Tilth token optimization is enabled by
+default. Use init --advanced to choose each model, disable RTK/Tilth or enable
+local token monitoring.
 
 `doctor` checks mandatory prerequisites. `doctor --full` also checks optional
 RTK, npx, Tilth and local monitoring components.
@@ -40,13 +41,13 @@ usage: ./ccb-template init [TARGET] [--advanced]
 Default mode:
   - derives the project name from TARGET
   - selects recommended installed Ollama Cloud models, with a clear fallback
-  - installs the four CCB agents, minimal development rules and Git
+  - installs the four CCB agents, token optimization and Git
   - keeps local token monitoring disabled
   - never commits, pushes, deploys or starts a model
 
 Advanced mode:
   - choose the model for each agent
-  - enable or disable RTK/Tilth integration
+  - keep or disable RTK/Tilth integration
   - enable or disable local token monitoring
   - review the full summary before installation
 EOF
@@ -510,9 +511,9 @@ if [ "$advanced" -eq 1 ]; then
   developer_model=$(choose_model developer)
   reviewer_model=$(choose_model reviewer)
 
-  printf '\nEnable optional RTK + Tilth integration? [y/N] '
+  printf '\nEnable RTK + Tilth token optimization? [Y/n] '
   IFS= read -r token_answer || exit 1
-  case "$token_answer" in y|Y|yes|YES) token_option=--token-optimization; token_summary='[ON] RTK + Tilth integration' ;; *) token_option=--no-token-optimization; token_summary='[OFF] RTK + Tilth integration' ;; esac
+  case "$token_answer" in n|N|no|NO) token_option=--no-token-optimization; token_summary='[OFF] RTK + Tilth integration' ;; *) token_option=--token-optimization; token_summary='[ON] RTK + Tilth integration' ;; esac
   printf 'Enable local token monitoring proxy? [y/N] '
   IFS= read -r monitor_answer || exit 1
   case "$monitor_answer" in y|Y|yes|YES) monitor_option=--token-monitoring; monitor_summary='[ON] local token monitoring' ;; *) monitor_option=; monitor_summary='[OFF] local token monitoring' ;; esac
@@ -525,7 +526,7 @@ else
   graph_model=$(select_model_for_role graph "$DEFAULT_GRAPH_MODEL")
   developer_model=$(select_model_for_role developer "$DEFAULT_DEVELOPER_MODEL")
   reviewer_model=$(select_model_for_role reviewer "$DEFAULT_REVIEWER_MODEL")
-  token_option=--no-token-optimization
+  token_option=--token-optimization
   monitor_option=
 
   printf '\nProject: %s\n\nRecommended configuration:\n' "$name"
@@ -535,7 +536,7 @@ else
   else
     printf '[WARNING] Some recommended models are unavailable; installed Cloud fallbacks were selected\n'
   fi
-  printf '[OK] minimal development rules\n'
+  printf '[OK] token optimization enabled\n'
   printf '[OK] Git will be initialized\n'
   printf '[OFF] local token monitoring\n\n'
   confirm_default_yes 'Create the project?' || { printf '%s\n' 'Cancelled.'; exit 0; }

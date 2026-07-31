@@ -70,15 +70,17 @@ Cloud models automatically, leaves local monitoring off and asks one main confir
 ./ccb-template init /chemin/du/projet
 ```
 
-Use advanced mode only when you want to choose each agent model or enable optional RTK/Tilth or
-local token monitoring:
+Use advanced mode only when you want to choose each agent model, disable RTK/Tilth, or enable local
+token monitoring:
 
 ```sh
 ./ccb-template init /chemin/du/projet --advanced
 ```
 
 The initializer creates no commit, pushes nothing, deploys nothing and does not start CCB without
-asking after the files are written.
+asking after the files are written. It prepares each CCB agent's isolated Claude Code home with the
+local Claude Code CLI link and onboarding/project-trust state required by the native Claude
+provider.
 
 ## 5. Non-interactive install
 
@@ -105,14 +107,13 @@ Install after reviewing the preflight:
   --yes
 ```
 
-### Optional token optimization
+### Token optimization
 
-The standard install does not require RTK, npx or Tilth. Dependency-free minimalist rules inspired
-by [Ponytail](https://github.com/dietrichgebert/ponytail) are already included in the generated
-agent skills; this is not the full or official Ponytail plugin.
+The standard install enables RTK and Tilth token optimization by default. Dependency-free
+minimalist rules inspired by [Ponytail](https://github.com/dietrichgebert/ponytail) are also
+included in the generated agent skills; this is not the full or official Ponytail plugin.
 
-Pass `--token-optimization` or use `init --advanced` to integrate the external RTK terminal filter
-and Tilth MCP server. Install and initialize RTK yourself, then confirm npx can resolve Tilth:
+Install and initialize RTK yourself, then confirm npx can resolve Tilth:
 
 ```sh
 brew install rtk-ai/tap/rtk
@@ -121,13 +122,14 @@ npx tilth --version
 ```
 
 The installer creates `.mcp.json` using the pinned command `npx -y tilth@0.9.0 --mcp` and a concise
-`.claude/rules/token-optimization.md`. The bootstrap
-does not run RTK initialization or replace an existing `.mcp.json`, rule or `CLAUDE.md`. It does
-prewarm Tilth once per managed agent home with `npx -y tilth@0.9.0 --version` and links the local
-Claude Code CLI into each isolated home. It also seeds Claude Code onboarding/project trust state
-so first-start agents do not wait on the theme picker or RTK external-import prompt. RTK filters
-primarily terminal output; its estimates do not guarantee a matching reduction in Claude usage.
-Tilth is started by npx when Claude Code starts the MCP server, using the prewarmed isolated cache.
+`.claude/rules/token-optimization.md`. The bootstrap does not run RTK initialization or replace an
+existing `.mcp.json`, rule or `CLAUDE.md`. It does prewarm Tilth once per managed agent home with
+`npx -y tilth@0.9.0 --version`. RTK filters primarily terminal output; its estimates do not
+guarantee a matching reduction in Claude usage. Tilth is started by npx when Claude Code starts the
+MCP server, using the prewarmed isolated cache.
+
+Use `--no-token-optimization` with `install.sh`, or answer `n` in `ccb-template init --advanced`,
+only when the RTK/Tilth integration should be skipped.
 
 ## 6. Validate and start
 

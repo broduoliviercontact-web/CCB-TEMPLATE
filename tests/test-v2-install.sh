@@ -115,8 +115,8 @@ assert_contains "$output" 'DRY RUN — no files were modified.'
 
 default_missing_rtk="$WORK/default-missing-rtk"
 run env PATH="$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$default_missing_rtk" --name DefaultMissingRTK --profile web --claude-ollama-cloud --dry-run
-[ "$status" -eq 0 ] || fail "default installation was blocked by missing optional RTK: $output"
-assert_contains "$output" 'DRY RUN'
+[ "$status" -ne 0 ] || fail 'default installation accepted missing RTK'
+assert_contains "$output" 'RTK is required with --token-optimization'
 [ ! -e "$default_missing_rtk" ] || fail 'default installation without RTK wrote the target'
 
 opt_out_without_tools="$WORK/opt-out-without-token-tools"
@@ -175,6 +175,15 @@ for agent in manager graph developer reviewer; do
   grep -A2 -F "[agents.$agent.provider_profile]" "$project/.ccb/ccb.config" | grep -Fqx 'inherit_auth = false' || fail "missing inherit_auth $agent"
   [ -f "$project/.ccb/agents/$agent/memory.md" ] || fail "missing memory $agent"
   [ -f "$project/.ccb/agents/$agent/CLAUDE.md" ] || fail "missing role brief $agent"
+  link="$project/.ccb/agents/$agent/provider-state/claude/home/.local/bin/claude"
+  [ -L "$link" ] || fail "Claude Code CLI link missing for default $agent"
+  [ "$(readlink "$link")" = "$BIN/claude" ] || fail "default Claude Code CLI link points to the wrong target for $agent"
+  "$PYTHON_FOR_TESTS" -c '
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as source:
+    document = json.load(source)
+assert document["hasCompletedOnboarding"] is True
+' "$project/.ccb/agents/$agent/provider-state/claude/home/.claude/.claude.json" || fail "Claude Code onboarding state missing for default $agent"
 done
 [ -f "$project/CLAUDE.md" ] || fail 'missing shared project CLAUDE.md'
 for skill in ccb-manager-planning ccb-graph-analysis ccb-developer-delivery ccb-reviewer-audit; do
@@ -187,8 +196,8 @@ retired_model=$retired_prefix:480b-cloud
 if rg -n "$retired_model|sk-ant-|Bearer [A-Za-z0-9]" "$ROOT/install.sh" "$ROOT/scripts/v2" "$ROOT/assets" "$project/.ccb" >/dev/null; then fail 'new V2 files contain a retired model or sensitive token'; fi
 grep -Fxv -- '--version' "$WORK/ccb.calls" >/dev/null && fail 'installer executed ccb beyond --version' || :
 [ ! -e "$WORK/claude.calls" ] || fail 'installer executed Claude Code'
-[ ! -e "$project/.mcp.json" ] || fail 'default installation created optional Tilth MCP configuration'
-[ ! -e "$project/.claude/rules/token-optimization.md" ] || fail 'default installation created optional token-optimization files'
+[ -f "$project/.mcp.json" ] || fail 'default installation did not create Tilth MCP configuration'
+[ -f "$project/.claude/rules/token-optimization.md" ] || fail 'default installation did not create token-optimization files'
 
 custom_models="$WORK/custom-models"
 run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$custom_models" --name CustomModels --profile web --claude-ollama-cloud --no-token-optimization --manager-model kimi-k2.6:cloud --graph-model glm-5.2:cloud --developer-model qwen3.5:397b-cloud --reviewer-model kimi-k2.7-code:cloud --yes
@@ -199,12 +208,12 @@ grep -A1 -F '[agents.developer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'm
 grep -A1 -F '[agents.reviewer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.7-code:cloud"' || fail 'reviewer custom model was not rendered'
 
 cli_project="$WORK/cli-project"
-run sh -c "printf '%s\\n' '' n n | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$cli_project'"
+run sh -c "printf '%s\\n' '' n n | env PATH='$TOKEN_BIN:$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$cli_project'"
 [ "$status" -eq 0 ] || fail "interactive CLI failed: $output"
 [ -d "$cli_project/.git" ] || fail 'interactive CLI did not initialise Git'
 grep -A1 -F '[agents.manager]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "glm-5.2:cloud"' || fail 'interactive CLI did not select manager model'
 grep -A1 -F '[agents.reviewer]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.6:cloud"' || fail 'interactive CLI did not select reviewer model'
-[ ! -e "$cli_project/.mcp.json" ] || fail 'simple CLI created optional Tilth configuration'
+[ -f "$cli_project/.mcp.json" ] || fail 'simple CLI did not create default Tilth configuration'
 assert_contains "$output" 'CCB was not started.'
 
 advanced_project="$WORK/advanced-project"
@@ -268,7 +277,7 @@ assert document == {"mcpServers": {"tilth": {"command": "npx", "args": ["-y", "t
 ' "$token_project/.mcp.json" || fail 'Tilth MCP configuration is not deterministic'
 [ ! -e "$WORK/rtk.calls" ] || fail 'installer executed RTK'
 npx_count=$(grep -Fxc -- '-y tilth@0.9.0 --version' "$WORK/npx.calls")
-[ "$npx_count" -eq 8 ] || fail "installer did not prewarm Tilth once per advanced/token install agent: $npx_count"
+[ "$npx_count" -eq 16 ] || fail "installer did not prewarm Tilth once per default/advanced/token install agent: $npx_count"
 for agent in manager graph developer reviewer; do
   link="$token_project/.ccb/agents/$agent/provider-state/claude/home/.local/bin/claude"
   [ -L "$link" ] || fail "Claude Code CLI link missing for $agent"
@@ -355,7 +364,7 @@ grep -Fxv -- '--version' "$WORK/ccb.calls" >/dev/null && fail 'token-optimizatio
 [ ! -e "$WORK/claude.calls" ] || fail 'token-optimization executed Claude Code'
 [ ! -e "$WORK/rtk.calls" ] || fail 'token-optimization executed RTK'
 npx_count=$(grep -Fxc -- '-y tilth@0.9.0 --version' "$WORK/npx.calls")
-[ "$npx_count" -eq 16 ] || fail "unexpected Tilth prewarm count after token installs: $npx_count"
+[ "$npx_count" -eq 24 ] || fail "unexpected Tilth prewarm count after token installs: $npx_count"
 
 second="$WORK/second"
 env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$second" --name 'Other name' --profile web --claude-ollama-cloud --no-token-optimization --yes >/dev/null

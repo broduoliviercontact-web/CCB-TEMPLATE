@@ -193,12 +193,18 @@ PY
   v2_info "seeded Claude Code onboarding state for $agent"
 }
 
-v2_prepare_token_optimization_runtime() {
+v2_prepare_claude_agent_runtime() {
   target=$1 dry_run=$2
   claude_bin=$(v2_claude_bin)
   for agent in manager graph developer reviewer; do
     v2_prepare_agent_claude_home "$target" "$agent" "$dry_run" "$claude_bin"
     v2_seed_claude_onboarding "$target" "$agent" "$dry_run"
+  done
+}
+
+v2_prepare_token_optimization_runtime() {
+  target=$1 dry_run=$2
+  for agent in manager graph developer reviewer; do
     v2_prewarm_tilth_home "$target" "$agent" "$dry_run"
   done
 }
@@ -296,6 +302,7 @@ v2_install_assets() {
   for skill in ccb-manager-planning ccb-graph-analysis ccb-developer-delivery ccb-reviewer-audit; do
     v2_install_one "$root/assets/skills/$skill/SKILL.md" "$target/.claude/skills/$skill/SKILL.md" "$dry_run"
   done
+  v2_prepare_claude_agent_runtime "$target" "$dry_run"
   if [ "$token_monitoring" -eq 1 ]; then
     v2_install_one "$root/assets/token-proxy.py" "$config_dir/token-proxy.py" "$dry_run"
     v2_install_token_monitor_python "$config_dir/token-monitor-python" "$dry_run"

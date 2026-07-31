@@ -174,27 +174,32 @@ V2.0.0 and does not load a `profiles/` directory.
 
 Each generated project receives a common `CLAUDE.md`, a role brief and durable memory for each
 CCB agent, plus project-local planning, architecture analysis, implementation and review skills.
-Existing user-authored files are preserved. CCB's managed agent homes remain runtime-owned; the
-role memories are the durable CCB-native instructions for the isolated agents.
+The installer also prepares each isolated Claude Code agent home with the local Claude Code CLI
+link and onboarding/project-trust state required by CCB's native Claude provider. Existing
+user-authored files are preserved. CCB's managed agent homes remain runtime-owned; the role memories
+are the durable CCB-native instructions for the isolated agents.
 
-### Optional RTK and Tilth integration
+### Token optimization by default
 
-The standard installation does not require RTK, npx or Tilth. The generated agent skills already
-include concise, dependency-free rules inspired by [Ponytail](https://github.com/dietrichgebert/ponytail):
+The standard installation enables RTK and Tilth token optimization by default. `--token-optimization`
+is accepted for explicit scripts, but it is already the default. Use `--no-token-optimization`, or
+answer `n` in `ccb-template init --advanced`, only when you need to disable that integration. The
+generated agent skills also include concise, dependency-free rules
+inspired by [Ponytail](https://github.com/dietrichgebert/ponytail):
 check whether work is needed, reuse existing code first, prefer native or standard features, keep
 the smallest correct change and never weaken validation, security, accessibility, error handling or
 data-loss protection. This is not the full or official Ponytail plugin, and the template does not
 add Ponytail as a dependency.
 
-In advanced mode, or with `install.sh --token-optimization`, the bootstrap can prepare the generated
-project for the external RTK terminal filter and the Tilth MCP code-navigation server. It verifies
+The bootstrap prepares the generated project for the external RTK terminal filter and the Tilth MCP
+code-navigation server. It verifies
 `rtk` and `npx`, writes project-local `.mcp.json` with the pinned
 `npx -y tilth@0.9.0 --mcp` server, and adds a concise `.claude/rules/token-optimization.md`
 without replacing an existing user rule or `CLAUDE.md`. It never installs or initializes RTK.
-For Tilth, it prewarms the pinned npm package in each managed Claude Code agent home, seeds Claude
-Code's onboarding state, and links the local Claude Code CLI there. The seeded state trusts the
-generated project and approves the RTK `CLAUDE.md` external include for that project, so the first
-CCB start does not stop on a theme/import prompt or require four concurrent cold `npx` downloads.
+For Tilth, it prewarms the pinned npm package in each managed Claude Code agent home. The standard
+agent-home preparation already trusts the generated project and links the Claude Code CLI, so the
+first CCB start does not stop on a theme/import prompt or require four concurrent cold `npx`
+downloads when Tilth is enabled.
 
 ```sh
 brew install rtk-ai/tap/rtk
