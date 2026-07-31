@@ -6,12 +6,17 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 require() { grep -Fq -- "$2" "$1" || fail "missing $2 in $1"; }
 
 require "$ROOT/README.md" 'SeemSeam/claude_codex_bridge'
-require "$ROOT/README.md" './install.sh /chemin/du/projet'
+require "$ROOT/README.md" './ccb-template doctor'
+require "$ROOT/README.md" './ccb-template init "/chemin/du/nouveau-projet"'
+require "$ROOT/README.md" './ccb-template doctor --full'
+require "$ROOT/README.md" './ccb-template init "/chemin/du/nouveau-projet" --advanced'
 require "$ROOT/README.md" 'repository-local `./ccb` command has been removed'
 require "$ROOT/README.md" 'official globally installed CCB binary'
 require "$ROOT/README.md" 'V1.8.0 archive'
 require "$ROOT/README.md" 'does not use OpenCode'
 require "$ROOT/README.md" '--token-optimization'
+require "$ROOT/README.md" 'does not require RTK, npx or Tilth'
+require "$ROOT/README.md" 'This is not the full or official Ponytail plugin'
 require "$ROOT/README.md" 'rtk init -g'
 require "$ROOT/README.md" 'tilth@0.9.0'
 
@@ -26,12 +31,15 @@ for model in glm-5.2:cloud qwen3.5:397b-cloud kimi-k2.7-code:cloud kimi-k2.6:clo
 done
 
 require "$ROOT/.github/workflows/validate.yml" './tests/test-v2-install.sh'
+require "$ROOT/.github/workflows/validate.yml" './tests/test-v2-doctor.sh'
 require "$ROOT/.github/workflows/validate.yml" './tests/test-v2-docs.sh'
 require "$ROOT/.github/workflows/validate.yml" './tests/test-v2-clean-tree.sh'
 require "$ROOT/.github/workflows/validate.yml" 'token-optimization tests'
 require "$ROOT/README.md" 'V1 profiles, skills, prompts and manuals were removed'
 require "$ROOT/README.md" 'standard built-in asset preset'
 require "$ROOT/docs/v2-quickstart.md" 'standard built-in asset preset'
+require "$ROOT/docs/v2-quickstart.md" './ccb-template doctor'
+require "$ROOT/docs/v2-quickstart.md" './ccb-template init /chemin/du/projet --advanced'
 
 if rg -n '^\s*ccb\s*$|\$\s*ccb\s*$' "$ROOT/tests/test-v2-install.sh" "$ROOT/tests/test-v2-docs.sh" >/dev/null; then
   fail 'a V2 test launches ccb without a subcommand'
@@ -41,5 +49,6 @@ require "$ROOT/docs/v2-architecture.md" 'not a workflow engine'
 require "$ROOT/docs/v2-architecture.md" 'project/workspace MCP metadata'
 require "$ROOT/docs/v2-quickstart.md" 'npx tilth --version'
 require "$ROOT/docs/v2-troubleshooting.md" 'MCP configuration'
+require "$ROOT/docs/v2-troubleshooting.md" './ccb-template doctor --full'
 
-echo '[OK] V2 documentation tests passed (25 checks)'
+echo '[OK] V2 documentation tests passed (32 checks)'

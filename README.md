@@ -15,34 +15,51 @@ and installs reusable text assets. It is not an orchestration engine and does no
 It requires official CCB 8.4.3 or later.
 
 ```sh
-./install.sh /chemin/du/projet \
-  --name "Nom du projet" \
-  --profile web \
-  --claude-ollama-cloud \
-  --yes
+git clone https://github.com/broduoliviercontact-web/CCB-TEMPLATE.git
+cd CCB-TEMPLATE
+./ccb-template doctor
+./ccb-template init "/chemin/du/nouveau-projet"
+```
 
-cd /chemin/du/projet
-ccb config validate
-ccb
+The standard path checks mandatory prerequisites, derives the project name from the target folder,
+selects recommended installed Ollama Cloud models automatically and asks one main confirmation
+before writing. It initializes Git, but never creates a commit, pushes, deploys, starts a model or
+starts CCB without asking.
+
+Use the explicit advanced commands only when you need the optional integrations or per-agent model
+choices:
+
+```sh
+./ccb-template doctor --full
+./ccb-template init "/chemin/du/nouveau-projet" --advanced
 ```
 
 ### Interactive project creation
 
-Create a new project, choose an installed Ollama Cloud model for each permanent agent and
-initialise Git in one interactive flow:
+Create a new project with the simple flow:
 
 ```sh
 ./ccb-template init /chemin/du/projet
 ```
 
-The target directory must be new or empty. The CLI never creates a commit or pushes. After project
-creation, it proposes an initial CCB brief and explicitly asks whether to start CCB. Create a new
-dated brief later with `./ccb-template brief /chemin/du/projet`; finish the input with a line
-containing only `.`.
+Mandatory prerequisites are a compatible Unix-like platform, tmux, Git, Python 3.10+ with
+`tomllib`/`tomli`, `aiohttp` and `cryptography`, official CCB 8.4.3+, Claude Code CLI, reachable
+Ollama and at least one installed model ending in `:cloud`.
+
+The default recommended models are used when they are installed; otherwise the initializer chooses
+a visible Cloud fallback and reports the fallback before the summary. The target directory must be
+new or empty.
+
+The CLI never creates a commit or pushes. After project creation, it proposes an initial CCB brief
+and explicitly asks whether to start CCB. Create a new dated brief later with
+`./ccb-template brief /chemin/du/projet`; finish the input with a line containing only `.`.
+
+`./ccb-template init TARGET --advanced` lets you choose the model for each agent and opt into RTK,
+Tilth and local token monitoring before the final summary.
 
 ### Optional token monitoring
 
-Choose token monitoring during `ccb-template init`, or pass `--token-monitoring` to `install.sh`,
+Choose token monitoring during `ccb-template init --advanced`, or pass `--token-monitoring` to `install.sh`,
 to route the four agents through a local transparent proxy. It records only timestamp, agent,
 model, input tokens, output tokens and duration in `.ccb/token-monitor/`; it never stores prompt
 or response content. Each project automatically receives a free local port (stored in
@@ -160,18 +177,24 @@ CCB agent, plus project-local planning, architecture analysis, implementation an
 Existing user-authored files are preserved. CCB's managed agent homes remain runtime-owned; the
 role memories are the durable CCB-native instructions for the isolated agents.
 
-### Token optimization by default
+### Optional RTK and Tilth integration
 
-The standard installation prepares the generated project for the external RTK terminal filter and
-the Tilth MCP code-navigation server. It verifies `rtk` and `npx`, writes project-local
-`.mcp.json` with the pinned `npx -y tilth@0.9.0 --mcp` server, and adds a concise
-`.claude/rules/token-optimization.md` without replacing an existing user rule or `CLAUDE.md`.
-It never installs or initializes RTK. For Tilth, it prewarms the pinned npm package in each
-managed Claude Code agent home, seeds Claude Code's onboarding state, and links the local Claude
-Code CLI there. The seeded state trusts the generated project and approves the RTK `CLAUDE.md`
-external include for that project, so the first CCB start does not stop on a theme/import prompt or
-require four concurrent cold `npx` downloads. Use `--no-token-optimization` to skip this integration.
-`--token-optimization` remains accepted for explicit configuration and backwards-compatible scripts.
+The standard installation does not require RTK, npx or Tilth. The generated agent skills already
+include concise, dependency-free rules inspired by [Ponytail](https://github.com/dietrichgebert/ponytail):
+check whether work is needed, reuse existing code first, prefer native or standard features, keep
+the smallest correct change and never weaken validation, security, accessibility, error handling or
+data-loss protection. This is not the full or official Ponytail plugin, and the template does not
+add Ponytail as a dependency.
+
+In advanced mode, or with `install.sh --token-optimization`, the bootstrap can prepare the generated
+project for the external RTK terminal filter and the Tilth MCP code-navigation server. It verifies
+`rtk` and `npx`, writes project-local `.mcp.json` with the pinned
+`npx -y tilth@0.9.0 --mcp` server, and adds a concise `.claude/rules/token-optimization.md`
+without replacing an existing user rule or `CLAUDE.md`. It never installs or initializes RTK.
+For Tilth, it prewarms the pinned npm package in each managed Claude Code agent home, seeds Claude
+Code's onboarding state, and links the local Claude Code CLI there. The seeded state trusts the
+generated project and approves the RTK `CLAUDE.md` external include for that project, so the first
+CCB start does not stop on a theme/import prompt or require four concurrent cold `npx` downloads.
 
 ```sh
 brew install rtk-ai/tap/rtk
@@ -179,10 +202,10 @@ rtk init -g
 npx tilth --version
 ```
 
-RTK mainly filters verbose terminal output; any advertised percentage is an estimate and does
-not guarantee an equivalent reduction in Claude usage. Tilth is launched by npx when Claude Code
-starts the configured MCP server; the bootstrap only runs `npx -y tilth@0.9.0 --version` once per
-agent home to warm the isolated caches.
+RTK mainly filters verbose terminal output; reductions depend on the task, terminal output and
+models. CCB-TEMPLATE does not promise a percentage reduction. Tilth is launched by npx when Claude
+Code starts the configured MCP server; the bootstrap only runs `npx -y tilth@0.9.0 --version` once
+per agent home to warm the isolated caches.
 
 The generated official configuration uses four Claude Code agents through Ollama's
 Anthropic-compatible local endpoint:

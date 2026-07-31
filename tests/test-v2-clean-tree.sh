@@ -30,7 +30,7 @@ for path in \
   codex-skills/start-ccb-project/references/brief-template.md \
   docs/v2-architecture.md docs/v2-migration-from-v1.md docs/v2-migration-plan.md \
   docs/v2-quickstart.md docs/v2-troubleshooting.md docs/v2-codex-workflow.md \
-  tests/fixtures/ccb.config.expected tests/test-v2-install.sh tests/test-v2-docs.sh tests/test-token-proxy.sh; do
+  tests/fixtures/ccb.config.expected tests/test-v2-install.sh tests/test-v2-doctor.sh tests/test-v2-docs.sh tests/test-token-proxy.sh; do
   require_file "$path"
 done
 

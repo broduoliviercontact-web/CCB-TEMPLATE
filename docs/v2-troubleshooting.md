@@ -32,8 +32,14 @@ TOML validation error, inspect `.ccb/ccb.config` and rerun `ccb config validate`
 
 ## Token optimization prerequisites or MCP configuration
 
-Token optimization is enabled by default. If RTK is missing on macOS, install and initialize it
-only after choosing its telemetry settings yourself:
+Token optimization is optional. Run the full diagnostic before enabling it:
+
+```sh
+./ccb-template doctor --full
+```
+
+If RTK is missing on macOS, install and initialize it only after choosing its telemetry settings
+yourself:
 
 ```sh
 brew install rtk-ai/tap/rtk
@@ -49,4 +55,4 @@ agents still stop on the theme picker or RTK external-import prompt, restart fro
 generated with the current template. If an existing `.mcp.json` is invalid or its `mcpServers`
 member is not an object, repair it manually and retry; the bootstrap leaves it unchanged on refusal.
 Existing `.claude/rules/token-optimization.md` files are preserved. Use `--no-token-optimization`
-when this integration is not wanted.
+or the standard `ccb-template init TARGET` flow when this integration is not wanted.

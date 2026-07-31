@@ -23,7 +23,7 @@ fi
 
 usage() {
   cat <<'EOF'
-usage: ./install.sh TARGET --name NAME --profile web --claude-ollama-cloud [MODEL OPTIONS] [--no-token-optimization] [--yes|--dry-run]
+usage: ./install.sh TARGET --name NAME --profile web --claude-ollama-cloud [MODEL OPTIONS] [--token-optimization] [--yes|--dry-run]
 
 Prepare a project for the official Claude Code Bridge (CCB) with Claude Code
 using Ollama Cloud through its Anthropic-compatible local endpoint.
@@ -32,7 +32,7 @@ Options:
   --name NAME              Project name written to shared memory
   --profile web             Required built-in V2 preset (web is the only preset currently supported)
   --claude-ollama-cloud     Enable the required Claude Code + Ollama Cloud layout
-  --token-optimization      Configure project-local RTK and Tilth guidance (default)
+  --token-optimization      Configure project-local RTK and Tilth integration
   --no-token-optimization   Skip the RTK and Tilth project integration
   --manager-model MODEL     Ollama Cloud model for manager
   --graph-model MODEL       Ollama Cloud model for graph
@@ -45,7 +45,7 @@ Options:
 EOF
 }
 
-target= name= profile= cloud=0 token_optimization=1 yes=0 dry_run=0
+target= name= profile= cloud=0 token_optimization=0 yes=0 dry_run=0
 manager_model=glm-5.2:cloud graph_model=qwen3.5:397b-cloud developer_model=kimi-k2.7-code:cloud reviewer_model=kimi-k2.6:cloud
 token_monitoring=0
 while [ "$#" -gt 0 ]; do

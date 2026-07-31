@@ -115,8 +115,8 @@ assert_contains "$output" 'DRY RUN — no files were modified.'
 
 default_missing_rtk="$WORK/default-missing-rtk"
 run env PATH="$BIN:/usr/bin:/bin" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$default_missing_rtk" --name DefaultMissingRTK --profile web --claude-ollama-cloud --dry-run
-[ "$status" -ne 0 ] || fail 'default installation accepted missing RTK'
-assert_contains "$output" 'RTK is required with --token-optimization'
+[ "$status" -eq 0 ] || fail "default installation was blocked by missing optional RTK: $output"
+assert_contains "$output" 'DRY RUN'
 [ ! -e "$default_missing_rtk" ] || fail 'default installation without RTK wrote the target'
 
 opt_out_without_tools="$WORK/opt-out-without-token-tools"
@@ -187,8 +187,8 @@ retired_model=$retired_prefix:480b-cloud
 if rg -n "$retired_model|sk-ant-|Bearer [A-Za-z0-9]" "$ROOT/install.sh" "$ROOT/scripts/v2" "$ROOT/assets" "$project/.ccb" >/dev/null; then fail 'new V2 files contain a retired model or sensitive token'; fi
 grep -Fxv -- '--version' "$WORK/ccb.calls" >/dev/null && fail 'installer executed ccb beyond --version' || :
 [ ! -e "$WORK/claude.calls" ] || fail 'installer executed Claude Code'
-[ -f "$project/.mcp.json" ] || fail 'default installation did not create a Tilth MCP configuration'
-[ -f "$project/.claude/rules/token-optimization.md" ] || fail 'default installation did not create Claude token-optimization files'
+[ ! -e "$project/.mcp.json" ] || fail 'default installation created optional Tilth MCP configuration'
+[ ! -e "$project/.claude/rules/token-optimization.md" ] || fail 'default installation created optional token-optimization files'
 
 custom_models="$WORK/custom-models"
 run env PATH="$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$custom_models" --name CustomModels --profile web --claude-ollama-cloud --no-token-optimization --manager-model kimi-k2.6:cloud --graph-model glm-5.2:cloud --developer-model qwen3.5:397b-cloud --reviewer-model kimi-k2.7-code:cloud --yes
@@ -199,13 +199,20 @@ grep -A1 -F '[agents.developer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'm
 grep -A1 -F '[agents.reviewer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.7-code:cloud"' || fail 'reviewer custom model was not rendered'
 
 cli_project="$WORK/cli-project"
-run sh -c "printf '%s\\n' 'CLI Project' 1 2 3 4 n n y n n | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$cli_project'"
+run sh -c "printf '%s\\n' '' n n | env PATH='$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$cli_project'"
 [ "$status" -eq 0 ] || fail "interactive CLI failed: $output"
 [ -d "$cli_project/.git" ] || fail 'interactive CLI did not initialise Git'
 grep -A1 -F '[agents.manager]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "glm-5.2:cloud"' || fail 'interactive CLI did not select manager model'
 grep -A1 -F '[agents.reviewer]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.6:cloud"' || fail 'interactive CLI did not select reviewer model'
-[ ! -e "$cli_project/.mcp.json" ] || fail 'interactive CLI ignored token-optimization opt-out'
+[ ! -e "$cli_project/.mcp.json" ] || fail 'simple CLI created optional Tilth configuration'
 assert_contains "$output" 'CCB was not started.'
+
+advanced_project="$WORK/advanced-project"
+run sh -c "printf '%s\\n' 'Advanced Project' 1 2 3 4 y n '' n n | env PATH='$TOKEN_BIN:$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$advanced_project' --advanced"
+[ "$status" -eq 0 ] || fail "advanced CLI failed: $output"
+[ -f "$advanced_project/.mcp.json" ] || fail 'advanced CLI did not create optional Tilth configuration'
+[ ! -e "$advanced_project/.ccb/token-monitor/port" ] || fail 'advanced CLI enabled monitoring despite opt-out'
+assert_contains "$output" '[ON] RTK + Tilth integration'
 
 monitored_project="$WORK/monitored-project"
 "$PYTHON_FOR_TESTS" -c 'import socket, time; sock = socket.socket(); sock.bind(("127.0.0.1", 11435)); sock.listen(); time.sleep(30)' >/dev/null 2>&1 &
@@ -261,7 +268,7 @@ assert document == {"mcpServers": {"tilth": {"command": "npx", "args": ["-y", "t
 ' "$token_project/.mcp.json" || fail 'Tilth MCP configuration is not deterministic'
 [ ! -e "$WORK/rtk.calls" ] || fail 'installer executed RTK'
 npx_count=$(grep -Fxc -- '-y tilth@0.9.0 --version' "$WORK/npx.calls")
-[ "$npx_count" -eq 8 ] || fail "installer did not prewarm Tilth once per agent: $npx_count"
+[ "$npx_count" -eq 8 ] || fail "installer did not prewarm Tilth once per advanced/token install agent: $npx_count"
 for agent in manager graph developer reviewer; do
   link="$token_project/.ccb/agents/$agent/provider-state/claude/home/.local/bin/claude"
   [ -L "$link" ] || fail "Claude Code CLI link missing for $agent"
