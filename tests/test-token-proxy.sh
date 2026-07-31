@@ -3,6 +3,8 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd)
 PYTHON=${CCB_PYTHON:-python3}
+PYTHON_BIN=$(command -v "$PYTHON" 2>/dev/null || true)
+[ -n "$PYTHON_BIN" ] && PYTHON=$PYTHON_BIN
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/ccb-token-proxy.XXXXXX")
 proxy_pid= upstream_pid=
 cleanup() {
