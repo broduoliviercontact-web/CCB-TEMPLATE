@@ -19,6 +19,7 @@ require "$ROOT/README.md" 'enables RTK and Tilth token optimization by default'
 require "$ROOT/README.md" 'This is not the full or official Ponytail plugin'
 require "$ROOT/README.md" 'rtk init -g'
 require "$ROOT/README.md" 'tilth@0.9.0'
+require "$ROOT/README.md" './ccb-template monitor model /chemin/du/projet'
 
 for document in docs/v2-quickstart.md docs/v2-architecture.md docs/v2-migration-from-v1.md docs/v2-troubleshooting.md; do
   [ -f "$ROOT/$document" ] || fail "missing $document"
@@ -50,5 +51,6 @@ require "$ROOT/docs/v2-architecture.md" 'project/workspace MCP metadata'
 require "$ROOT/docs/v2-quickstart.md" 'npx tilth --version'
 require "$ROOT/docs/v2-troubleshooting.md" 'MCP configuration'
 require "$ROOT/docs/v2-troubleshooting.md" './ccb-template doctor --full'
+require "$ROOT/docs/v2-quickstart.md" './ccb-template monitor model /chemin/du/projet'
 
-echo '[OK] V2 documentation tests passed (32 checks)'
+echo '[OK] V2 documentation tests passed (34 checks)'

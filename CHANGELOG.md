@@ -18,6 +18,8 @@
   one main confirmation and Git repository initialization.
 - `ccb-template init --advanced` for per-agent Ollama Cloud model selection and optional
   RTK/Tilth and token-monitoring choices.
+- `ccb-template monitor model` to inspect and atomically update installed Ollama Cloud models in a
+  generated project's `.ccb/ccb.config`.
 - Per-project token-monitor ports with persistent recovery metadata and proxy integration tests.
 
 ### Fixed

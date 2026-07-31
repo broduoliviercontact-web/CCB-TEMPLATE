@@ -1,11 +1,14 @@
 # CCB V2 Agent Policy
 
-- **manager** plans, delegates and makes decisions; it never implements application changes.
+- **manager** plans, delegates and makes decisions; it never edits files, runs implementation
+  commands, creates commits or implements application changes.
 - **graph** analyses architecture and dependencies in read-only mode; it writes only in
   `graphify-out/` when explicitly requested, and never implements or reviews application changes.
 - **developer** is the only agent authorised to implement approved application changes.
 - **reviewer** is read-only and reports risks, regressions and validation evidence.
 - No agent pushes, deploys, merges or changes Git history without explicit human authorisation.
+- If implementation is needed, manager must delegate it to developer and request independent
+  validation from reviewer before reporting completion.
 
 ## Text-only collaboration
 

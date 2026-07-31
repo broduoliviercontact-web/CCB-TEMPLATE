@@ -222,6 +222,17 @@ Anthropic-compatible local endpoint:
 | developer | `kimi-k2.7-code:cloud` |
 | reviewer | `kimi-k2.6:cloud` |
 
+Change models later from the template clone:
+
+```sh
+./ccb-template monitor model /chemin/du/projet
+./ccb-template monitor model /chemin/du/projet developer kimi-k2.7-code:cloud
+./ccb-template monitor model /chemin/du/projet all glm-5.2:cloud
+```
+
+The command accepts only installed Ollama Cloud models ending in `:cloud`, edits
+`.ccb/ccb.config` atomically and asks you to restart CCB so running sessions pick up the change.
+
 See the [V2 quickstart](docs/v2-quickstart.md), [architecture](docs/v2-architecture.md),
 [migration guide](docs/v2-migration-from-v1.md), [migration plan](docs/v2-migration-plan.md) and
 [troubleshooting](docs/v2-troubleshooting.md).

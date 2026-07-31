@@ -30,6 +30,17 @@ If CCB is detached, use `tmux attach`. If `ccb` appears blocked while starting, 
 startup diagnostics before retrying; use `ccb kill` only to stop a workspace deliberately. For a
 TOML validation error, inspect `.ccb/ccb.config` and rerun `ccb config validate`.
 
+## Change an agent Cloud model
+
+Use the template helper instead of editing `.ccb/ccb.config` by hand:
+
+```sh
+./ccb-template monitor model /chemin/du/projet
+./ccb-template monitor model /chemin/du/projet manager glm-5.2:cloud
+```
+
+The model must already appear in `ollama list` and end in `:cloud`. Restart CCB after the change.
+
 ## Token optimization prerequisites or MCP configuration
 
 Token optimization is enabled by default. Run the full diagnostic when RTK, npx or Tilth look

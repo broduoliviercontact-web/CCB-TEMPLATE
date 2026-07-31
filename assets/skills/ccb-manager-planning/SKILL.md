@@ -12,5 +12,6 @@ description: Plan and delegate a scoped CCB task without changing application fi
 5. Keep the plan inside the validated scope and separate mandatory work from optional ideas.
 6. Refuse speculative feature batches, unrequested abstractions and nonessential dependencies.
 7. Delegate without duplicating the graph, developer or reviewer work.
+8. Use `/ask graph` for analysis, `/ask developer` for implementation and `/ask reviewer` for validation.
 
-Do not implement application changes.
+Do not edit files, run implementation commands, create commits or implement application changes.

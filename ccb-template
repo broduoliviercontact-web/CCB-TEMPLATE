@@ -18,6 +18,7 @@ usage: ./ccb-template doctor [--full]
        ./ccb-template manager-prompt TARGET BRIEF_FILE
        ./ccb-template monitor TARGET
        ./ccb-template monitor start|stop|watch|price TARGET
+       ./ccb-template monitor model TARGET [manager|graph|developer|reviewer|all MODEL]
        ./ccb-template start TARGET
 
 Create a new Git project configured with CCB-TEMPLATE. The default init flow
@@ -30,7 +31,8 @@ local token monitoring.
 RTK, npx, Tilth and local monitoring components.
 `brief` creates a dated execution brief in TARGET/.ccb/briefs/.
 `manager-prompt` prints the prompt to paste into the CCB manager conversation.
-`monitor` is the unified dashboard, service control and local price-estimation interface.
+`monitor` is the unified dashboard, service control, model selection and local
+price-estimation interface.
 EOF
 }
 
@@ -287,6 +289,111 @@ show_pricing() {
   printf '{"models":{"model:cloud":{"input_per_million_usd":2.0,"output_per_million_usd":8.0}}}\n'
 }
 
+project_config_file() {
+  model_target=$1
+  [ -d "$model_target" ] && [ ! -L "$model_target" ] && [ -d "$model_target/.ccb" ] && [ ! -L "$model_target/.ccb" ] || {
+    printf 'error: not a CCB project: %s\n' "$model_target" >&2
+    return 1
+  }
+  config_file=$model_target/.ccb/ccb.config
+  [ -f "$config_file" ] && [ ! -L "$config_file" ] || {
+    printf 'error: CCB configuration is missing or unsafe: %s\n' "$config_file" >&2
+    return 1
+  }
+  printf '%s\n' "$config_file"
+}
+
+agent_is_valid() {
+  case "$1" in manager|graph|developer|reviewer|all) return 0 ;; *) return 1 ;; esac
+}
+
+cloud_model_is_installed() {
+  checked_model=$1
+  v2_is_cloud_model "$checked_model" || {
+    printf 'error: model must be an installed Ollama Cloud model ending in :cloud: %s\n' "$checked_model" >&2
+    return 1
+  }
+  command -v ollama >/dev/null 2>&1 || {
+    printf '%s\n' 'error: Ollama is required to verify installed Cloud models.' >&2
+    return 1
+  }
+  ollama list 2>/dev/null | awk 'NR > 1 { print $1 }' | grep -Fqx "$checked_model" || {
+    printf 'error: Ollama Cloud model is not installed: %s\n' "$checked_model" >&2
+    return 1
+  }
+}
+
+show_project_models() {
+  model_target=$1
+  config_file=$(project_config_file "$model_target") || return 1
+  awk '
+    /^\[agents\.(manager|graph|developer|reviewer)\]$/ {
+      agent = $0
+      sub(/^\[agents\./, "", agent)
+      sub(/\]$/, "", agent)
+      next
+    }
+    agent != "" && /^model = "/ {
+      model = $0
+      sub(/^model = "/, "", model)
+      sub(/"$/, "", model)
+      printf "%-9s %s\n", agent, model
+      agent = ""
+    }
+  ' "$config_file"
+  if command -v ollama >/dev/null 2>&1; then
+    cloud_models=$(ollama list 2>/dev/null | awk 'NR > 1 && $1 ~ /:.*cloud$/ { print $1 }') || cloud_models=
+    if [ -n "$cloud_models" ]; then
+      printf '\nInstalled Cloud models:\n'
+      printf '%s\n' "$cloud_models" | sed 's/^/  /'
+    fi
+  fi
+}
+
+set_project_model() {
+  model_target=$1 model_agent=$2 model_name=$3
+  config_file=$(project_config_file "$model_target") || return 1
+  agent_is_valid "$model_agent" || {
+    printf 'error: unknown agent: %s\n' "$model_agent" >&2
+    printf '%s\n' 'expected manager, graph, developer, reviewer or all' >&2
+    return 2
+  }
+  cloud_model_is_installed "$model_name" || return 1
+  config_dir=$(dirname "$config_file")
+  temporary=$(mktemp "$config_dir/.ccb.config.model.XXXXXX") || return 1
+  awk -v wanted="$model_agent" -v replacement="$model_name" '
+    /^\[agents\.(manager|graph|developer|reviewer)\]$/ {
+      current = $0
+      sub(/^\[agents\./, "", current)
+      sub(/\]$/, "", current)
+    }
+    current != "" && /^model = "/ && (wanted == "all" || current == wanted) {
+      print "model = \"" replacement "\""
+      current = ""
+      changed = 1
+      next
+    }
+    { print }
+    END { if (!changed) exit 3 }
+  ' "$config_file" >"$temporary" || {
+    status=$?
+    rm -f "$temporary"
+    [ "$status" -eq 3 ] && printf 'error: agent section not found in CCB config: %s\n' "$model_agent" >&2
+    return 1
+  }
+  chmod 600 "$temporary" && mv "$temporary" "$config_file" || {
+    rm -f "$temporary"
+    printf 'error: cannot update CCB configuration: %s\n' "$config_file" >&2
+    return 1
+  }
+  if [ "$model_agent" = all ]; then
+    printf 'Updated all agent models to %s.\n' "$model_name"
+  else
+    printf 'Updated %s model to %s.\n' "$model_agent" "$model_name"
+  fi
+  printf '%s\n' 'Restart CCB for running agent sessions to use the new model.'
+}
+
 print_manager_prompt() {
   prompt_target=$1 prompt_brief=$2
   case "$prompt_brief" in
@@ -467,7 +574,8 @@ case "$command" in
   monitor)
     case "$#" in
       1) show_usage "$1" ;;
-      2) case "$1" in start) monitor_start "$2" ;; stop) monitor_stop "$2" ;; watch) monitor_watch "$2" ;; price) show_pricing "$2" ;; *) usage >&2; exit 2 ;; esac ;;
+      2) case "$1" in start) monitor_start "$2" ;; stop) monitor_stop "$2" ;; watch) monitor_watch "$2" ;; price) show_pricing "$2" ;; model) show_project_models "$2" ;; *) usage >&2; exit 2 ;; esac ;;
+      4) case "$1" in model) set_project_model "$2" "$3" "$4" ;; *) usage >&2; exit 2 ;; esac ;;
       *) usage >&2; exit 2 ;;
     esac
     exit $?

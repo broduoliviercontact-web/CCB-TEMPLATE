@@ -185,6 +185,8 @@ with open(sys.argv[1], encoding="utf-8") as source:
 assert document["hasCompletedOnboarding"] is True
 ' "$project/.ccb/agents/$agent/provider-state/claude/home/.claude/.claude.json" || fail "Claude Code onboarding state missing for default $agent"
 done
+grep -Fq '`/ask developer` for implementation' "$project/.ccb/agents/manager/CLAUDE.md" || fail 'manager role brief does not force implementation delegation'
+grep -Fq 'Do not run edit tools' "$project/.ccb/agents/manager/CLAUDE.md" || fail 'manager role brief does not forbid direct implementation tools'
 [ -f "$project/CLAUDE.md" ] || fail 'missing shared project CLAUDE.md'
 for skill in ccb-manager-planning ccb-graph-analysis ccb-developer-delivery ccb-reviewer-audit; do
   [ -f "$project/.claude/skills/$skill/SKILL.md" ] || fail "missing default skill $skill"
@@ -206,6 +208,24 @@ grep -A1 -F '[agents.manager]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'mod
 grep -A1 -F '[agents.graph]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "glm-5.2:cloud"' || fail 'graph custom model was not rendered'
 grep -A1 -F '[agents.developer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "qwen3.5:397b-cloud"' || fail 'developer custom model was not rendered'
 grep -A1 -F '[agents.reviewer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.7-code:cloud"' || fail 'reviewer custom model was not rendered'
+run env PATH="$BIN:$PATH" "$ROOT/ccb-template" monitor model "$custom_models"
+[ "$status" -eq 0 ] || fail "model monitor listing failed: $output"
+assert_contains "$output" 'manager'
+assert_contains "$output" 'Installed Cloud models:'
+run env PATH="$BIN:$PATH" "$ROOT/ccb-template" monitor model "$custom_models" developer kimi-k2.7-code:cloud
+[ "$status" -eq 0 ] || fail "model monitor update failed: $output"
+grep -A1 -F '[agents.developer]' "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.7-code:cloud"' || fail 'monitor model did not update developer model'
+assert_contains "$output" 'Restart CCB'
+run env PATH="$BIN:$PATH" "$ROOT/ccb-template" monitor model "$custom_models" all glm-5.2:cloud
+[ "$status" -eq 0 ] || fail "model monitor all update failed: $output"
+for agent in manager graph developer reviewer; do
+  grep -A1 -F "[agents.$agent]" "$custom_models/.ccb/ccb.config" | grep -Fqx 'model = "glm-5.2:cloud"' || fail "monitor model all did not update $agent"
+done
+run env PATH="$BIN:$PATH" "$ROOT/ccb-template" monitor model "$custom_models" developer missing:cloud
+[ "$status" -ne 0 ] || fail 'monitor model accepted an unavailable cloud model'
+assert_contains "$output" 'Ollama Cloud model is not installed'
+run env PATH="$BIN:$PATH" "$ROOT/ccb-template" monitor model "$custom_models" unknown glm-5.2:cloud
+[ "$status" -eq 2 ] || fail 'monitor model accepted an unknown agent'
 
 cli_project="$WORK/cli-project"
 run sh -c "printf '%s\\n' '' n n | env PATH='$TOKEN_BIN:$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$cli_project'"

@@ -141,3 +141,21 @@ ccb
 
 CCB runs in tmux. Detach with `Ctrl-b` then `d`; reattach from a terminal with `tmux attach`.
 Stop an active CCB workspace explicitly with `ccb kill`.
+
+## Change Cloud models later
+
+From the template clone, inspect the current agent models and installed Cloud models:
+
+```sh
+./ccb-template monitor model /chemin/du/projet
+```
+
+Update one agent, or all agents, with an installed model ending in `:cloud`:
+
+```sh
+./ccb-template monitor model /chemin/du/projet developer kimi-k2.7-code:cloud
+./ccb-template monitor model /chemin/du/projet all glm-5.2:cloud
+```
+
+The command updates `.ccb/ccb.config` atomically. Restart CCB after changing models so existing
+Claude Code sessions are recreated with the new model.
