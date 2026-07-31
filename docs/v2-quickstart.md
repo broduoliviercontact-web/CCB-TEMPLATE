@@ -29,7 +29,27 @@ export CCB_PYTHON="$HOME/.venvs/ccb-8.4.3/bin/python"
 
 Do not use `--break-system-packages`.
 
-## 2. Verify Claude Code and Ollama
+## 2. Run doctor
+
+From the template clone, run the standard diagnostic:
+
+```sh
+./ccb-template doctor
+```
+
+It reports all mandatory prerequisites in one pass using `[OK]` and `[MISSING]`. Missing RTK, npx
+or Tilth does not fail the standard diagnostic because those components are optional.
+
+Use the full diagnostic when you plan to enable optional RTK, Tilth or local token monitoring:
+
+```sh
+./ccb-template doctor --full
+```
+
+`doctor --full` still exits with status 1 only when a mandatory prerequisite is missing. Optional
+components are reported as `[WARNING]`.
+
+## 3. Verify Claude Code and Ollama
 
 Claude Code uses Ollama's Anthropic-compatible local endpoint. Set these values in the shell used
 for a manual check; the V2 generated agent configuration writes the harmless literal `ollama` and
@@ -41,7 +61,26 @@ export ANTHROPIC_BASE_URL=http://localhost:11434
 claude --model kimi-k2.7-code:cloud -p 'Reply only: connection check.'
 ```
 
-## 3. Preview and install
+## 4. Create a project
+
+The shortest path derives the project name from the target folder, selects recommended installed
+Cloud models automatically, leaves local monitoring off and asks one main confirmation:
+
+```sh
+./ccb-template init /chemin/du/projet
+```
+
+Use advanced mode only when you want to choose each agent model or enable optional RTK/Tilth or
+local token monitoring:
+
+```sh
+./ccb-template init /chemin/du/projet --advanced
+```
+
+The initializer creates no commit, pushes nothing, deploys nothing and does not start CCB without
+asking after the files are written.
+
+## 5. Non-interactive install
 
 `--profile web` selects the standard built-in asset preset. It is the only preset supported by
 V2.0.0; external or specialized profile directories are not installed.
@@ -66,11 +105,14 @@ Install after reviewing the preflight:
   --yes
 ```
 
-### Token optimization
+### Optional token optimization
 
-Token optimization is enabled by default and integrates the external RTK terminal filter and Tilth
-MCP server. Install and initialize RTK yourself, then confirm npx can resolve
-Tilth:
+The standard install does not require RTK, npx or Tilth. Dependency-free minimalist rules inspired
+by [Ponytail](https://github.com/dietrichgebert/ponytail) are already included in the generated
+agent skills; this is not the full or official Ponytail plugin.
+
+Pass `--token-optimization` or use `init --advanced` to integrate the external RTK terminal filter
+and Tilth MCP server. Install and initialize RTK yourself, then confirm npx can resolve Tilth:
 
 ```sh
 brew install rtk-ai/tap/rtk
@@ -79,7 +121,7 @@ npx tilth --version
 ```
 
 The installer creates `.mcp.json` using the pinned command `npx -y tilth@0.9.0 --mcp` and a concise
-`.claude/rules/token-optimization.md`. Pass `--no-token-optimization` to skip this integration. The bootstrap
+`.claude/rules/token-optimization.md`. The bootstrap
 does not run RTK initialization or replace an existing `.mcp.json`, rule or `CLAUDE.md`. It does
 prewarm Tilth once per managed agent home with `npx -y tilth@0.9.0 --version` and links the local
 Claude Code CLI into each isolated home. It also seeds Claude Code onboarding/project trust state
@@ -87,7 +129,7 @@ so first-start agents do not wait on the theme picker or RTK external-import pro
 primarily terminal output; its estimates do not guarantee a matching reduction in Claude usage.
 Tilth is started by npx when Claude Code starts the MCP server, using the prewarmed isolated cache.
 
-## 4. Validate and start
+## 6. Validate and start
 
 ```sh
 cd /chemin/du/projet

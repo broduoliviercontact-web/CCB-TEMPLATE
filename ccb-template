@@ -2,22 +2,53 @@
 set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")" && pwd)
+. "$ROOT/scripts/v2/common.sh"
+. "$ROOT/scripts/v2/preflight.sh"
+
+DEFAULT_MANAGER_MODEL=glm-5.2:cloud
+DEFAULT_GRAPH_MODEL=qwen3.5:397b-cloud
+DEFAULT_DEVELOPER_MODEL=kimi-k2.7-code:cloud
+DEFAULT_REVIEWER_MODEL=kimi-k2.6:cloud
 
 usage() {
   cat <<'EOF'
-usage: ./ccb-template init [TARGET]
+usage: ./ccb-template doctor [--full]
+       ./ccb-template init [TARGET] [--advanced]
        ./ccb-template brief TARGET
        ./ccb-template manager-prompt TARGET BRIEF_FILE
        ./ccb-template monitor TARGET
        ./ccb-template monitor start|stop|watch|price TARGET
        ./ccb-template start TARGET
 
-Create a new Git project configured with CCB-TEMPLATE. The command interactively
-selects one installed Ollama Cloud model for each permanent CCB agent.
+Create a new Git project configured with CCB-TEMPLATE. The default init flow
+selects available Ollama Cloud models automatically and asks one main
+confirmation before writing. Use init --advanced to choose each model and
+optional RTK, Tilth and local token monitoring integrations.
 
+`doctor` checks mandatory prerequisites. `doctor --full` also checks optional
+RTK, npx, Tilth and local monitoring components.
 `brief` creates a dated execution brief in TARGET/.ccb/briefs/.
 `manager-prompt` prints the prompt to paste into the CCB manager conversation.
 `monitor` is the unified dashboard, service control and local price-estimation interface.
+EOF
+}
+
+init_usage() {
+  cat <<'EOF'
+usage: ./ccb-template init [TARGET] [--advanced]
+
+Default mode:
+  - derives the project name from TARGET
+  - selects recommended installed Ollama Cloud models, with a clear fallback
+  - installs the four CCB agents, minimal development rules and Git
+  - keeps local token monitoring disabled
+  - never commits, pushes, deploys or starts a model
+
+Advanced mode:
+  - choose the model for each agent
+  - enable or disable RTK/Tilth integration
+  - enable or disable local token monitoring
+  - review the full summary before installation
 EOF
 }
 
@@ -323,10 +354,105 @@ choose_model() {
   done
 }
 
+model_is_available() {
+  wanted=$1
+  printf '%s\n' "$cloud_models" | grep -Fqx "$wanted"
+}
+
+select_model_for_role() {
+  role=$1 recommended=$2
+  if model_is_available "$recommended"; then
+    printf '%s\n' "$recommended"
+    return 0
+  fi
+  fallback=$(printf '%s\n' "$cloud_models" | sed -n '1p')
+  [ -n "$fallback" ] || { printf 'error: no installed Ollama Cloud model was found.\n' >&2; return 1; }
+  printf '%s\n' "$fallback"
+  printf '[WARNING] %s recommended model unavailable; using %s\n' "$role" "$fallback" >&2
+}
+
+confirm_default_yes() {
+  prompt=$1
+  printf '%s [Y/n] ' "$prompt"
+  IFS= read -r answer || exit 1
+  case "$answer" in n|N|no|NO) return 1 ;; *) return 0 ;; esac
+}
+
+validate_init_target() {
+  [ -n "$target" ] || { printf '%s\n' 'error: project directory is required.' >&2; exit 1; }
+  parent=$(dirname "$target")
+  [ -d "$parent" ] || { printf 'error: project parent does not exist: %s\n' "$parent" >&2; exit 1; }
+  if [ -e "$target" ]; then
+    [ -d "$target" ] && [ ! -L "$target" ] || { printf 'error: project directory is unsafe: %s\n' "$target" >&2; exit 1; }
+    [ -z "$(find "$target" -mindepth 1 -maxdepth 1 -print -quit)" ] || { printf 'error: project directory must be empty: %s\n' "$target" >&2; exit 1; }
+  fi
+}
+
+run_init_doctor() {
+  printf 'Checking prerequisites...\n'
+  if ! v2_doctor_check_standard "$ROOT"; then
+    printf '%s\n' 'Cannot create the project until the missing prerequisites above are fixed.' >&2
+    exit 1
+  fi
+  cloud_models=$v2_doctor_cloud_models
+  [ -n "$cloud_models" ] || { printf '%s\n' 'error: no installed Ollama Cloud model was found.' >&2; exit 1; }
+}
+
+install_generated_project() {
+  "$ROOT/install.sh" "$target" --name "$name" --profile web --claude-ollama-cloud \
+    --manager-model "$manager_model" --graph-model "$graph_model" \
+    --developer-model "$developer_model" --reviewer-model "$reviewer_model" \
+    "$token_option" $monitor_option --yes
+  git -C "$target" init >/dev/null
+  printf 'Git repository initialised: %s/.git\n' "$target"
+}
+
+post_create_prompts() {
+  if is_monitored_project "$target"; then
+    monitor_start "$target"
+    printf 'Open a live token monitoring terminal? [y/N] '
+    IFS= read -r terminal_answer || exit 1
+    case "$terminal_answer" in y|Y|yes|YES) open_monitor_terminal "$target" ;; *) : ;; esac
+  fi
+  printf 'Create an initial CCB brief now? [y/N] '
+  IFS= read -r brief_answer || exit 1
+  case "$brief_answer" in
+    y|Y|yes|YES) write_brief "$target" initial-brief ;;
+    *) : ;;
+  esac
+  printf 'Start CCB now? [Y/n] '
+  IFS= read -r start_answer || exit 1
+  case "$start_answer" in
+    n|N|no|NO) if is_monitored_project "$target"; then printf 'CCB was not started. Run: %s start %s\n' "$ROOT/ccb-template" "$target"; else printf 'CCB was not started. Run: cd %s && ccb\n' "$target"; fi ;;
+    *) if is_monitored_project "$target"; then monitor_start "$target"; fi; cd "$target" && exec ccb ;;
+  esac
+}
+
 [ "$#" -gt 0 ] || { usage >&2; exit 2; }
 command=$1
 shift
 case "$command" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  doctor)
+    full=0
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --full) full=1 ;;
+        -h|--help) printf 'usage: ./ccb-template doctor [--full]\n'; exit 0 ;;
+        *) printf 'error: unknown doctor argument: %s\n' "$1" >&2; exit 2 ;;
+      esac
+      shift
+    done
+    if [ "$full" -eq 1 ]; then
+      v2_doctor_check_full "$ROOT"
+    else
+      v2_doctor_check_standard "$ROOT"
+    fi
+    exit $?
+    ;;
   brief)
     [ "$#" -eq 1 ] || { usage >&2; exit 2; }
     write_brief "$1" "brief-$(date +%Y%m%d-%H%M%S)"
@@ -350,76 +476,70 @@ case "$command" in
     if is_monitored_project "$1"; then monitor_start "$1"; fi
     cd "$1" && exec ccb
     ;;
-  init) [ "$#" -le 1 ] || { usage >&2; exit 2; } ;;
+  init)
+    advanced=0
+    target=
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --advanced) advanced=1 ;;
+        -h|--help) init_usage; exit 0 ;;
+        -*) printf 'error: unknown init argument: %s\n' "$1" >&2; exit 2 ;;
+        *) [ -z "$target" ] || { usage >&2; exit 2; }; target=$1 ;;
+      esac
+      shift
+    done
+    ;;
   *) usage >&2; exit 2 ;;
 esac
 
-command -v ollama >/dev/null 2>&1 || { printf '%s\n' 'error: Ollama is required and must be running.' >&2; exit 1; }
-command -v git >/dev/null 2>&1 || { printf '%s\n' 'error: git is required to initialise the project.' >&2; exit 1; }
-cloud_models=$(ollama list 2>/dev/null | awk 'NR > 1 && $1 ~ /:.*cloud$/ { print $1 }') || {
-  printf '%s\n' 'error: Ollama is not reachable; start it and retry.' >&2
-  exit 1
-}
-[ -n "$cloud_models" ] || {
-  printf '%s\n' 'error: no installed Ollama Cloud model was found; pull one ending in :cloud and retry.' >&2
-  exit 1
-}
-
-target=${1:-}
 if [ -z "$target" ]; then
   printf 'Project directory: '
   IFS= read -r target || exit 1
 fi
-[ -n "$target" ] || { printf '%s\n' 'error: project directory is required.' >&2; exit 1; }
-parent=$(dirname "$target")
-[ -d "$parent" ] || { printf 'error: project parent does not exist: %s\n' "$parent" >&2; exit 1; }
-if [ -e "$target" ]; then
-  [ -d "$target" ] && [ ! -L "$target" ] || { printf 'error: project directory is unsafe: %s\n' "$target" >&2; exit 1; }
-  [ -z "$(find "$target" -mindepth 1 -maxdepth 1 -print -quit)" ] || { printf 'error: project directory must be empty: %s\n' "$target" >&2; exit 1; }
+validate_init_target
+run_init_doctor
+name=$(basename "$target")
+
+if [ "$advanced" -eq 1 ]; then
+  printf 'Project name [%s]: ' "$name"
+  IFS= read -r entered_name || exit 1
+  [ -n "$entered_name" ] && name=$entered_name
+
+  manager_model=$(choose_model manager)
+  graph_model=$(choose_model graph)
+  developer_model=$(choose_model developer)
+  reviewer_model=$(choose_model reviewer)
+
+  printf '\nEnable optional RTK + Tilth integration? [y/N] '
+  IFS= read -r token_answer || exit 1
+  case "$token_answer" in y|Y|yes|YES) token_option=--token-optimization; token_summary='[ON] RTK + Tilth integration' ;; *) token_option=--no-token-optimization; token_summary='[OFF] RTK + Tilth integration' ;; esac
+  printf 'Enable local token monitoring proxy? [y/N] '
+  IFS= read -r monitor_answer || exit 1
+  case "$monitor_answer" in y|Y|yes|YES) monitor_option=--token-monitoring; monitor_summary='[ON] local token monitoring' ;; *) monitor_option=; monitor_summary='[OFF] local token monitoring' ;; esac
+
+  printf '\nProject: %s\nName: %s\nManager: %s\nGraph: %s\nDeveloper: %s\nReviewer: %s\n%s\n%s\n[OK] Git will be initialized\n' \
+    "$target" "$name" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model" "$token_summary" "$monitor_summary"
+  confirm_default_yes 'Create the project?' || { printf '%s\n' 'Cancelled.'; exit 0; }
+else
+  manager_model=$(select_model_for_role manager "$DEFAULT_MANAGER_MODEL")
+  graph_model=$(select_model_for_role graph "$DEFAULT_GRAPH_MODEL")
+  developer_model=$(select_model_for_role developer "$DEFAULT_DEVELOPER_MODEL")
+  reviewer_model=$(select_model_for_role reviewer "$DEFAULT_REVIEWER_MODEL")
+  token_option=--no-token-optimization
+  monitor_option=
+
+  printf '\nProject: %s\n\nRecommended configuration:\n' "$name"
+  printf '[OK] 4 CCB agents\n'
+  if [ "$manager_model" = "$DEFAULT_MANAGER_MODEL" ] && [ "$graph_model" = "$DEFAULT_GRAPH_MODEL" ] && [ "$developer_model" = "$DEFAULT_DEVELOPER_MODEL" ] && [ "$reviewer_model" = "$DEFAULT_REVIEWER_MODEL" ]; then
+    printf '[OK] Ollama Cloud models selected automatically\n'
+  else
+    printf '[WARNING] Some recommended models are unavailable; installed Cloud fallbacks were selected\n'
+  fi
+  printf '[OK] minimal development rules\n'
+  printf '[OK] Git will be initialized\n'
+  printf '[OFF] local token monitoring\n\n'
+  confirm_default_yes 'Create the project?' || { printf '%s\n' 'Cancelled.'; exit 0; }
 fi
 
-printf 'Project name [%s]: ' "$(basename "$target")"
-IFS= read -r name || exit 1
-[ -n "$name" ] || name=$(basename "$target")
-
-manager_model=$(choose_model manager)
-graph_model=$(choose_model graph)
-developer_model=$(choose_model developer)
-reviewer_model=$(choose_model reviewer)
-
-printf '\nEnable token optimization (RTK + Tilth)? [Y/n] '
-IFS= read -r token_answer || exit 1
-case "$token_answer" in n|N|no|NO) token_option=--no-token-optimization ;; *) token_option=--token-optimization ;; esac
-printf 'Enable local token monitoring proxy? [y/N] '
-IFS= read -r monitor_answer || exit 1
-case "$monitor_answer" in y|Y|yes|YES) monitor_option=--token-monitoring ;; *) monitor_option= ;; esac
-
-printf '\nProject: %s\nManager: %s\nGraph: %s\nDeveloper: %s\nReviewer: %s\nGit: initialise repository\nContinue? [y/N] ' \
-  "$target" "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"
-IFS= read -r confirm || exit 1
-case "$confirm" in y|Y|yes|YES) : ;; *) printf '%s\n' 'Cancelled.'; exit 0 ;; esac
-
-"$ROOT/install.sh" "$target" --name "$name" --profile web --claude-ollama-cloud \
-  --manager-model "$manager_model" --graph-model "$graph_model" \
-  --developer-model "$developer_model" --reviewer-model "$reviewer_model" \
-  "$token_option" $monitor_option --yes
-git -C "$target" init >/dev/null
-printf 'Git repository initialised: %s/.git\n' "$target"
-if is_monitored_project "$target"; then
-  monitor_start "$target"
-  printf 'Open a live token monitoring terminal? [y/N] '
-  IFS= read -r terminal_answer || exit 1
-  case "$terminal_answer" in y|Y|yes|YES) open_monitor_terminal "$target" ;; *) : ;; esac
-fi
-printf 'Create an initial CCB brief now? [y/N] '
-IFS= read -r brief_answer || exit 1
-case "$brief_answer" in
-  y|Y|yes|YES) write_brief "$target" initial-brief ;;
-  *) : ;;
-esac
-printf 'Start CCB now? [Y/n] '
-IFS= read -r start_answer || exit 1
-case "$start_answer" in
-  n|N|no|NO) if is_monitored_project "$target"; then printf 'CCB was not started. Run: %s start %s\n' "$ROOT/ccb-template" "$target"; else printf 'CCB was not started. Run: cd %s && ccb\n' "$target"; fi ;;
-  *) if is_monitored_project "$target"; then monitor_start "$target"; fi; cd "$target" && exec ccb ;;
-esac
+install_generated_project
+post_create_prompts

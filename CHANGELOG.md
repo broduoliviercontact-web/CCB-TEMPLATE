@@ -4,13 +4,19 @@
 
 ### Changed
 
-- Enable the RTK and Tilth token-optimization integration by default; add
-  `--no-token-optimization` for an explicit opt-out while retaining `--token-optimization`.
+- Make the default setup path lighter: RTK, npx and Tilth are optional and enabled only through
+  `--token-optimization` or `ccb-template init --advanced`.
+- Keep dependency-free minimal delivery rules in the four generated agent skills, with attribution
+  to Ponytail inspiration but no Ponytail plugin dependency.
 
 ### Added
 
-- Interactive `ccb-template init` project creation with per-agent Ollama Cloud model selection
-  and Git repository initialization.
+- `ccb-template doctor` with `[OK]`, `[WARNING]` and `[MISSING]` states, plus `doctor --full` for
+  optional RTK, npx, Tilth and local monitoring checks.
+- Simple interactive `ccb-template init` project creation with automatic Cloud model selection,
+  one main confirmation and Git repository initialization.
+- `ccb-template init --advanced` for per-agent Ollama Cloud model selection and optional
+  RTK/Tilth and token-monitoring choices.
 - Per-project token-monitor ports with persistent recovery metadata and proxy integration tests.
 
 ### Fixed

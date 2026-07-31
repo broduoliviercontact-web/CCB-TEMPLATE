@@ -30,16 +30,22 @@ isolated agents.
 
 No template action pushes, deploys or interprets a model response.
 
-## Token optimization
+## Minimal guidance and optional token optimization
 
-By default, the bootstrap adds only project-native Claude Code inputs:
+By default, the bootstrap installs four project-local skills with concise, dependency-free delivery
+rules inspired by Ponytail. They ask the agents to verify need, reuse existing code, prefer native
+or standard features, keep changes small and preserve validation, security, accessibility, error
+handling and data-loss protection. CCB-TEMPLATE does not install the Ponytail plugin or add it as a
+dependency.
+
+When `--token-optimization` is selected, the bootstrap also adds project-native Claude Code inputs:
 `.mcp.json` configures the pinned Tilth stdio server through `npx`, and
 `.claude/rules/token-optimization.md` provides concise usage guidance for Tilth and RTK. RTK
 and Tilth remain external tools; the bootstrap does not install or initialize RTK. It does prewarm
 the pinned Tilth npm package once per managed Claude Code home and links the local Claude Code CLI
 into those isolated homes to avoid first-start MCP timeouts. It also seeds Claude Code onboarding
 and generated-project trust state so newly generated agents can start without waiting for the native
-theme picker or RTK external-import prompt. Pass `--no-token-optimization` to omit these inputs.
+theme picker or RTK external-import prompt.
 
 CCB 8.4.3 projects each Claude agent into an isolated managed home. Its documented MCP
 projection includes current project/workspace MCP metadata when configuration inheritance is

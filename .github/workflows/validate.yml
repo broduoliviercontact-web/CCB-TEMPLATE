@@ -24,6 +24,7 @@ jobs:
           sh -n scripts/v2/render-config.sh
           sh -n scripts/v2/install-assets.sh
           sh -n tests/test-v2-install.sh
+          sh -n tests/test-v2-doctor.sh
           sh -n tests/test-v2-docs.sh
           sh -n tests/test-v2-clean-tree.sh
           sh -n tests/test-v2-release.sh
@@ -31,6 +32,7 @@ jobs:
       - name: Run V2 bootstrap and token-optimization tests
         run: |
           ./tests/test-v2-install.sh
+          ./tests/test-v2-doctor.sh
           ./tests/test-v2-docs.sh
           ./tests/test-v2-clean-tree.sh
           ./tests/test-v2-release.sh
