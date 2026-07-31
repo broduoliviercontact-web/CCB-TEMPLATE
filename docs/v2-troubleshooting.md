@@ -41,8 +41,12 @@ rtk init -g
 ```
 
 The integration also requires `npx`; install Node.js/npm through their official distribution, then
-check `npx tilth --version`. Tilth is not downloaded during bootstrap: Claude Code later starts
-the project MCP command `npx -y tilth@0.9.0 --mcp`. If an existing `.mcp.json` is invalid or its
-`mcpServers` member is not an object, repair it manually and retry; the bootstrap leaves it
-unchanged on refusal. Existing `.claude/rules/token-optimization.md` files are preserved.
-Use `--no-token-optimization` when this integration is not wanted.
+check `npx tilth --version`. During installation, the bootstrap runs
+`npx -y tilth@0.9.0 --version` once with each managed agent home as `HOME`, then Claude Code later
+starts the project MCP command `npx -y tilth@0.9.0 --mcp` from the warmed cache. The bootstrap also
+seeds Claude Code onboarding and generated-project trust state in each isolated agent home; if
+agents still stop on the theme picker or RTK external-import prompt, restart from a project
+generated with the current template. If an existing `.mcp.json` is invalid or its `mcpServers`
+member is not an object, repair it manually and retry; the bootstrap leaves it unchanged on refusal.
+Existing `.claude/rules/token-optimization.md` files are preserved. Use `--no-token-optimization`
+when this integration is not wanted.

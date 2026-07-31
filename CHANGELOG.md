@@ -15,6 +15,9 @@
 
 ### Fixed
 
+- Prewarm Tilth in each isolated Claude Code agent home, seed Claude Code onboarding/project-trust
+  state and add the expected Claude Code CLI link, avoiding first-start theme/import prompts and
+  MCP timeouts when all four CCB agents launch together.
 - Align the generated CCB topology with the four permanent roles supported by the current CCB
   governance: manager, graph, developer and reviewer.
 - Keep CCB runtime state and Graphify outputs out of the repository worktree.
