@@ -6,12 +6,15 @@ description: Plan and delegate a scoped CCB task without changing application fi
 # Manager planning
 
 1. State the outcome, scope, assumptions and acceptance criteria.
-2. Break the work into independent investigation, implementation and review steps.
-3. Assign each step to the appropriate permanent role.
-4. Track risks, dependencies and validation required for completion.
-5. Keep the plan inside the validated scope and separate mandatory work from optional ideas.
-6. Refuse speculative feature batches, unrequested abstractions and nonessential dependencies.
-7. Delegate without duplicating the graph, developer or reviewer work.
-8. Use `/ask graph` for analysis, `/ask developer` for implementation and `/ask reviewer` for validation.
-
-Do not edit files, run implementation commands, create commits or implement application changes.
+2. Classify complexity: SIMPLE / NORMAL / COMPLEX. Pick the smallest agent
+   set that reaches the required confidence. Graph only on demand.
+3. Materialise the task as a TASK PACKET with
+   `./ccb-template task create TARGET BRIEF_FILE --complexity ...`. The packet
+   is a compact pointer; omit any field that does not materially help the
+   next agent.
+4. Delegate to developer for implementation, reviewer for validation, graph
+   only when dependencies or impact are ambiguous.
+5. Refuse speculative feature batches, unrequested abstractions and
+   nonessential dependencies.
+6. Consolidate results before declaring completion. Never implement, edit or
+   commit yourself.

@@ -21,7 +21,7 @@ require "$ROOT/README.md" 'rtk init -g'
 require "$ROOT/README.md" 'tilth@0.9.0'
 require "$ROOT/README.md" './ccb-template monitor model /chemin/du/projet'
 
-for document in docs/v2-quickstart.md docs/v2-architecture.md docs/v2-migration-from-v1.md docs/v2-troubleshooting.md; do
+for document in docs/v2-quickstart.md docs/v2-architecture.md docs/v2-migration-from-v1.md docs/v2-troubleshooting.md docs/v2-complexity-router.md docs/v2-reviewer-diff-first.md docs/v2-context-packet.md docs/v2-quality-token-metrics.md; do
   [ -f "$ROOT/$document" ] || fail "missing $document"
   if grep -F -- '--break-system-packages' "$ROOT/$document" | grep -Eiv 'do not use.*--break-system-packages|--break-system-packages.*do not use' >/dev/null; then fail "$document recommends --break-system-packages"; fi
   if grep -Fq 'qwen3-coder:480b-cloud' "$ROOT/$document"; then fail "$document mentions retired model"; fi

@@ -23,11 +23,20 @@ jobs:
           sh -n scripts/v2/preflight.sh
           sh -n scripts/v2/render-config.sh
           sh -n scripts/v2/install-assets.sh
+          sh -n scripts/v2/complexity-router.sh
+          sh -n scripts/v2/context-packet.sh
+          sh -n scripts/v2/metrics.sh
+          python3 -m py_compile scripts/v2/metrics_aggregate.py
+          python3 -m py_compile tests/_proxy_attr_harness.py
           sh -n tests/test-v2-install.sh
           sh -n tests/test-v2-doctor.sh
           sh -n tests/test-v2-docs.sh
           sh -n tests/test-v2-clean-tree.sh
           sh -n tests/test-v2-release.sh
+          sh -n tests/test-v2-complexity-router.sh
+          sh -n tests/test-v2-reviewer-diff-first.sh
+          sh -n tests/test-v2-context-packet.sh
+          sh -n tests/test-v2-metrics.sh
           sh -n tests/test-token-proxy.sh
       - name: Run V2 bootstrap and token-optimization tests
         run: |
@@ -36,4 +45,9 @@ jobs:
           ./tests/test-v2-docs.sh
           ./tests/test-v2-clean-tree.sh
           ./tests/test-v2-release.sh
+          ./tests/test-v2-complexity-router.sh
+          ./tests/test-v2-reviewer-diff-first.sh
+          ./tests/test-v2-context-packet.sh
+          ./tests/test-v2-metrics.sh
+          ./tests/test-v2-telemetry.sh
           ./tests/test-token-proxy.sh

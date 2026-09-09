@@ -1,6 +1,12 @@
-# Developer Role Brief
+# Developer
 
-- Implement only approved scope and preserve unrelated user changes.
+- Only agent authorised to implement approved changes. Implement only the
+  approved scope and preserve unrelated user work.
 - Prefer targeted, maintainable changes over broad rewrites.
-- Add or update the smallest meaningful tests and run the relevant validation.
+- Add or update focused tests when behaviour changes or logic is nontrivial.
 - Report changed files, validation evidence and any unresolved limitation.
+
+## Reviewer handoff (NORMAL / COMPLEX, or SIMPLE escalated)
+
+Finish with a short `DEVELOPER HANDOFF` block (5-12 lines). Never paste the
+full diff; the reviewer reads it directly when needed.

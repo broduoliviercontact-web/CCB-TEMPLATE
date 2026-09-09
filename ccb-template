@@ -4,6 +4,9 @@ set -eu
 ROOT=$(CDPATH= cd "$(dirname "$0")" && pwd)
 . "$ROOT/scripts/v2/common.sh"
 . "$ROOT/scripts/v2/preflight.sh"
+. "$ROOT/scripts/v2/complexity-router.sh"
+. "$ROOT/scripts/v2/context-packet.sh"
+. "$ROOT/scripts/v2/metrics.sh"
 
 DEFAULT_MANAGER_MODEL=glm-5.2:cloud
 DEFAULT_GRAPH_MODEL=qwen3.5:397b-cloud
@@ -15,10 +18,19 @@ usage() {
 usage: ./ccb-template doctor [--full]
        ./ccb-template init [TARGET] [--advanced]
        ./ccb-template brief TARGET
-       ./ccb-template manager-prompt TARGET BRIEF_FILE
+       ./ccb-template task create TARGET BRIEF_FILE [--complexity simple|normal|complex] [--id TASK_ID]
+       ./ccb-template task show TARGET TASK_ID
+       ./ccb-template task delivery TARGET TASK_ID [--changed FILE,...] [--validation CMD -> RESULT,...] [--summary TEXT] [--notes TEXT]
+       ./ccb-template task outcome TARGET TASK_ID [--status accepted|needs_fix|failed|abandoned] [--tests pass|fail|unknown] [--review pass|findings|skipped] [--escalated true|false] [--rework N]
+       ./ccb-template task review-input TARGET TASK_ID
+       ./ccb-template manager-prompt TARGET BRIEF_FILE [--complexity simple|normal|complex]
+       ./ccb-template classify TARGET BRIEF_FILE
+       ./ccb-template route [simple|normal|complex]
        ./ccb-template monitor TARGET
        ./ccb-template monitor start|stop|watch|price TARGET
        ./ccb-template monitor model TARGET [manager|graph|developer|reviewer|all MODEL]
+       ./ccb-template monitor task TARGET TASK_ID
+       ./ccb-template monitor tasks TARGET
        ./ccb-template start TARGET
 
 Create a new Git project configured with CCB-TEMPLATE. The default init flow
@@ -30,7 +42,19 @@ local token monitoring.
 `doctor` checks mandatory prerequisites. `doctor --full` also checks optional
 RTK, npx, Tilth and local monitoring components.
 `brief` creates a dated execution brief in TARGET/.ccb/briefs/.
+`task create` initialises a Context Packet (TASK PACKET) for a brief at
+  TARGET/.ccb/tasks/<id>/task.md. `--id` overrides the default id derived
+  from the brief filename.
+`task delivery` writes the DELIVERY DELTA (changed files, validation,
+  summary, notes) for an existing task.
+`task review-input` prints the compact markdown the reviewer reads as its
+  starting point: TASK PACKET + DELIVERY DELTA + a pointer to `git diff`.
+`task show` prints the packet and delta for the given task id.
 `manager-prompt` prints the prompt to paste into the CCB manager conversation.
+  `--complexity simple|normal|complex` adds the matching routing rules so the
+  manager uses the smallest agent set that reaches the required confidence.
+`classify` recommends a complexity level from a brief (heuristic, advisory).
+`route` prints the routing summary for a complexity level.
 `monitor` is the unified dashboard, service control, model selection and local
 price-estimation interface.
 EOF
@@ -93,6 +117,14 @@ monitor_restore_assets() {
     chmod 600 "$restore_dir/pricing.json"
     printf '%s\n' 'Restored token monitor pricing configuration.'
   fi
+  # active-task file defaults to a valid empty JSON object so every reader
+  # always parses it cleanly. CLI commands overwrite it as the lifecycle
+  # progresses.
+  if [ -L "$restore_dir/active-task" ]; then rm -f "$restore_dir/active-task"; fi
+  if [ ! -e "$restore_dir/active-task" ]; then
+    printf '{}\n' > "$restore_dir/active-task"
+    chmod 600 "$restore_dir/active-task"
+  fi
 }
 
 monitor_port_for() {
@@ -145,7 +177,7 @@ monitor_start() {
   "$monitor_python" -c 'import aiohttp' >/dev/null 2>&1 || { printf 'error: token monitor Python needs aiohttp: %s\n' "$monitor_python" >&2; return 1; }
   monitor_port=$(monitor_port_for "$monitor_target")
   monitor_config_matches_port "$monitor_target" "$monitor_port"
-  nohup "$monitor_python" "$monitor_target/.ccb/token-proxy.py" --upstream http://127.0.0.1:11434 --port "$monitor_port" --metrics "$monitor_dir/usage.jsonl" >"$monitor_dir/proxy.log" 2>&1 &
+  nohup "$monitor_python" "$monitor_target/.ccb/token-proxy.py" --upstream http://127.0.0.1:11434 --port "$monitor_port" --metrics "$monitor_dir/usage.jsonl" --active-task "$monitor_dir/active-task" >"$monitor_dir/proxy.log" 2>&1 &
   printf '%s\n' "$!" >"$monitor_pid"
   attempts=0
   while [ "$attempts" -lt 20 ]; do
@@ -395,7 +427,7 @@ set_project_model() {
 }
 
 print_manager_prompt() {
-  prompt_target=$1 prompt_brief=$2
+  prompt_target=$1 prompt_brief=$2 complexity_level=$3
   case "$prompt_brief" in
     *'/'*|*'..'*) printf '%s\n' 'error: brief file must be a filename inside .ccb/briefs.' >&2; return 1 ;;
   esac
@@ -403,15 +435,33 @@ print_manager_prompt() {
     printf 'error: brief not found: %s/.ccb/briefs/%s\n' "$prompt_target" "$prompt_brief" >&2
     return 1
   }
+  if [ -n "$complexity_level" ]; then
+    v2_complexity_is_valid "$complexity_level" || {
+      printf 'error: unknown complexity level: %s\n' "$complexity_level" >&2
+      printf '%s\n' 'expected: simple, normal or complex' >&2
+      return 1
+    }
+  fi
   cat <<EOF
 You are the CCB manager for this project.
 
 Read .ccb/briefs/$prompt_brief and treat it as the requested scope.
-First confirm the objective, assumptions, acceptance criteria and risks. Then delegate architecture
-analysis to graph, implementation only to developer, and independent validation to reviewer.
-Follow .ccb/AGENT_POLICY.md and do not modify application files yourself. Report concise progress,
-validation evidence and any decision that needs the user's approval.
+First confirm the objective, assumptions, acceptance criteria and risks.
+Follow .ccb/AGENT_POLICY.md and do not modify application files yourself.
+Use the smallest agent set that reaches the required confidence:
+- developer is the only agent authorised to implement approved changes;
+- reviewer is read-only and reports risks and validation evidence;
+- graph is read-only and MUST stay on demand; do not invoke it for local
+  edits, isolated fixes, formatting, simple CSS or any task whose affected
+  files are already known;
+- delegate implementation to developer and independent validation to reviewer
+  before reporting completion.
+Report concise progress, validation evidence and any decision that needs the
+user's approval.
 EOF
+  if [ -n "$complexity_level" ]; then
+    v2_complexity_prompt_block "$complexity_level"
+  fi
 }
 
 write_brief() {
@@ -567,14 +617,388 @@ case "$command" in
     exit $?
     ;;
   manager-prompt)
-    [ "$#" -eq 2 ] || { usage >&2; exit 2; }
-    print_manager_prompt "$1" "$2"
+    complexity_level=
+    case "${1:-}" in
+      -h|--help) printf 'usage: ./ccb-template manager-prompt TARGET BRIEF_FILE [--complexity simple|normal|complex]\n'; exit 0 ;;
+    esac
+    case "$#" in
+      2) : ;;
+      4) case "$3" in
+            --complexity) complexity_level=$4 ;;
+            *) usage >&2; exit 2 ;;
+          esac ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    print_manager_prompt "$1" "$2" "$complexity_level"
     exit $?
+    ;;
+  classify)
+    [ "$#" -eq 2 ] || { printf '%s\n' 'usage: ./ccb-template classify TARGET BRIEF_FILE' >&2; exit 2; }
+    brief_dir=$1/.ccb/briefs
+    brief_file=$brief_dir/$2
+    [ ! -L "$brief_dir" ] || { printf 'error: unsafe brief directory.\n' >&2; exit 1; }
+    [ -f "$brief_file" ] && [ ! -L "$brief_file" ] || { printf 'error: brief not found: %s\n' "$brief_file" >&2; exit 1; }
+    v2_complexity_classify_brief "$brief_file"
+    exit $?
+    ;;
+  route)
+    [ "$#" -eq 1 ] || { printf '%s\n' 'usage: ./ccb-template route [simple|normal|complex]' >&2; exit 2; }
+    v2_complexity_route "$1"
+    exit $?
+    ;;
+  task)
+    [ "$#" -gt 0 ] || { printf '%s\n' 'usage: ./ccb-template task <create|show|delivery|review-input> ...' >&2; exit 2; }
+    task_subcommand=$1
+    shift
+    case "$task_subcommand" in
+      create)
+        complexity_level=normal
+        task_id=
+        if [ "$#" -lt 2 ]; then
+          printf '%s\n' 'usage: ./ccb-template task create TARGET BRIEF_FILE [--complexity simple|normal|complex] [--id TASK_ID]' >&2; exit 2
+        fi
+        packet_target=$1
+        packet_brief=$2
+        shift 2
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --complexity)
+              [ "$#" -ge 2 ] || { printf 'error: --complexity requires a value\n' >&2; exit 2; }
+              complexity_level=$2
+              shift 2
+              ;;
+            --id)
+              [ "$#" -ge 2 ] || { printf 'error: --id requires a value\n' >&2; exit 2; }
+              task_id=$2
+              shift 2
+              ;;
+            -h|--help)
+              printf 'usage: ./ccb-template task create TARGET BRIEF_FILE [--complexity simple|normal|complex] [--id TASK_ID]\n'
+              exit 0
+              ;;
+            *)
+              printf 'error: unknown task create argument: %s\n' "$1" >&2
+              exit 2
+              ;;
+          esac
+        done
+        if [ -z "$task_id" ]; then task_id=${packet_brief%.md}; fi
+        v2_packet_create "$packet_target" "$task_id" "$complexity_level" "$packet_brief"
+        # Activate the task for token attribution: every proxy event from
+        # now until the next deactivate will carry this task_id plus the
+        # initial complexity. The active-task file is local, contains only
+        # IDs, and is read by the proxy on each request.
+        monitor_dir=$packet_target/.ccb/token-monitor
+        [ ! -L "$monitor_dir" ] || monitor_dir=
+        if [ -n "$monitor_dir" ]; then
+          mkdir -p "$monitor_dir"
+          if [ ! -e "$monitor_dir/active-task" ] && [ ! -L "$monitor_dir/active-task" ]; then
+            printf '{}\n' > "$monitor_dir/active-task"
+            chmod 600 "$monitor_dir/active-task" 2>/dev/null || true
+          fi
+          v2_metrics_set_active "$packet_target" "$task_id" \
+            "$complexity_level" "$complexity_level" >/dev/null 2>&1 || true
+        fi
+        exit $?
+        ;;
+      activate)
+        if [ "$#" -ne 2 ]; then
+          printf '%s\n' 'usage: ./ccb-template task activate TARGET TASK_ID' >&2
+          exit 2
+        fi
+        activate_target=$1 activate_id=$2
+        initial_complexity=
+        if [ -f "$activate_target/.ccb/tasks/$activate_id/task.md" ] \
+           && [ ! -L "$activate_target/.ccb/tasks/$activate_id/task.md" ]; then
+          initial_complexity=$(sed -n 's/^Complexity:[[:space:]]*//p' \
+            "$activate_target/.ccb/tasks/$activate_id/task.md" | head -1)
+        fi
+        [ -n "$initial_complexity" ] || {
+          printf 'error: cannot activate a task without an initial complexity (run task create first).\n' >&2
+          exit 1
+        }
+        v2_complexity_is_valid "$initial_complexity" || {
+          printf 'error: invalid stored complexity: %s\n' "$initial_complexity" >&2
+          exit 1
+        }
+        v2_metrics_set_active "$activate_target" "$activate_id" \
+          "$initial_complexity" "$initial_complexity"
+        printf 'Task activated: %s (initial=%s)\n' "$activate_id" "$initial_complexity"
+        exit $?
+        ;;
+      deactivate)
+        if [ "$#" -ne 2 ]; then
+          printf '%s\n' 'usage: ./ccb-template task deactivate TARGET TASK_ID' >&2
+          exit 2
+        fi
+        v2_metrics_clear_active "$1"
+        printf 'Active task cleared.\n'
+        exit $?
+        ;;
+      show)
+        if [ "$#" -ne 2 ]; then
+          printf '%s\n' 'usage: ./ccb-template task show TARGET TASK_ID' >&2; exit 2
+        fi
+        v2_packet_show "$1" "$2"
+        exit $?
+        ;;
+      delivery)
+        changed= validation= summary= notes=
+        if [ "$#" -lt 2 ]; then
+          printf '%s\n' 'usage: ./ccb-template task delivery TARGET TASK_ID [--changed FILE,...] [--validation CMD -> RESULT,...] [--summary TEXT] [--notes TEXT]' >&2; exit 2
+        fi
+        packet_target=$1
+        packet_id=$2
+        shift 2
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --changed)
+              [ "$#" -ge 2 ] || { printf 'error: --changed requires a value\n' >&2; exit 2; }
+              changed=$2
+              shift 2
+              ;;
+            --validation)
+              [ "$#" -ge 2 ] || { printf 'error: --validation requires a value\n' >&2; exit 2; }
+              validation=$2
+              shift 2
+              ;;
+            --summary)
+              [ "$#" -ge 2 ] || { printf 'error: --summary requires a value\n' >&2; exit 2; }
+              summary=$2
+              shift 2
+              ;;
+            --notes)
+              [ "$#" -ge 2 ] || { printf 'error: --notes requires a value\n' >&2; exit 2; }
+              notes=$2
+              shift 2
+              ;;
+            -h|--help)
+              printf 'usage: ./ccb-template task delivery TARGET TASK_ID [--changed FILE,...] [--validation CMD -> RESULT,...] [--summary TEXT] [--notes TEXT]\n'
+              exit 0
+              ;;
+            *)
+              printf 'error: unknown task delivery argument: %s\n' "$1" >&2
+              exit 2
+              ;;
+          esac
+        done
+        if [ -z "$changed" ]; then changed=$(v2_packet_git_changed "$packet_target"); fi
+        v2_packet_delivery "$packet_target" "$packet_id" "$changed" "$validation" "$summary" "$notes"
+        exit $?
+        ;;
+      review-input)
+        if [ "$#" -ne 2 ]; then
+          printf '%s\n' 'usage: ./ccb-template task review-input TARGET TASK_ID' >&2; exit 2
+        fi
+        v2_packet_review_input "$1" "$2"
+        exit $?
+        ;;
+      outcome)
+        outcome_status= outcome_tests= outcome_review= outcome_escalated= outcome_rework=
+        if [ "$#" -lt 2 ]; then
+          printf '%s\n' 'usage: ./ccb-template task outcome TARGET TASK_ID [--status accepted|needs_fix|failed|abandoned] [--tests pass|fail|unknown] [--review pass|findings|skipped] [--escalated true|false] [--rework N]' >&2
+          exit 2
+        fi
+        outcome_target=$1
+        outcome_task=$2
+        shift 2
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --status)
+              [ "$#" -ge 2 ] || { printf 'error: --status requires a value\n' >&2; exit 2; }
+              outcome_status=$2; shift 2 ;;
+            --tests)
+              [ "$#" -ge 2 ] || { printf 'error: --tests requires a value\n' >&2; exit 2; }
+              outcome_tests=$2; shift 2 ;;
+            --review)
+              [ "$#" -ge 2 ] || { printf 'error: --review requires a value\n' >&2; exit 2; }
+              outcome_review=$2; shift 2 ;;
+            --escalated)
+              [ "$#" -ge 2 ] || { printf 'error: --escalated requires a value\n' >&2; exit 2; }
+              outcome_escalated=$2; shift 2 ;;
+            --rework)
+              [ "$#" -ge 2 ] || { printf 'error: --rework requires a value\n' >&2; exit 2; }
+              outcome_rework=$2; shift 2 ;;
+            -h|--help)
+              printf 'usage: ./ccb-template task outcome TARGET TASK_ID [--status ...] [--tests ...] [--review ...] [--escalated ...] [--rework N]\n'
+              exit 0 ;;
+            *)
+              printf 'error: unknown task outcome argument: %s\n' "$1" >&2; exit 2 ;;
+          esac
+        done
+        # Default complexity = initial complexity from the stored task packet.
+        outcome_initial=
+        if [ -f "$outcome_target/.ccb/tasks/$outcome_task/task.md" ] \
+           && [ ! -L "$outcome_target/.ccb/tasks/$outcome_task/task.md" ]; then
+          outcome_initial=$(sed -n 's/^Complexity:[[:space:]]*//p' \
+            "$outcome_target/.ccb/tasks/$outcome_task/task.md" | head -1)
+        fi
+        # Strict validation + JSON construction in one Python call. This
+        # guarantees: correct enum validation, correct JSON escaping, and
+        # correct latest-outcome semantics.
+        outcome_py=$(v2_metrics_python) || exit 1
+        result=$("$outcome_py" - "$outcome_target" "$outcome_task" \
+            "$outcome_initial" \
+            "${outcome_status}" "${outcome_tests}" "${outcome_review}" \
+            "${outcome_escalated}" "${outcome_rework}" <<'PY'
+import json, os, re, sys
+from datetime import datetime, timezone
+
+target, task_id, initial_complexity, status, tests, review, escalated, rework = sys.argv[1:9]
+# Reject traversal / empty / overly long task ids. Reuse the Context Packet
+# safe-id rule.
+if task_id == "" or task_id == "." or ".." in task_id or "/" in task_id or "\\" in task_id:
+    print(f"error: invalid task id: {task_id!r}", file=sys.stderr)
+    sys.exit(2)
+allowed = {
+    "status": {"accepted", "needs_fix", "failed", "abandoned"},
+    "tests": {"pass", "fail", "unknown"},
+    "review": {"pass", "findings", "skipped"},
+    "escalated": {"true", "false"},
+}
+provided = {"status": status, "tests": tests, "review": review, "escalated": escalated, "rework": rework}
+for name, value in provided.items():
+    if value == "":
+        continue
+    if name == "rework":
+        if not re.fullmatch(r"[0-9]+", value):
+            print(f"error: invalid rework: {value!r}", file=sys.stderr)
+            sys.exit(2)
+        continue
+    if value not in allowed.get(name, set()):
+        print(f"error: invalid {name}: {value!r}", file=sys.stderr)
+        sys.exit(2)
+
+monitor_dir = os.path.join(target, ".ccb", "token-monitor")
+outcomes_path = os.path.join(monitor_dir, "outcomes.jsonl")
+active_path = os.path.join(monitor_dir, "active-task")
+
+# Read initial_complexity from the task packet when not provided.
+if not initial_complexity:
+    pkt = os.path.join(target, ".ccb", "tasks", task_id, "task.md")
+    try:
+        with open(pkt, encoding="utf-8") as source:
+            for line in source:
+                m = re.match(r"^Complexity:\s*(\S+)", line)
+                if m:
+                    initial_complexity = m.group(1)
+                    break
+    except FileNotFoundError:
+        initial_complexity = ""
+
+# current_complexity: track escalation in the active-task file when present.
+current_complexity = initial_complexity
+try:
+    with open(active_path, encoding="utf-8") as source:
+        active = json.load(source)
+    if isinstance(active, dict):
+        active_task = active.get("task_id")
+        active_current = active.get("current_complexity")
+        if active_task == task_id and isinstance(active_current, str) and active_current:
+            current_complexity = active_current
+except (FileNotFoundError, json.JSONDecodeError, OSError):
+    pass
+
+if escalated == "true" and initial_complexity == "simple":
+    current_complexity = "normal"
+
+document = {
+    "task_id": task_id,
+    "initial_complexity": initial_complexity,
+    "current_complexity": current_complexity,
+}
+if status:
+    document["status"] = status
+if tests:
+    document["tests"] = tests
+if review:
+    document["review"] = review
+if escalated:
+    document["escalated"] = escalated
+if rework != "":
+    document["rework_count"] = int(rework)
+document["timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+line = json.dumps(document, ensure_ascii=False, separators=(",", ":"))
+
+# Append atomically: validate parseability then write.
+json.loads(line)
+os.makedirs(monitor_dir, exist_ok=True)
+with open(outcomes_path, "a", encoding="utf-8") as destination:
+    destination.write(line + "\n")
+os.chmod(outcomes_path, 0o600)
+print(line)
+
+# Lifecycle: when an escalation is recorded for the currently active task,
+# rewrite the active-task file so subsequent proxy requests are attributed
+# at the new current_complexity. This is what enables the proxy to report
+# post-escalation cost without any manual intervention.
+if (
+    escalated == "true"
+    and current_complexity != initial_complexity
+):
+    try:
+        with open(active_path, encoding="utf-8") as source:
+            active = json.load(source)
+        if isinstance(active, dict) and active.get("task_id") == task_id:
+            active["current_complexity"] = current_complexity
+            tmp = active_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as destination:
+                json.dump(active, destination, ensure_ascii=False, separators=(",", ":"))
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, active_path)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+
+# Lifecycle: deactivate when the task is finalised (accepted/failed/abandoned).
+# needs_fix keeps the task active so further iterations are attributed to it.
+# Write a valid JSON {} so subsequent readers always parse cleanly.
+if status in ("accepted", "failed", "abandoned"):
+    try:
+        tmp = active_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as destination:
+            json.dump({}, destination, ensure_ascii=False, separators=(",", ":"))
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, active_path)
+    except OSError:
+        pass
+PY
+        )
+        outcome_status=$?
+        if [ "$outcome_status" -ne 0 ]; then
+          printf 'outcome rejected\n' >&2
+          exit "$outcome_status"
+        fi
+        printf 'Outcome recorded: %s\n' "$result"
+        exit 0
+        ;;
+      -h|--help)
+        printf 'usage: ./ccb-template task <create|show|delivery|review-input> ...\n'
+        exit 0
+        ;;
+      *)
+        printf 'error: unknown task subcommand: %s\n' "$task_subcommand" >&2
+        exit 2
+        ;;
+    esac
     ;;
   monitor)
     case "$#" in
       1) show_usage "$1" ;;
-      2) case "$1" in start) monitor_start "$2" ;; stop) monitor_stop "$2" ;; watch) monitor_watch "$2" ;; price) show_pricing "$2" ;; model) show_project_models "$2" ;; *) usage >&2; exit 2 ;; esac ;;
+      2) case "$1" in
+           start) monitor_start "$2" ;;
+           stop) monitor_stop "$2" ;;
+           watch) monitor_watch "$2" ;;
+           price) show_pricing "$2" ;;
+           model) show_project_models "$2" ;;
+           task) v2_metrics_report_task "$2" ;;
+           tasks) v2_metrics_report_tasks "$2" ;;
+           *) usage >&2; exit 2 ;;
+         esac ;;
+      3) case "$1" in
+           task) v2_metrics_report_task "$2" "$3" ;;
+           *) usage >&2; exit 2 ;;
+         esac ;;
       4) case "$1" in model) set_project_model "$2" "$3" "$4" ;; *) usage >&2; exit 2 ;; esac ;;
       *) usage >&2; exit 2 ;;
     esac

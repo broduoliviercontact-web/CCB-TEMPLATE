@@ -18,6 +18,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 "$PYTHON" -c 'import aiohttp' >/dev/null 2>&1 || fail "aiohttp is required; set CCB_PYTHON to the CCB Python environment"
 
 upstream_port_file=$WORK/upstream-port
+printf '{}\n' >"$WORK/active-task"
 "$PYTHON" -c '
 import json
 import sys
@@ -45,7 +46,7 @@ for attempt in $(seq 1 20); do [ -s "$upstream_port_file" ] && break; sleep 0.1;
 upstream_port=$(cat "$upstream_port_file")
 proxy_port=$("$PYTHON" -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
 
-"$PYTHON" "$ROOT/assets/token-proxy.py" --upstream "http://127.0.0.1:$upstream_port" --port "$proxy_port" --metrics "$WORK/usage.jsonl" >"$WORK/proxy.log" 2>&1 &
+"$PYTHON" "$ROOT/assets/token-proxy.py" --upstream "http://127.0.0.1:$upstream_port" --port "$proxy_port" --metrics "$WORK/usage.jsonl" --active-task "$WORK/active-task" >"$WORK/proxy.log" 2>&1 &
 proxy_pid=$!
 for attempt in $(seq 1 20); do
   if "$PYTHON" -c 'import sys, urllib.request; urllib.request.urlopen(sys.argv[1], timeout=.2).read()' "http://127.0.0.1:$proxy_port/health" >/dev/null 2>&1; then break; fi

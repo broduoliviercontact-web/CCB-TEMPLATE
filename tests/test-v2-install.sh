@@ -280,7 +280,7 @@ grep -Fqx 'Implement the login screen.' "$brief_file" || fail 'brief command did
 run "$ROOT/ccb-template" manager-prompt "$cli_project" "$(basename "$brief_file")"
 [ "$status" -eq 0 ] || fail "manager-prompt command failed: $output"
 assert_contains "$output" "Read .ccb/briefs/$(basename "$brief_file")"
-assert_contains "$output" 'delegate architecture'
+assert_contains "$output" 'delegate implementation to developer'
 
 token_project="$WORK/token project"
 run env PATH="$TOKEN_BIN:$BIN:$PATH" CCB_PYTHON="$BIN/python-good" "$INSTALL" "$token_project" --name 'Token Project' --profile web --claude-ollama-cloud --token-optimization --yes

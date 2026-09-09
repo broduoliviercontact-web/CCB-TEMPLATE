@@ -84,15 +84,49 @@ async def forward(request: web.Request) -> web.StreamResponse:
             await downstream.write(chunk)
         await downstream.write_eof()
     usage = parse_usage(b"".join(chunks))
-    append_metric(request.app["metrics"], {
+    metric: dict[str, object] = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "agent": agent,
         "model": model,
         "input_tokens": usage["input_tokens"],
         "output_tokens": usage["output_tokens"],
         "duration_ms": round((time.monotonic() - started) * 1000),
-    })
+    }
+    attribution = read_active_task(request.app["active_task"])
+    if attribution:
+        metric.update(attribution)
+    append_metric(request.app["metrics"], metric)
     return downstream
+
+
+def read_active_task(path: Path) -> dict[str, object]:
+    """Read .ccb/token-monitor/active-task and return a small attribution dict.
+
+    The file is plain JSON with three keys only: task_id, initial_complexity,
+    current_complexity. No prompt, no content, no secrets. It is the single
+    source of truth for attribution because the official global CCB launches
+    the per-agent Claude Code processes and does not propagate custom
+    request headers from this template.
+    """
+    try:
+        with path.open("r", encoding="utf-8") as source:
+            document = json.load(source)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(document, dict):
+        return {}
+    attribution: dict[str, object] = {}
+    task_id = document.get("task_id")
+    if isinstance(task_id, str) and task_id:
+        attribution["task_id"] = task_id
+    initial = document.get("initial_complexity")
+    if isinstance(initial, str) and initial:
+        attribution["initial_complexity"] = initial
+    current = document.get("current_complexity")
+    if isinstance(current, str) and current:
+        attribution["complexity"] = current
+        attribution["current_complexity"] = current
+    return attribution
 
 
 async def cleanup(app: web.Application) -> None:
@@ -108,10 +142,12 @@ def main() -> None:
     parser.add_argument("--upstream", required=True)
     parser.add_argument("--metrics", required=True, type=Path)
     parser.add_argument("--port", required=True, type=int)
+    parser.add_argument("--active-task", required=True, type=Path)
     arguments = parser.parse_args()
     app = web.Application()
     app["upstream"] = arguments.upstream
     app["metrics"] = arguments.metrics
+    app["active_task"] = arguments.active_task
     app.on_startup.append(startup)
     app.on_cleanup.append(cleanup)
     app.router.add_get("/health", health)

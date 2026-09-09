@@ -9,8 +9,25 @@
   available when needed.
 - Keep dependency-free minimal delivery rules in the four generated agent skills, with attribution
   to Ponytail inspiration but no Ponytail plugin dependency.
+- Manager prompt now states explicitly that graph is on demand and that manager must use the
+  smallest agent set that reaches the required confidence. The default `manager-prompt` keeps
+  its existing wording; the new wording appears when `--complexity` is supplied.
 
 ### Added
+
+- Complexity Router with three levels: SIMPLE (developer + deterministic checks, reviewer and
+  graph optional), NORMAL (developer + reviewer, graph on demand) and COMPLEX (graph on demand +
+  developer + reviewer).
+- `--complexity simple|normal|complex` option on `ccb-template manager-prompt` so the routing
+  rules are appended to the prompt only when the user asks for them.
+- `ccb-template classify TARGET BRIEF_FILE` heuristic that recommends a level from a brief.
+- `ccb-template route [simple|normal|complex]` to print the routing summary of a level.
+- `scripts/v2/complexity-router.sh` shared module, `docs/v2-complexity-router.md` documentation
+  and `tests/test-v2-complexity-router.sh` covering routing rules, classification and prompt
+  injection.
+- Per-project token-monitor ports with persistent recovery metadata and proxy integration tests.
+
+### Added (V2.0.0 bootstrap, retained for history)
 
 - `ccb-template doctor` with `[OK]`, `[WARNING]` and `[MISSING]` states, plus `doctor --full` for
   optional RTK, npx, Tilth and local monitoring checks.
@@ -20,7 +37,6 @@
   RTK/Tilth and token-monitoring choices.
 - `ccb-template monitor model` to inspect and atomically update installed Ollama Cloud models in a
   generated project's `.ccb/ccb.config`.
-- Per-project token-monitor ports with persistent recovery metadata and proxy integration tests.
 
 ### Fixed
 

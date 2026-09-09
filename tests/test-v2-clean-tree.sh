@@ -16,7 +16,7 @@ done
 
 for path in \
   install.sh ccb-template VERSION LICENSE README.md \
-  scripts/v2/common.sh scripts/v2/preflight.sh scripts/v2/render-config.sh scripts/v2/install-assets.sh \
+  scripts/v2/common.sh scripts/v2/preflight.sh scripts/v2/render-config.sh scripts/v2/install-assets.sh scripts/v2/complexity-router.sh scripts/v2/context-packet.sh scripts/v2/metrics.sh \
   assets/AGENT_POLICY.md assets/CLAUDE.md assets/ccb_memory.md assets/token-optimization.md assets/token-proxy.py assets/token-pricing.json \
   assets/agents/manager/memory.md assets/agents/graph/memory.md \
   assets/agents/developer/memory.md \
@@ -29,8 +29,9 @@ for path in \
   codex-skills/start-ccb-project/agents/openai.yaml \
   codex-skills/start-ccb-project/references/brief-template.md \
   docs/v2-architecture.md docs/v2-migration-from-v1.md docs/v2-migration-plan.md \
-  docs/v2-quickstart.md docs/v2-troubleshooting.md docs/v2-codex-workflow.md \
-  tests/fixtures/ccb.config.expected tests/test-v2-install.sh tests/test-v2-doctor.sh tests/test-v2-docs.sh tests/test-token-proxy.sh; do
+  docs/v2-quickstart.md docs/v2-troubleshooting.md docs/v2-codex-workflow.md docs/v2-complexity-router.md docs/v2-reviewer-diff-first.md docs/v2-context-packet.md docs/v2-quality-token-metrics.md \
+  scripts/v2/metrics_aggregate.py tests/_proxy_attr_harness.py \
+  tests/fixtures/ccb.config.expected tests/test-v2-install.sh tests/test-v2-doctor.sh tests/test-v2-docs.sh tests/test-v2-complexity-router.sh tests/test-v2-reviewer-diff-first.sh tests/test-v2-context-packet.sh tests/test-v2-metrics.sh tests/test-v2-telemetry.sh tests/test-token-proxy.sh; do
   require_file "$path"
 done
 
@@ -64,7 +65,7 @@ fi
 
 for document in "$ROOT"/docs/*; do
   case "$(basename "$document")" in
-    v2-architecture.md|v2-codex-workflow.md|v2-migration-from-v1.md|v2-migration-plan.md|v2-quickstart.md|v2-troubleshooting.md) : ;;
+    v2-architecture.md|v2-codex-workflow.md|v2-migration-from-v1.md|v2-migration-plan.md|v2-quickstart.md|v2-troubleshooting.md|v2-complexity-router.md|v2-reviewer-diff-first.md|v2-context-packet.md|v2-quality-token-metrics.md) : ;;
     *) fail "non-V2 documentation remains: $(basename "$document")" ;;
   esac
 done
