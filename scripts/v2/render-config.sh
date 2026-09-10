@@ -1,7 +1,7 @@
 #!/bin/sh
 
 v2_render_config() {
-  output=$1 name=$2 profile=$3 manager_model=${4:-glm-5.2:cloud} graph_model=${5:-qwen3.5:397b-cloud} developer_model=${6:-kimi-k2.7-code:cloud} reviewer_model=${7:-kimi-k2.6:cloud} token_monitoring=${8:-0} monitor_port=${9:-}
+  output=$1 name=$2 profile=$3 manager_model=${4:-glm-5.3-flash:cloud} graph_model=${5:-glm-5.3-flash:cloud} developer_model=${6:-kimi-k2.7-code:cloud} reviewer_model=${7:-glm-5.3-flash:cloud} token_monitoring=${8:-0} monitor_port=${9:-}
   v2_is_safe_name "$name" || v2_die 'project name contains an unsafe line break'
   [ "$profile" = web ] || v2_die 'unsupported profile'
   for model in "$manager_model" "$graph_model" "$developer_model" "$reviewer_model"; do

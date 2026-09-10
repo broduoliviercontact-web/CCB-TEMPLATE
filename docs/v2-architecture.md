@@ -15,10 +15,10 @@ is the official global binary.
 
 | Agent | Model | Responsibility |
 | --- | --- | --- |
-| manager | `glm-5.2:cloud` | Plans, delegates and consolidates. |
-| graph | `qwen3.5:397b-cloud` | Read-only architecture analysis. |
+| manager | `glm-5.3-flash:cloud` | Plans, delegates and consolidates. |
+| graph | `glm-5.3-flash:cloud` | Read-only architecture analysis. |
 | developer | `kimi-k2.7-code:cloud` | Implements approved changes. |
-| reviewer | `kimi-k2.6:cloud` | Read-only review and validation. |
+| reviewer | `glm-5.3-flash:cloud` | Read-only review and validation. |
 
 The official `.ccb/ccb.config` declares the windows, agent model, description, isolated provider
 profile and the per-agent Ollama compatibility environment. `.ccb/ccb_memory.md` holds durable

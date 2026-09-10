@@ -189,7 +189,7 @@ v2_doctor_check_full() {
 }
 
 v2_preflight() {
-  root=$1 token_optimization=${2:-0} manager_model=${3:-glm-5.2:cloud} graph_model=${4:-qwen3.5:397b-cloud} developer_model=${5:-kimi-k2.7-code:cloud} reviewer_model=${6:-kimi-k2.6:cloud}
+  root=$1 token_optimization=${2:-0} manager_model=${3:-glm-5.3-flash:cloud} graph_model=${4:-glm-5.3-flash:cloud} developer_model=${5:-kimi-k2.7-code:cloud} reviewer_model=${6:-glm-5.3-flash:cloud}
   system=$(uname -s 2>/dev/null || true)
   case "$system" in Darwin|Linux|FreeBSD) v2_info "platform: $system" ;; *) v2_die "unsupported platform: ${system:-unknown}; use macOS or a Unix-compatible environment" ;; esac
   command -v tmux >/dev/null 2>&1 || v2_die 'tmux is required; install it with your system package manager'

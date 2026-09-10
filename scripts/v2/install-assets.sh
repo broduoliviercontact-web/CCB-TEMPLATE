@@ -242,7 +242,7 @@ v2_install_token_monitor_port() {
 }
 
 v2_install_assets() {
-  root=$1 target=$2 name=$3 profile=$4 dry_run=$5 token_optimization=${6:-0} manager_model=${7:-glm-5.2:cloud} graph_model=${8:-qwen3.5:397b-cloud} developer_model=${9:-kimi-k2.7-code:cloud} reviewer_model=${10:-kimi-k2.6:cloud} token_monitoring=${11:-0}
+  root=$1 target=$2 name=$3 profile=$4 dry_run=$5 token_optimization=${6:-0} manager_model=${7:-glm-5.3-flash:cloud} graph_model=${8:-glm-5.3-flash:cloud} developer_model=${9:-kimi-k2.7-code:cloud} reviewer_model=${10:-glm-5.3-flash:cloud} token_monitoring=${11:-0}
   v2_is_safe_name "$name" || v2_die 'project name contains an unsafe line break'
   if [ -e "$target" ]; then target=$(v2_real_dir "$target") || v2_die "target must be a real directory: $target"; else
     parent=$(v2_resolve_existing_dir "$(dirname "$target")") || v2_die "target parent must be an existing directory: $(dirname "$target")"

@@ -46,7 +46,7 @@ EOF
 }
 
 target= name= profile= cloud=0 token_optimization=1 yes=0 dry_run=0
-manager_model=glm-5.2:cloud graph_model=qwen3.5:397b-cloud developer_model=kimi-k2.7-code:cloud reviewer_model=kimi-k2.6:cloud
+manager_model=glm-5.3-flash:cloud graph_model=glm-5.3-flash:cloud developer_model=kimi-k2.7-code:cloud reviewer_model=glm-5.3-flash:cloud
 token_monitoring=0
 while [ "$#" -gt 0 ]; do
   case "$1" in

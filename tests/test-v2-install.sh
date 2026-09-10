@@ -43,10 +43,11 @@ printf '%s\n' "\$*" >>"$WORK/ollama.calls"
 case "\${1:-}" in
   list) cat <<'MODELS'
 NAME ID SIZE MODIFIED
-glm-5.2:cloud a 1 now
-qwen3.5:397b-cloud b 1 now
-kimi-k2.7-code:cloud c 1 now
+glm-5.3-flash:cloud a 1 now
+kimi-k2.7-code:cloud b 1 now
+glm-5.2:cloud c 1 now
 kimi-k2.6:cloud d 1 now
+qwen3.5:397b-cloud e 1 now
 MODELS
   ;;
   *) exit 88 ;;
@@ -231,8 +232,8 @@ cli_project="$WORK/cli-project"
 run sh -c "printf '%s\\n' '' n n | env PATH='$TOKEN_BIN:$BIN:$PATH' CCB_PYTHON='$BIN/python-good' '$ROOT/ccb-template' init '$cli_project'"
 [ "$status" -eq 0 ] || fail "interactive CLI failed: $output"
 [ -d "$cli_project/.git" ] || fail 'interactive CLI did not initialise Git'
-grep -A1 -F '[agents.manager]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "glm-5.2:cloud"' || fail 'interactive CLI did not select manager model'
-grep -A1 -F '[agents.reviewer]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "kimi-k2.6:cloud"' || fail 'interactive CLI did not select reviewer model'
+grep -A1 -F '[agents.manager]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "glm-5.3-flash:cloud"' || fail 'interactive CLI did not select manager model'
+grep -A1 -F '[agents.reviewer]' "$cli_project/.ccb/ccb.config" | grep -Fqx 'model = "glm-5.3-flash:cloud"' || fail 'interactive CLI did not select reviewer model'
 [ -f "$cli_project/.mcp.json" ] || fail 'simple CLI did not create default Tilth configuration'
 assert_contains "$output" 'CCB was not started.'
 
@@ -473,10 +474,10 @@ run env PATH="$oldbin:$PATH" CCB_PYTHON="$oldbin/python-good" "$INSTALL" "$WORK/
 assert_contains "$output" '8.4.3+'
 
 if [ "${CCB_TEMPLATE_RUN_CLOUD_TESTS:-0}" = 1 ]; then
-  for model in glm-5.2:cloud qwen3.5:397b-cloud kimi-k2.7-code:cloud kimi-k2.6:cloud; do
+  for model in glm-5.3-flash:cloud kimi-k2.7-code:cloud; do
     ANTHROPIC_AUTH_TOKEN=ollama ANTHROPIC_BASE_URL=http://localhost:11434 claude --model "$model" -p 'Reply only: CCB template model check.' >/dev/null
   done
-  echo '[OK] Optional Cloud model tests passed (4 models)'
+  echo '[OK] Optional Cloud model tests passed (2 models)'
 else
   echo '[SKIP] Optional Cloud model tests (set CCB_TEMPLATE_RUN_CLOUD_TESTS=1 to run)'
 fi

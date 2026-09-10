@@ -217,10 +217,10 @@ Anthropic-compatible local endpoint:
 
 | Agent | Model |
 | --- | --- |
-| manager | `glm-5.2:cloud` |
-| graph | `qwen3.5:397b-cloud` |
+| manager | `glm-5.3-flash:cloud` |
+| graph | `glm-5.3-flash:cloud` |
 | developer | `kimi-k2.7-code:cloud` |
-| reviewer | `kimi-k2.6:cloud` |
+| reviewer | `glm-5.3-flash:cloud` |
 
 Change models later from the template clone:
 

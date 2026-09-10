@@ -8,10 +8,10 @@ ROOT=$(CDPATH= cd "$(dirname "$0")" && pwd)
 . "$ROOT/scripts/v2/context-packet.sh"
 . "$ROOT/scripts/v2/metrics.sh"
 
-DEFAULT_MANAGER_MODEL=glm-5.2:cloud
-DEFAULT_GRAPH_MODEL=qwen3.5:397b-cloud
+DEFAULT_MANAGER_MODEL=glm-5.3-flash:cloud
+DEFAULT_GRAPH_MODEL=glm-5.3-flash:cloud
 DEFAULT_DEVELOPER_MODEL=kimi-k2.7-code:cloud
-DEFAULT_REVIEWER_MODEL=kimi-k2.6:cloud
+DEFAULT_REVIEWER_MODEL=glm-5.3-flash:cloud
 
 usage() {
   cat <<'EOF'

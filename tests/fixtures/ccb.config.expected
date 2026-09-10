@@ -8,7 +8,7 @@ build = "developer:claude"
 review = "reviewer:claude"
 
 [agents.manager]
-model = "glm-5.2:cloud"
+model = "glm-5.3-flash:cloud"
 description = "Planifie, délègue et consolide sans modifier les fichiers applicatifs."
 
 [agents.manager.provider_profile]
@@ -20,7 +20,7 @@ ANTHROPIC_AUTH_TOKEN = "ollama"
 ANTHROPIC_BASE_URL = "http://localhost:11434"
 
 [agents.graph]
-model = "qwen3.5:397b-cloud"
+model = "glm-5.3-flash:cloud"
 description = "Analyse l’architecture et les dépendances en lecture seule."
 
 [agents.graph.provider_profile]
@@ -44,7 +44,7 @@ ANTHROPIC_AUTH_TOKEN = "ollama"
 ANTHROPIC_BASE_URL = "http://localhost:11434"
 
 [agents.reviewer]
-model = "kimi-k2.6:cloud"
+model = "glm-5.3-flash:cloud"
 description = "Relit en lecture seule les risques, régressions et validations."
 
 [agents.reviewer.provider_profile]
