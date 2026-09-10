@@ -14,6 +14,10 @@ description: Implement an approved change with focused validation and a short re
 7. Never reduce validation, security, accessibility, error handling or
    data-loss protection to make the diff smaller.
 8. Run relevant checks and report files changed, results and limitations.
+9. Prefer coherent passes: batch independent reads/searches, make related
+   edits together, run related validations at the end; do not add tool
+   calls merely to reconfirm information already known; once the change
+   passes validation, write the delivery and stop.
 
 ## Reviewer handoff
 
